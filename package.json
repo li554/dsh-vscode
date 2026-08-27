@@ -2,7 +2,7 @@
   "name": "dsh-vscode",
   "displayName": "DeepSeek Harness (DSH) for VS Code",
   "description": "Runs the DeepSeek Harness web surface inside VS Code. All host dependencies are bundled into the extension — users need no Node.js, npm, pnpm, or Python.",
-  "version": "0.2.14",
+  "version": "0.2.16",
   "publisher": "your-publisher-id",
   "license": "MIT",
   "engines": {
@@ -67,8 +67,8 @@
         },
         "dsh.enableBakedPlugins": {
           "type": "boolean",
-          "default": false,
-          "description": "Mount the ecosystem plugins baked into this extension (UI/tool plugins, recall, auto-continue) into the web profile. Keep off unless needed: mounting them changes what the panel serves."
+          "default": true,
+          "description": "Mount the ecosystem plugins baked into this extension (UI/tool plugins, recall, task board, memory) into the web profile."
         }
       }
     },

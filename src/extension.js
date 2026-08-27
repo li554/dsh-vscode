@@ -161,10 +161,10 @@ const RETIRED_PLUGINS = ["@linxin666/dsh-remote-web-ui", "dsh-easyrewrite", "dsh
  * webServer -> every entry stays "pending waiting for service: webServer" and
  * assertEntriesActivated aborts the whole host. */
 const BASE_BUNDLES = ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app"];
-/** Baked-in plugins are OPT-IN (dsh.enableBakedPlugins). Default off keeps the
- * default web profile at base+web-app, which always boots and renders. */
+/** Baked-in plugins are ON by default (dsh.enableBakedPlugins). The default web
+ * profile carries base+web-app plus every bundled ecosystem plugin. */
 function bakedPluginsEnabled() {
-  return Boolean(vscode.workspace.getConfiguration("dsh").get("enableBakedPlugins", false));
+  return Boolean(vscode.workspace.getConfiguration("dsh").get("enableBakedPlugins", true));
 }
 /**
  * Synchronize the baked plugin state with the web profile: when enabled,

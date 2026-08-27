@@ -2,8 +2,10 @@
 /node_modules/
 *.vsix
 
-# local experiment residue at repo root (not part of the build)
-@linxin666/
+# local experiment residue at repo root (not part of the build).
+# Root-level only: @linxin666 scoped package dirs inside vendor/node_modules
+# and plugins/bundled are shipped build content and ARE committed.
+/@linxin666/
 
 # flat plugin install tree (source clones / pnpm layout, ~490 MB).
 # plugins/bundled is the actual shipped content and IS committed.
