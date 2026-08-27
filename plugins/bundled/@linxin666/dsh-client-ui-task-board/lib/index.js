@@ -2622,8 +2622,20 @@ function applyImpl(ctx, config) {
 	/** A session only earns a task the moment it actually starts executing —
 	* opened historical/completed sessions and freshly-created-but-idle sessions
 	* never appear on the board. The task tracks the agent lifecycle with only
-	* three statuses: running -> done / failed. */
-	const applyAutoLifecycle = (sessionId, runningNow, outcome) => {
+	* three statuses: running -> done / failed. Its title is the session's own
+	* auto-generated title (once the user sends a message DSH names the session),
+	* falling back to "新会话". */
+	const autoTitle = async (sessionId) => {
+		try {
+			const response = await host.runner.api.sessions.list(request({}));
+			if (response.result.ok) {
+				const item = response.result.value.items.find((entry) => entry.sessionId === sessionId);
+				if (item !== void 0 && typeof item.title === "string" && item.title.trim() !== "") return item.title;
+			}
+		} catch {}
+		return "新会话";
+	};
+	const applyAutoLifecycle = async (sessionId, runningNow, outcome) => {
 		if (!host.active || sessionId === void 0) return;
 		const ledger = host.ledger;
 		if (runningNow) {
@@ -2643,9 +2655,10 @@ function applyImpl(ctx, config) {
 			}
 			if (!exists) {
 				const now = ledger.now();
+				const title = await autoTitle(sessionId);
 				ledger.document.tasks.push({
 					id: `auto-${sessionId}`,
-					title: "新会话",
+					title,
 					description: "",
 					prompt: "",
 					status: "running",
@@ -2681,14 +2694,14 @@ function applyImpl(ctx, config) {
 			catch (error) { console.error("[dsh-task-board] settle auto task failed", error); }
 		}
 	};
-	ctx.on("agent/status", ({ agent, status }) => {
-		applyAutoLifecycle(agent.id, status === "running");
+	ctx.on("agent/status", async ({ agent, status }) => {
+		await applyAutoLifecycle(agent.id, status === "running");
 	}, { global: true });
-	ctx.on("agent/error", ({ agent }) => {
-		applyAutoLifecycle(agent.id, false, "failed");
+	ctx.on("agent/error", async ({ agent }) => {
+		await applyAutoLifecycle(agent.id, false, "failed");
 	}, { global: true });
-	ctx.on("session/disposed", (session) => {
-		applyAutoLifecycle(session.id, false, "succeeded");
+	ctx.on("session/disposed", async (session) => {
+		await applyAutoLifecycle(session.id, false, "succeeded");
 	}, { global: true });
 	/** Startup self-heal for legacy rows left by older builds: only ever end
 	* up as running (if truly executing) or done/failed — never "todo". */
