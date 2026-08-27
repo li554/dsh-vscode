@@ -1,84 +1,116 @@
-# DeepSeek Harness (DSH) for VS Code
+# DeepSeek Harness for VS Code
 
-Run the [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) **native web surface** inside a VS Code webview. All host dependencies are bundled into the extension — the user machine needs **no Node.js, no npm, no pnpm, no Python**. VS Code itself provides the runtime.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-## How it works (Method B)
+在 **VS Code** 内以 Webview 方式运行 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的原生网页界面。扩展已内置全部宿主依赖与生态插件，用户机器 **无需安装 Node.js、npm、pnpm 或 Python** —— VS Code 自身即为运行时。
 
-1. On open, the extension forks the bundled DSH host as a child process from the extension host:
-   `dsh --profile web --port 0 --no-open`
-   (`ELECTRON_RUN_AS_NODE=1` makes the VS Code binary serve as the Node runtime, so no standalone Node is required.)
-2. The host binds `127.0.0.1` on an OS-assigned port and serves the prebuilt web UI (`@deepseek-ai/dsh-web-frontend/dist`).
-3. A webview panel shows a local HTML shell containing a full-viewport iframe pointing at `http://127.0.0.1:<port>/`.
-4. The panel declares VS Code's stable `WebviewPortMapping` (`{ webviewPort: port, extensionHostPort: port }`). The webview service worker intercepts the iframe navigation and every subresource/`/api` request and proxies them through the extension host.
-5. Because the DSH `/api` trust fence sees those requests as clean loopback requests from the extension host (no `Origin`/`Sec-Fetch-Site` browser markers), it passes **without any modification to DSH**. The DSH web client uses fetch + SSE only (no WebSocket), which the port-mapping proxy supports.
+## ✨ 特性
 
-### Verified facts (smoke-tested on this machine)
+- **零依赖开箱即用**：宿主运行时、网页前端、生态插件全部打进扩展，一条 `.vsix` 完成安装。
+- **原生 DSH 体验**：完整渲染 Harness 网页界面（模型对话、工具调用、工作区、会话管理），无二次封装。
+- **内置插件全家桶**：撤回/快照、分层记忆、任务看板、侧边栏增强、自动续写等生态插件随附启用。
+- **对 DSH 零改动**：利用本地回环端口映射（`WebviewPortMapping`）+ 信任边界机制接入，不修改 DSH 任何源码。
+- **多窗口隔离**：每个 VS Code 窗口独立宿主实例、独立端口，互不冲突。
+- **丰富操作命令**：打开面板、重启宿主、外部浏览器逃生、查看宿主日志。
 
-- Host boots from the npm-installed tree: `dsh --profile web --port 0 --no-open` prints `dsh web: http://127.0.0.1:<port>`.
-- The served `index.html` contains the boot injection plus `/plugins/@deepseek-ai/<pkg>/client.js` scripts and `/assets/*` bundles — all same-origin paths inside the iframe.
-- Trust fence behavior: a request carrying `Origin: http://evil.example` + `Sec-Fetch-Site: cross-site` → **403**; the same request with no browser markers (what the VS Code localhost proxy produces) → **200**. This is exactly why Method B needs no DSH code changes.
-- VS Code 1.133 ships `WebviewPortMapping` as a **stable** API (verified in `resources/app/out/vscode-dts/vscode.d.ts`, no proposed variant).
+## 🚀 快速开始
 
-## Building the .vsix (developer machine only)
+1. 在 [Releases](https://github.com/li554/dsh-vscode/releases) 下载最新的 `dsh-vscode.vsix`。
+2. VS Code 内打开 **扩展视图** → 右上角 `⋯` → **从 VSIX 安装...**，选择下载的文件。
+3. 按 `Ctrl+Shift+P` 打开命令面板，执行 **`DSH: Open`** 打开 Harness 面板。
 
-Both heavyweight inputs are **committed to this repository** so a fresh clone can reproduce the .vsix without a network install:
+> 要求 VS Code `^1.133.0`。建议启用信任的工作区（扩展会读写文件并执行命令）。
 
-- `vendor/` — the vendored DSH platform tree (MIT) the host runs from. Rebuild it from the flat install with `pnpm install --node-linker=hoisted && rm -rf vendor && cp -r node_modules vendor` (then re-apply the trims documented in `.smoke/`).
-- `plugins/bundled/` — the self-contained baked plugin set embedded in the extension. Re-assembling it from `plugins/node_modules` is covered by `plugins/_selfcontained.mjs` (it drops native-ABI packages like ssh2/lightningcss and flattens non-platform host deps into `_hostdeps/`).
+## 📖 常用命令
 
-The packaging chain is deterministic and matches the shipped artifact:
+| 命令 | 说明 |
+| --- | --- |
+| `DSH: Open` | 打开 Harness 面板（按需启动宿主进程） |
+| `DSH: Restart Host` | 结束并重启宿主，重建面板 |
+| `DSH: Open in External Browser` | 在系统浏览器中打开同一宿主地址（逃生通道） |
+| `DSH: Show Host Logs` | 打开宿主 stdout/stderr 的输出通道 |
 
-```bash
-# 1. assemble the vsix (standard zip + vsix manifest, excludes *.map)
-python .smoke/pack.py
-# -> dsh-vscode.vsix
+## ⚙️ 设置
+
+| 配置项 | 说明 |
+| --- | --- |
+| `dsh.openOnStartup` | 启动时自动打开面板（仅信任工作区生效） |
+| `dsh.cwd` | 宿主工作目录（即 agent 的工作目录），留空 = 首个工作区文件夹 |
+| `dsh.dshHome` | 覆盖 `DSH_HOME`（配置、会话、插件数据等存放位置），留空 = DSH 默认路径 |
+| `dsh.enableBakedPlugins` | 是否启用内置生态插件（默认 `true`） |
+
+## 🔌 内置插件
+
+扩展在 `plugins/bundled` 下随附以下第三方生态插件（各自保留原 LICENSE）：
+
+| 插件 | 来源 | 本地改动 |
+| --- | --- | --- |
+| `dsh-recall-plugin` | [limbo947/dsh-recall-plugin](https://github.com/limbo947/dsh-recall-plugin) | 撤回确认框新增**回退范围选择**：整段回退（对话+文件）或仅回退对话 |
+| `dsh-memory-evolve` | [csyangwen/dsh-memory-evolve](https://github.com/csyangwen/dsh-memory-evolve) | 无（精简打包为 `lib` + `vendor` + `skills`） |
+| `dsh-better-sidebar` | [omdsh-dev/DSH-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar) | 无 |
+| `dsh-client-auto-continue` | [HsiangNianian/dsh-auto-continue](https://github.com/HsiangNianian/dsh-auto-continue) | 无 |
+| `@linxin666/dsh-*`（会话恢复、桌面启动器、医疗辅助、宠物、UI 面板等） | [zhu1090093659/dsh-web-ui](https://github.com/zhu1090093659/dsh-web-ui) / linxin666 生态 | 无。`dsh-ssh`、`dsh-client-ui-skin-center` 因原生 ABI 无法在 VS Code 内嵌 Node 中加载而被排除 |
+| `dsh-miraculous-standard`、`@dsh-external/dsh-super-injector` | 社区包 | 无 |
+| `_hostdeps/`（cosmokit、fflate、jpeg-js、schemastery） | npm 包 | 内置以便非平台依赖离线解析 |
+
+## 🛠️ 从源码构建
+
+### 环境要求
+
+- Git
+- Python 3（用于打包脚本）
+- 无需 Node.js/npm：构建产物由本仓库已提交的 `vendor/` 与 `plugins/bundled/` 直接打包
+
+### 仓库结构
+
+```
+dsh-vscode/
+├── vendor/            # DSH 宿主平台依赖树（已提交，构建时整体打包）
+├── plugins/
+│   ├── bundled/       # 内置生态插件（自包含，含 _hostdeps 宿主依赖）
+│   ├── presets/       # 内置 agent 预设（router-standard / router-spec）
+│   └── node_modules/  # 插件扁平安装树（仅本地生成用，不入库）
+├── src/extension.js   # 扩展入口：宿主 fork、插件移植、配置同步
+└── .smoke/            # 打包脚本与冒烟测试
 ```
 
-Users never touch npm: install the .vsix via *Extensions → ⋯ → Install from VSIX...*.
+### 打包
 
-> The `.smoke/pack.py` route is preferred over `npx @vscode/vsce package` — vsce's dependency listing rejects pnpm layouts and its file walk is much slower.
+```bash
+# 生成 dsh-vscode.vsix（标准 zip + vsix 清单，剔除 *.map）
+python .smoke/pack.py
+```
 
-## Bundled ecosystem plugins
+> 优先使用 `.smoke/pack.py` 而非 `npx @vscode/vsce package`：vsce 的依赖清单校验不兼容 pnpm 扁平布局，且文件遍历明显更慢。
 
-The extension ships these third-party ecosystem plugins under `plugins/bundled` (each keeps its own LICENSE):
+## 🧱 工作原理
 
-| Plugin | Origin | Local changes |
-|---|---|---|
-| `dsh-recall-plugin` | [limbo947/dsh-recall-plugin](https://github.com/limbo947/dsh-recall-plugin) | Recall confirm dialog adds a **rollback scope choice**: full rollback (chat + files) or chat-only rollback |
-| `dsh-memory-evolve` | [csyangwen/dsh-memory-evolve](https://github.com/csyangwen/dsh-memory-evolve) | None (package trimmed to `lib` + `vendor` + `skills`) |
-| `dsh-better-sidebar` | [omdsh-dev/DSH-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar) | None |
-| `dsh-client-auto-continue` | [HsiangNianian/dsh-auto-continue](https://github.com/HsiangNianian/dsh-auto-continue) | None |
-| `@linxin666/dsh-*` (chat-recovery, desktop-launcher, doctor, liangshen, pet, UI panels, …) | [zhu1090093659/dsh-web-ui](https://github.com/zhu1090093659/dsh-web-ui) repo / linxin666 ecosystem | None; `dsh-ssh` and `dsh-client-ui-skin-center` are **excluded** (native ABI cannot load in the VS Code embedded Node) |
-| `dsh-miraculous-standard`, `@dsh-external/dsh-super-injector` | community packages | None |
-| `_hostdeps/` (cosmokit, fflate, jpeg-js, schemastery) | npm packages | Vendored so non-platform host deps resolve offline |
+1. 扩展在扩展宿主内以 `ELECTRON_RUN_AS_NODE=1` 方式 fork 内置 DSH 宿主：`dsh --profile web --port 0 --no-open`，用 VS Code 二进制充当 Node 运行时。
+2. 宿主监听 `127.0.0.1` 的随机端口，提供预构建网页前端（`@deepseek-ai/dsh-web-frontend/dist`）。
+3. Webview 面板通过声明稳定的 `WebviewPortMapping`（`{ webviewPort: port, extensionHostPort: port }`），让 Service Worker 将 iframe 及全部 `/api` 请求代理到扩展宿主。
+4. DSH 的 `/api` 信任边界将代理请求识别为来自扩展宿主的干净回环请求（无浏览器 `Origin`/`Sec-Fetch-Site` 标记），**无需任何 DSH 源码改动**即可通过校验。
+5. DSH Web 客户端仅使用 fetch + SSE（无 WebSocket），端口映射代理完全可以承载。
 
-## Commands
+## ❓ 常见问题
 
-| Command | Action |
-|---|---|
-| `DSH: Open` | Open the Harness panel (starts the host if needed) |
-| `DSH: Restart Host` | Kill and restart the host, recreate the panel |
-| `DSH: Open in External Browser` | Escape hatch: open the same host URL in the system browser |
-| `DSH: Show Host Logs` | Output channel with host stdout/stderr |
+**问：安装后宿主启动失败？**
+答：确认 VS Code ≥ 1.133；查看 `DSH: Show Host Logs` 输出；若曾升级旧版本，可尝试 `DSH: Restart Host`。
 
-## Settings
+**问：面板空白/页面加载不出来？**
+答：执行 `DSH: Open in External Browser` 确认宿主是否正常服务；仍异常时通过日志定位或重置 `dsh.dshHome` 指定的配置文件目录。
 
-- `dsh.openOnStartup` — open the panel automatically (trusted workspaces only).
-- `dsh.cwd` — the host's working directory (= the agent's cwd). Empty = first workspace folder.
-- `dsh.dshHome` — override `DSH_HOME` (profiles, settings, sessions). Empty = DSH default.
+**问：升级扩展后会话/配置会丢吗？**
+答：不会。会话、设置等数据存放在 `dsh.dshHome`（默认 `DSH_HOME`）目录，与扩展安装目录相互隔离。
 
-## Smoke-test checklist (after installing the .vsix)
+**问：为什么 .vsix 有 100+ MB？**
+答：完整运行时依赖树内置在扩展内以保证离线可用，体积换取了"零依赖、开箱即用"的体验。
 
-1. Panel opens and the DSH UI renders (boot injection + `/plugins/*/client.js` + `/assets/*` load through the port mapping).
-2. **SSE event streaming** reaches the UI live (long-lived `/api/events.*` stream through the proxy).
-3. `run_code`/tool execution, image attachments, and settings persistence.
-4. Host crash → error page → *Restart host* works.
-5. Second VS Code window gets its own host instance on its own port.
+## 👥 致谢
 
-## Known considerations
+- [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)——上游网页宿主
+- [zhu1090093659/dsh-web-ui](https://github.com/zhu1090093659/dsh-web-ui)——@linxin666 插件生态
+- [limbo947/dsh-recall-plugin](https://github.com/limbo947/dsh-recall-plugin)、[csyangwen/dsh-memory-evolve](https://github.com/csyangwen/dsh-memory-evolve) 等其他内置插件作者
 
-- `engines.vscode: ^1.133.0` — the floor where `WebviewPortMapping` was verified stable here. Lower it only after testing on that version.
-- The extension deliberately declares `untrustedWorkspaces.supported: false` (the host can run commands and read/write files).
-- Marketplace publication requires disclosure of the loopback server + command execution (same class as Cline/Continue).
-- One host per VS Code window (one extension host per window); `--port 0` makes them conflict-free.
-- The .vsix is large (~100–200 MB) because the full runtime tree ships inside. Pruning candidates (later): platform prebuilds for other OSes, `@vscode/vsce` remnants, unused tool backends.
+## 📄 许可证
+
+[MIT](LICENSE)
