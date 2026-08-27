@@ -1,0 +1,9 @@
+.vscode/**
+**/*.map
+.gitignore
+.git/**
+*.vsix
+vsce*.log
+.smoke/**
+pnpm-lock.yaml
+pnpm-workspace.yaml

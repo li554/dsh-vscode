@@ -1,0 +1,105 @@
+{
+  "name": "dsh-vscode",
+  "displayName": "DeepSeek Harness (DSH) for VS Code",
+  "description": "Runs the DeepSeek Harness web surface inside VS Code. All host dependencies are bundled into the extension — users need no Node.js, npm, pnpm, or Python.",
+  "version": "0.2.14",
+  "publisher": "your-publisher-id",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.133.0"
+  },
+  "categories": [
+    "AI",
+    "Chat"
+  ],
+  "keywords": [
+    "deepseek",
+    "harness",
+    "agent",
+    "coding-agent",
+    "dsh"
+  ],
+  "main": "./src/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "dsh.open",
+        "title": "Open",
+        "category": "DeepSeek Harness",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "dsh.restart",
+        "title": "Restart Host",
+        "category": "DeepSeek Harness"
+      },
+      {
+        "command": "dsh.openInBrowser",
+        "title": "Open in External Browser",
+        "category": "DeepSeek Harness"
+      },
+      {
+        "command": "dsh.showLogs",
+        "title": "Show Host Logs",
+        "category": "DeepSeek Harness"
+      }
+    ],
+    "configuration": {
+      "title": "DeepSeek Harness",
+      "properties": {
+        "dsh.openOnStartup": {
+          "type": "boolean",
+          "default": false,
+          "description": "Open the Harness panel automatically when a trusted workspace window starts."
+        },
+        "dsh.cwd": {
+          "type": "string",
+          "default": "",
+          "description": "Working directory for the DSH host (the agent's cwd). Empty = the first workspace folder."
+        },
+        "dsh.dshHome": {
+          "type": "string",
+          "default": "",
+          "description": "Override DSH_HOME (profiles, settings, sessions). Empty = the DSH default."
+        },
+        "dsh.enableBakedPlugins": {
+          "type": "boolean",
+          "default": false,
+          "description": "Mount the ecosystem plugins baked into this extension (UI/tool plugins, recall, auto-continue) into the web profile. Keep off unless needed: mounting them changes what the panel serves."
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "dsh",
+          "title": "DeepSeek Harness",
+          "icon": "media/dsh.svg"
+        }
+      ]
+    },
+    "views": {
+      "dsh": [
+        {
+          "type": "webview",
+          "id": "dsh.harness",
+          "name": "Harness"
+        }
+      ]
+    }
+  },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false
+    }
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh": "0.1.1-rc.2"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.3.0"
+  }
+}

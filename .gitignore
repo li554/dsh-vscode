@@ -1,0 +1,19 @@
+# local dependency / install trees at the repo root (never committed)
+/node_modules/
+*.vsix
+
+# local experiment residue at repo root (not part of the build)
+@linxin666/
+
+# flat plugin install tree (source clones / pnpm layout, ~490 MB).
+# plugins/bundled is the actual shipped content and IS committed.
+plugins/node_modules/
+
+# smoke-test artifacts: old vsix unpack, disposable test DSH_HOME, logs
+.smoke/installed/
+.smoke/home/
+*.log
+
+# platform-shim binaries inside the vendored tree (runtime tools, not source).
+# vendor/node_modules itself is committed (the shipped platform tree).
+vendor/node_modules/.bin/

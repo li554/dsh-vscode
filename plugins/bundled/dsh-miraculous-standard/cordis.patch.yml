@@ -1,0 +1,7 @@
+# The `dsh-miraculous-standard` bundle layer: one installer entry that copies the
+# bundled preset into the user preset root on boot, so
+# `dsh plugin --profile web add github:rinDBeans/dsh-miraculous-standard`
+# also makes the preset selectable in the session preset list.
+- insert:
+    - id: miraculous-standard-installer
+      name: dsh-miraculous-standard

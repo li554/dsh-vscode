@@ -1,0 +1,111 @@
+# DSH Archive Manager · Codex-style Archived Session Management
+
+[中文](README.md) | English
+
+[![npm version](https://img.shields.io/npm/v/@mlgbnb/dsh-archive-manager.svg)](https://www.npmjs.com/package/@mlgbnb/dsh-archive-manager)
+[![npm downloads](https://img.shields.io/npm/dm/@mlgbnb/dsh-archive-manager.svg)](https://www.npmjs.com/package/@mlgbnb/dsh-archive-manager)
+
+![DSH Archive Manager settings card and archived session list](docs/images/archive-manager.png)
+
+**DSH Archive Manager** is a DeepSeek Harness (DSH) Web UI plugin that adds a Codex-style archived session manager to the settings page. It lets you view, search, filter, **preview conversation history**, restore, and permanently delete archived sessions, with live synchronization to the sidebar.
+
+## Features
+
+- **Codex 1:1 look and interaction**
+  - The card follows the DSH official card style (dark background, 12px rounded corners, rotating chevron), loaded under **Settings -> Plugins**.
+  - Includes a top search bar (`Search archived chats`), sort/filter controls (`All chats` / `Earliest first`), and project filters (`All projects` / individual projects).
+- **Group by project with batch management**
+  - Sessions are grouped by workspace/project automatically, with folder icons and conversation counts.
+  - Each project group has a `···` menu with one-click **delete all contents in this project**.
+- **Real content parsing, preview and restore**
+  - Parses the underlying session stream to show accurate titles, creation time, turn count and disk size, with Codex-style dates (e.g. `August 15, 2026, 1:34`).
+  - **Conversation preview**: click **View** to browse the latest 50 user/assistant messages in a modal (system-injected text is stripped automatically) — no need to restore first.
+  - **Unarchive**: restores a session back to its original workspace list immediately, with SSE real-time sidebar sync.
+  - **Permanent delete**: removes the session metadata and disk data files to free storage.
+- **Zero-dependency decompression engine**
+  - Built-in zstd multi-frame decompressor based on Node `zlib`; reads both `session.jsonl.zstd` and plain `session.jsonl` — no external `zstd` CLI required.
+- **Live two-way sync**
+  - When the card is open, it listens for sidebar archive changes and updates the archive list automatically when sessions are archived or restored.
+
+## Installation
+
+DSH uses the Cordis modular microkernel architecture. You can install the plugin in either of the following ways.
+
+### Option 1: Install from npm (recommended)
+
+#### 1. Use the DSH CLI
+
+```bash
+dsh plugin --profile web add -w @mlgbnb/dsh-archive-manager
+```
+
+#### 2. Or install it in the web profile directory
+
+```bash
+cd ~/.dsh/profiles/web
+npm i @mlgbnb/dsh-archive-manager
+# or with pnpm
+pnpm add -w @mlgbnb/dsh-archive-manager
+```
+
+After installation, make sure `~/.dsh/profiles/web/package.json` contains `@mlgbnb/dsh-archive-manager` in its `dsh.profile.bundles` array:
+
+```json
+{
+  "name": "dsh-profile-web",
+  "private": true,
+  "dependencies": {
+    "@mlgbnb/dsh-archive-manager": "^1.0.0"
+  },
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "@deepseek-ai/dsh-base",
+        "@deepseek-ai/dsh-web-app",
+        "@mlgbnb/dsh-archive-manager"
+      ]
+    }
+  }
+}
+```
+
+### Option 2: Install from a local source directory (link)
+
+```bash
+dsh plugin --profile web add -w "link:/path/to/dsh/plugin/dsh-archive-manager"
+```
+
+> If startup reports duplicate sub-package declarations after `add`, check the `dsh.profile.bundles` array in `~/.dsh/profiles/web/package.json` to ensure it only contains root packages (such as `@mlgbnb/dsh-archive-manager`, `@linxin666/dsh-web-ui-all`, etc.).
+
+## Usage
+
+Start the DSH web service:
+
+```bash
+dsh --profile web
+# or
+dsh web
+```
+
+Open [http://127.0.0.1:3080/](http://127.0.0.1:3080/), click the gear icon at the bottom of the sidebar, and enter **Settings -> Plugins**. The "Archive Manager" card will appear there.
+
+## Project Structure
+
+```text
+dsh-archive-manager/
+├── cordis.patch.yml   # Cordis plugin profile declaration patch
+├── package.json       # Package manifest and dependency declarations
+├── README.md          # Chinese documentation
+├── README.en.md       # English documentation
+├── docs/
+│   └── images/        # Screenshots and preview images
+├── lib/
+│   ├── index.js       # Host (provides /api/dsh-archive-manager/* routes and workspaceRegistry interaction)
+│   └── client.js      # Client (Codex-style card interaction, project grouping, search/filter, preview modal, delete and restore logic)
+└── src/
+    └── index.ts       # TypeScript companion source (type declarations and host entry notes)
+```
+
+## License
+
+MIT

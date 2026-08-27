@@ -1,0 +1,64 @@
+{
+  "name": "@mlgbnb/dsh-archive-manager",
+  "version": "1.0.7",
+  "description": "DSH Archive Manager - preview, restore, and delete archived sessions from the settings page",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-slots"
+      ],
+      "platform": "web"
+    }
+  },
+  "keywords": [
+    "dsh",
+    "cordis",
+    "plugin",
+    "archive",
+    "session",
+    "cleanup"
+  ],
+  "author": "DSH Harness Agent",
+  "license": "MIT",
+  "dependencies": {},
+  "peerDependencies": {
+    "react": "^18.2.0"
+  },
+  "files": [
+    "lib",
+    "src",
+    "cordis.patch.yml",
+    "README.md",
+    "README.en.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/z953218350/dsh-archive-manager.git"
+  },
+  "homepage": "https://github.com/z953218350/dsh-archive-manager",
+  "bugs": {
+    "url": "https://github.com/z953218350/dsh-archive-manager/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
+}
