@@ -2637,38 +2637,90 @@ function applyImpl(ctx, config) {
 		if (message && typeof message.text === "string" && message.text.trim() !== "") return message.text.trim();
 		return "";
 	};
-	/** Title: the session's first user instruction truncated with "…" when long;
-	* the task's prompt keeps the full untruncated instruction. */
-	const fullFirstInstruction = async (sessionId) => {
-		try {
-			const response = await host.runner.api.sessions.history(request({ sessionId, maxMessages: 30 }));
-			if (response.result.ok) {
-				for (const entry of response.result.value.events) {
-					if (entry?.event?.type !== "user/message") continue;
-					const text = titleTextOf(entry.event.data);
-					if (text !== "") return text;
+	const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
+	const scanHistory = async (sessionId) => {
+		let title = "";
+		let firstUserText = "";
+		let beforeSeq;
+		let foundTitleAt = Number.MAX_SAFE_INTEGER;
+		let foundUserAt = Number.MAX_SAFE_INTEGER;
+		for (let page = 0; page < 100; page += 1) {
+			let response;
+			try {
+				response = await host.runner.api.sessions.history(request({
+					sessionId,
+					maxMessages: 100,
+					...(beforeSeq === void 0 ? {} : { beforeSeq })
+				}));
+			} catch {
+				break;
+			}
+			if (!response.result.ok) break;
+			const events = response.result.value.events;
+			if (events.length === 0) break;
+			let oldestSeq = Number.MAX_SAFE_INTEGER;
+			for (const entry of events) {
+				const event = entry?.event;
+				if (event === void 0 || typeof event.seq !== "number") continue;
+				if (event.seq < oldestSeq) oldestSeq = event.seq;
+				if (event.type === "session/title") {
+					const text = typeof event.data?.title === "string" ? event.data.title.trim() : "";
+					if (text !== "" && event.seq < foundTitleAt) {
+						foundTitleAt = event.seq;
+						title = text;
+					}
+				} else if (event.type === "user/message" && event.seq < foundUserAt) {
+					const text = titleTextOf(event.data);
+					if (text !== "") {
+						foundUserAt = event.seq;
+						firstUserText = text;
+					}
+				} else if (event.type === "agent/inbox/spliced" && event.seq < foundUserAt) {
+					for (const inserted of event.data?.inserted ?? []) {
+						if (inserted?.source?.kind !== "user") continue;
+						const text = titleTextOf({ content: inserted.content });
+						if (text !== "") {
+							foundUserAt = event.seq;
+							firstUserText = text;
+						}
+						break;
+					}
 				}
 			}
-		} catch {}
-		return "";
-	};
-	/** Prefer the session's auto-generated title (DSH names it after the first
-	* message via the session-title service); fall back to the first instruction. */
-	const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
-	const autoTitle = async (sessionId) => {
-		const svc = ctx.sessionTitle;
-		if (svc !== void 0 && typeof svc.get === "function" && typeof ctx.sessions?.get === "function") {
-			let session = ctx.sessions.get(sessionId);
-			for (let attempt = 0; attempt < 4 && session !== void 0; attempt++) {
-				try {
-					const snapshot = svc.get(session);
-					if (snapshot !== void 0 && typeof snapshot.title === "string" && snapshot.title.trim() !== "") return snapshot.title;
-				} catch {}
-				if (attempt < 3) await sleep(250);
-				session = ctx.sessions.get(sessionId);
-			}
+			if (!response.result.value.hasMore || oldestSeq === Number.MAX_SAFE_INTEGER || oldestSeq === beforeSeq) break;
+			beforeSeq = oldestSeq;
 		}
-		return await fullFirstInstruction(sessionId);
+		return { title, firstUserText };
+	};
+	const readTaskInfo = async (sessionId) => {
+		for (let attempt = 0; attempt < 5; attempt += 1) {
+			const info = await scanHistory(sessionId);
+			if (info.firstUserText !== "" || info.title !== "") return info;
+			if (attempt < 4) await sleep(250);
+		}
+		return { title: "", firstUserText: "" };
+	};
+	const refreshTaskInfo = async (sessionId) => {
+		const info = await readTaskInfo(sessionId);
+		const ledger = host.ledger;
+		const task = ledger.document.tasks.find((entry) => entry.id === `auto-${sessionId}` && entry.archivedAt === void 0);
+		if (task === void 0) return;
+		let changed = false;
+		if (task.prompt === "" && info.firstUserText !== "") {
+			task.prompt = info.firstUserText;
+			changed = true;
+		}
+		let nextTitle = task.title;
+		if (info.title !== "") nextTitle = titleFrom(info.title);
+		else if (task.title === "新会话" && info.firstUserText !== "") nextTitle = titleFrom(info.firstUserText);
+		if (nextTitle !== task.title) {
+			task.title = nextTitle;
+			changed = true;
+		}
+		if (changed) {
+			task.updatedAt = ledger.now();
+			ledger.commit();
+		}
 	};
 	const titleFrom = (text) => {
 		if (text === "") return "新会话";
@@ -2694,8 +2746,9 @@ function applyImpl(ctx, config) {
 			}
 			if (!exists) {
 				const now = ledger.now();
-				const title = await autoTitle(sessionId);
-				const prompt = await fullFirstInstruction(sessionId);
+				const info = await readTaskInfo(sessionId);
+				const title = info.title !== "" ? info.title : info.firstUserText;
+				const prompt = info.firstUserText;
 				ledger.document.tasks.push({
 					id: `auto-${sessionId}`,
 					title: titleFrom(title),
@@ -2715,6 +2768,12 @@ function applyImpl(ctx, config) {
 					auto: true
 				});
 				ledger.commit();
+				for (const delayMs of [2e3, 8e3]) {
+					setTimeout(() => {
+						if (!host.active) return;
+						refreshTaskInfo(sessionId).catch(() => {});
+					}, delayMs);
+				}
 			}
 			return;
 		}
@@ -2744,22 +2803,43 @@ function applyImpl(ctx, config) {
 		await applyAutoLifecycle(session.id, false, "succeeded");
 	}, { global: true });
 	ctx.on("session/event", (session, event) => {
-		if (typeof session?.id !== "string" || event === void 0 || event.type !== "session/title") return;
-		const svc = ctx.sessionTitle;
-		if (svc === void 0 || typeof svc.get !== "function") return;
-		let title = "";
-		try {
-			title = svc.get(session)?.title ?? "";
-		} catch {}
-		if (typeof title !== "string" || title.trim() === "") return;
+		if (typeof session?.id !== "string" || event === void 0) return;
 		const ledger = host.ledger;
 		const task = ledger.document.tasks.find((entry) => entry.id === `auto-${session.id}` && entry.archivedAt === void 0);
 		if (task === void 0) return;
-		const nextTitle = titleFrom(title.trim());
-		if (task.title === nextTitle) return;
-		task.title = nextTitle;
-		task.updatedAt = ledger.now();
-		ledger.commit();
+		let changed = false;
+		if (event.type === "session/title") {
+			const text = typeof event.data?.title === "string" ? event.data.title.trim() : "";
+			if (text !== "") {
+				const nextTitle = titleFrom(text);
+				if (task.title !== nextTitle) {
+					task.title = nextTitle;
+					changed = true;
+				}
+			}
+		} else if (event.type === "user/message" || event.type === "agent/inbox/spliced") {
+			let text = "";
+			if (event.type === "user/message") text = titleTextOf(event.data);
+			else for (const inserted of event.data?.inserted ?? []) {
+				if (inserted?.source?.kind !== "user") continue;
+				text = titleTextOf({ content: inserted.content });
+				if (text !== "") break;
+			}
+			if (text !== "") {
+				if (task.prompt === "") {
+					task.prompt = text;
+					changed = true;
+				}
+				if (task.title === "新会话") {
+					task.title = titleFrom(text);
+					changed = true;
+				}
+			}
+		}
+		if (changed) {
+			task.updatedAt = ledger.now();
+			ledger.commit();
+		}
 	}, { global: true });
 	/** Startup self-heal for legacy rows left by older builds: only ever end
 	* up as running (if truly executing) or done/failed — never "todo". */
