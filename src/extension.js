@@ -202,16 +202,13 @@ function syncBakedPlugins(profileDir) {
   }
   if (enabled) {
     for (const name of BUNDLED_PLUGINS) if (!changed.includes(name)) changed.push(name);
-    // Transplant whenever enabled AND any bundled entry is not yet materialized
-    // under <profile>/node_modules. Checking existence (rather than only the
-    // first-ever enable) makes an in-place UPGRADE self-heal: existing users of
-    // an older vsix already have baked plugins enabled, so hasAny is true, but a
-    // newly added bundled entry was never copied.
-    // Without this, resolveBundleDir finds the bundle name in the profile
-    // manifest yet cannot resolve its package -> host aborts with code 1.
-    const modules = path.join(profileDir, "node_modules");
-    const missing = BUNDLED_PLUGINS.some((n) => !fs.existsSync(path.join(modules, ...n.split("/"))));
-    if (missing) transplantBundledPlugins(profileDir);
+    // Always re-transplant on every boot (force-overwrite). A prior install
+    // already materialized the bundle dirs, so a mere existence check would
+    // keep running the STALE plugin code transplanted from an older vsix —
+    // exactly how fixes shipped in the bundled plugins never took effect.
+    // fs.cpSync(..., force: true) replaces the transplanted tree, so an
+    // upgraded vsix propagates its new plugin code to the profile.
+    transplantBundledPlugins(profileDir);
   } else {
     for (const name of BUNDLED_PLUGINS) {
       const i = changed.indexOf(name);
