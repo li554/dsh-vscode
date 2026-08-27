@@ -2164,23 +2164,7 @@ var TaskBoardHostService = class {
 		for (const execution of executions) {
 			if (execution.sessionId === void 0) continue;
 			const task = this.ledger.document.tasks.find((item) => item.id === execution.taskId);
-			if (task?.auto === true) {
-				const running = sessions.find((item) => item.sessionId === execution.sessionId)?.running === true;
-				if (running) {
-					if (task.status !== "running") {
-						this.ledger.document.tasks = this.ledger.document.tasks.map((item) => item.id === task.id ? {
-							...item,
-							status: "running",
-							updatedAt: this.ledger.now()
-						} : item);
-						this.ledger.commit();
-					}
-				} else if (task.status === "running") {
-					// It genuinely ran (was "running"); with the session idle it is done.
-					try { this.ledger.settle(task.id, execution.executionId, "succeeded"); } catch {}
-				}
-				continue;
-			}
+			if (task?.auto === true) continue;
 			try {
 				const result = await this.runner.inspect(execution.sessionId, execution.startedAt, sessions);
 				if (result.outcome === "pending") continue;
@@ -2635,42 +2619,36 @@ function applyImpl(ctx, config) {
 		onChange: sync
 	});
 	sync();
-	const trackedSessions = /* @__PURE__ */ new Set();
-	/** Auto-register sessions created outside the board (main UI, workspace
-	* browser, chaining) so they surface as tasks. The deferred check skips
-	* sessions the board's own runner just launched: those are attached to a
-	* task by the time the check runs. */
-	const registerSessionTask = (sessionId) => {
-		if (!host.active || trackedSessions.has(sessionId)) return;
-		trackedSessions.add(sessionId);
-		setTimeout(async () => {
-			try {
-				const ledger = host.ledger;
-				if (ledger.document.tasks.some((task) => task.executions.some((execution) => execution.sessionId === sessionId))) return;
-				let known = false;
-				let title = "";
-				let running = false;
-				try {
-					const response = await host.runner.api.sessions.list(request({}));
-					if (response.result.ok) {
-						const item = response.result.value.items.find((entry) => entry.sessionId === sessionId);
-						if (item !== void 0) {
-							known = true;
-							if (item.title !== void 0 && item.title !== "") title = item.title;
-							running = item.running === true;
-						}
-					} else known = true;
-				} catch { known = true; }
-				if (!known) return;
+	/** A session only earns a task the moment it actually starts executing —
+	* opened historical/completed sessions and freshly-created-but-idle sessions
+	* never appear on the board. The task tracks the agent lifecycle with only
+	* three statuses: running -> done / failed. */
+	const applyAutoLifecycle = (sessionId, runningNow, outcome) => {
+		if (!host.active || sessionId === void 0) return;
+		const ledger = host.ledger;
+		if (runningNow) {
+			// First real execution: create the running task if none is open yet.
+			let exists = false;
+			for (const task of ledger.document.tasks) {
+				if (task.auto !== true || task.archivedAt !== void 0) continue;
+				if (task.executions.some((execution) => execution.sessionId === sessionId && execution.endedAt === void 0)) {
+					exists = true;
+					if (task.status !== "running") {
+						task.status = "running";
+						task.updatedAt = ledger.now();
+						ledger.commit();
+					}
+					break;
+				}
+			}
+			if (!exists) {
 				const now = ledger.now();
-				const taskId = `auto-${sessionId}`;
-				if (ledger.document.tasks.some((task) => task.id === taskId)) return;
-				ledger.document.tasks = [...ledger.document.tasks, {
-					id: taskId,
-					title: title !== "" ? title : "新会话",
+				ledger.document.tasks.push({
+					id: `auto-${sessionId}`,
+					title: "新会话",
 					description: "",
 					prompt: "",
-					status: running ? "running" : "todo",
+					status: "running",
 					createdAt: now,
 					updatedAt: now,
 					executions: [{
@@ -2682,67 +2660,38 @@ function applyImpl(ctx, config) {
 						error: void 0
 					}],
 					auto: true
-				}];
+				});
 				ledger.commit();
-			} catch (error) {
-				console.error("[dsh-task-board] auto-register session failed", error);
 			}
-		}, 500);
-	};
-	ctx.on("session/created", (session) => {
-		registerSessionTask(session.id);
-	}, { global: true });
-	ctx.on("session/disposed", (session) => {
-		const ledger = host.ledger;
+			return;
+		}
+		// Stopped / disposed / errored: settle any open execution for this session.
+		const toSettle = [];
 		for (const task of ledger.document.tasks) {
 			if (task.auto !== true || task.archivedAt !== void 0) continue;
 			for (const execution of task.executions) {
-				if (execution.sessionId !== session.id || execution.endedAt !== void 0) continue;
-				try {
-					ledger.settle(task.id, execution.id, "succeeded");
-				} catch (error) {
-					console.error("[dsh-task-board] settle auto task failed", error);
+				if (execution.sessionId === sessionId && execution.endedAt === void 0) {
+					toSettle.push({ taskId: task.id, executionId: execution.id });
+					break;
 				}
-				return;
 			}
 		}
-	}, { global: true });
-	/** Sync an auto task to its session's real run state: an actively executing
-	* agent shows "running"; once a "running" auto task's session goes idle it
-	* is DONE (it genuinely ran); only a never-run placeholder stays "todo". */
-	const setAutoTaskStatus = (sessionId, runningNow) => {
-		if (!host.active) return;
-		const ledger = host.ledger;
-		const toSettle = [];
-		let changed = false;
-		for (const task of ledger.document.tasks) {
-			if (task.auto !== true || task.archivedAt !== void 0) continue;
-			const openExec = task.executions.find((execution) => execution.sessionId === sessionId && execution.endedAt === void 0);
-			if (openExec === void 0) continue;
-			if (runningNow) {
-				if (task.status !== "running") {
-					task.status = "running";
-					task.updatedAt = ledger.now();
-					changed = true;
-				}
-			} else if (task.status === "running") {
-				toSettle.push({ taskId: task.id, executionId: openExec.id });
-			}
-		}
-		if (changed) ledger.commit();
 		for (const entry of toSettle) {
-			try { ledger.settle(entry.taskId, entry.executionId, "succeeded"); }
+			try { ledger.settle(entry.taskId, entry.executionId, outcome ?? "succeeded"); }
 			catch (error) { console.error("[dsh-task-board] settle auto task failed", error); }
 		}
 	};
 	ctx.on("agent/status", ({ agent, status }) => {
-		setAutoTaskStatus(agent.id, status === "running");
+		applyAutoLifecycle(agent.id, status === "running");
 	}, { global: true });
-	/** Startup self-heal: auto tasks stamped "running" by an older release
-	* whose sessions are actually idle (or gone) must not keep showing as
-	* running forever. Reconcile every open auto task against the real
-	* running state once shortly after boot; running agents will flip it back
-	* through agent/status as they tick. */
+	ctx.on("agent/error", ({ agent }) => {
+		applyAutoLifecycle(agent.id, false, "failed");
+	}, { global: true });
+	ctx.on("session/disposed", (session) => {
+		applyAutoLifecycle(session.id, false, "succeeded");
+	}, { global: true });
+	/** Startup self-heal for legacy rows left by older builds: only ever end
+	* up as running (if truly executing) or done/failed — never "todo". */
 	const reconcileAllAutoStatus = async () => {
 		if (!host.active) return;
 		const runningIds = /* @__PURE__ */ new Set();
@@ -2758,7 +2707,7 @@ function applyImpl(ctx, config) {
 			const openExec = task.executions.find((execution) => execution.sessionId !== void 0 && execution.endedAt === void 0);
 			if (openExec === void 0 || seen.has(openExec.sessionId)) continue;
 			seen.add(openExec.sessionId);
-			setAutoTaskStatus(openExec.sessionId, runningIds.has(openExec.sessionId));
+			applyAutoLifecycle(openExec.sessionId, runningIds.has(openExec.sessionId));
 		}
 	};
 	setTimeout(() => {

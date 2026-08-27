@@ -2,7 +2,7 @@
   "name": "dsh-vscode",
   "displayName": "DeepSeek Harness (DSH) for VS Code",
   "description": "Runs the DeepSeek Harness web surface inside VS Code. All host dependencies are bundled into the extension — users need no Node.js, npm, pnpm, or Python.",
-  "version": "0.2.18",
+  "version": "0.2.19",
   "publisher": "your-publisher-id",
   "license": "MIT",
   "engines": {
