@@ -2165,18 +2165,19 @@ var TaskBoardHostService = class {
 			if (execution.sessionId === void 0) continue;
 			const task = this.ledger.document.tasks.find((item) => item.id === execution.taskId);
 			if (task?.auto === true) {
-				// Auto tasks track the session's live run state on every poll and
-				// never settle by turn-inspection: a session that was merely opened
-				// (idle) or belongs to a prior release stays out of "running".
-				const summary = sessions.find((item) => item.sessionId === execution.sessionId);
-				const next = summary?.running === true ? "running" : "todo";
-				if (task.status !== next) {
-					this.ledger.document.tasks = this.ledger.document.tasks.map((item) => item.id === task.id ? {
-						...item,
-						status: next,
-						updatedAt: this.ledger.now()
-					} : item);
-					this.ledger.commit();
+				const running = sessions.find((item) => item.sessionId === execution.sessionId)?.running === true;
+				if (running) {
+					if (task.status !== "running") {
+						this.ledger.document.tasks = this.ledger.document.tasks.map((item) => item.id === task.id ? {
+							...item,
+							status: "running",
+							updatedAt: this.ledger.now()
+						} : item);
+						this.ledger.commit();
+					}
+				} else if (task.status === "running") {
+					// It genuinely ran (was "running"); with the session idle it is done.
+					try { this.ledger.settle(task.id, execution.executionId, "succeeded"); } catch {}
 				}
 				continue;
 			}
@@ -2706,29 +2707,36 @@ function applyImpl(ctx, config) {
 			}
 		}
 	}, { global: true });
-	/** Sync the auto task's status to its session's real run state: only an
-	* agent whose turn is actively executing shows as "running"; idle/disposed
-	* historical sessions that were merely opened never show that way. */
-	const setAutoTaskStatus = (sessionId, status) => {
+	/** Sync an auto task to its session's real run state: an actively executing
+	* agent shows "running"; once a "running" auto task's session goes idle it
+	* is DONE (it genuinely ran); only a never-run placeholder stays "todo". */
+	const setAutoTaskStatus = (sessionId, runningNow) => {
 		if (!host.active) return;
 		const ledger = host.ledger;
+		const toSettle = [];
 		let changed = false;
-		const next = status === "running" ? "running" : "todo";
-		ledger.document.tasks = ledger.document.tasks.map((task) => {
-			if (task.auto !== true || task.archivedAt !== void 0) return task;
-			const hasOpen = task.executions.some((execution) => execution.sessionId === sessionId && execution.endedAt === void 0);
-			if (!hasOpen || task.status === next) return task;
-			changed = true;
-			return {
-				...task,
-				status: next,
-				updatedAt: ledger.now()
-			};
-		});
+		for (const task of ledger.document.tasks) {
+			if (task.auto !== true || task.archivedAt !== void 0) continue;
+			const openExec = task.executions.find((execution) => execution.sessionId === sessionId && execution.endedAt === void 0);
+			if (openExec === void 0) continue;
+			if (runningNow) {
+				if (task.status !== "running") {
+					task.status = "running";
+					task.updatedAt = ledger.now();
+					changed = true;
+				}
+			} else if (task.status === "running") {
+				toSettle.push({ taskId: task.id, executionId: openExec.id });
+			}
+		}
 		if (changed) ledger.commit();
+		for (const entry of toSettle) {
+			try { ledger.settle(entry.taskId, entry.executionId, "succeeded"); }
+			catch (error) { console.error("[dsh-task-board] settle auto task failed", error); }
+		}
 	};
 	ctx.on("agent/status", ({ agent, status }) => {
-		setAutoTaskStatus(agent.id, status);
+		setAutoTaskStatus(agent.id, status === "running");
 	}, { global: true });
 	/** Startup self-heal: auto tasks stamped "running" by an older release
 	* whose sessions are actually idle (or gone) must not keep showing as
@@ -2744,22 +2752,14 @@ function applyImpl(ctx, config) {
 				if (item.running === true && typeof item.sessionId === "string") runningIds.add(item.sessionId);
 			}
 		} catch {}
-		const ledger = host.ledger;
-		let changed = false;
-		ledger.document.tasks = ledger.document.tasks.map((task) => {
-			if (task.auto !== true || task.archivedAt !== void 0) return task;
+		const seen = /* @__PURE__ */ new Set();
+		for (const task of host.ledger.document.tasks) {
+			if (task.auto !== true || task.archivedAt !== void 0) continue;
 			const openExec = task.executions.find((execution) => execution.sessionId !== void 0 && execution.endedAt === void 0);
-			if (openExec === void 0) return task;
-			const next = runningIds.has(openExec.sessionId) ? "running" : "todo";
-			if (task.status === next) return task;
-			changed = true;
-			return {
-				...task,
-				status: next,
-				updatedAt: ledger.now()
-			};
-		});
-		if (changed) ledger.commit();
+			if (openExec === void 0 || seen.has(openExec.sessionId)) continue;
+			seen.add(openExec.sessionId);
+			setAutoTaskStatus(openExec.sessionId, runningIds.has(openExec.sessionId));
+		}
 	};
 	setTimeout(() => {
 		reconcileAllAutoStatus().catch(() => {});
