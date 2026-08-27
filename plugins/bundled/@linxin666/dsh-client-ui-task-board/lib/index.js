@@ -2654,17 +2654,20 @@ function applyImpl(ctx, config) {
 	};
 	/** Prefer the session's auto-generated title (DSH names it after the first
 	* message via the session-title service); fall back to the first instruction. */
+	const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 	const autoTitle = async (sessionId) => {
-		try {
-			const svc = ctx.sessionTitle;
-			if (svc !== void 0 && typeof svc.get === "function" && typeof ctx.sessions?.get === "function") {
-				const session = ctx.sessions.get(sessionId);
-				if (session !== void 0) {
+		const svc = ctx.sessionTitle;
+		if (svc !== void 0 && typeof svc.get === "function" && typeof ctx.sessions?.get === "function") {
+			let session = ctx.sessions.get(sessionId);
+			for (let attempt = 0; attempt < 4 && session !== void 0; attempt++) {
+				try {
 					const snapshot = svc.get(session);
-					if (snapshot && typeof snapshot.title === "string" && snapshot.title.trim() !== "") return snapshot.title;
-				}
+					if (snapshot !== void 0 && typeof snapshot.title === "string" && snapshot.title.trim() !== "") return snapshot.title;
+				} catch {}
+				if (attempt < 3) await sleep(250);
+				session = ctx.sessions.get(sessionId);
 			}
-		} catch {}
+		}
 		return await fullFirstInstruction(sessionId);
 	};
 	const titleFrom = (text) => {
@@ -2739,6 +2742,24 @@ function applyImpl(ctx, config) {
 	}, { global: true });
 	ctx.on("session/disposed", async (session) => {
 		await applyAutoLifecycle(session.id, false, "succeeded");
+	}, { global: true });
+	ctx.on("session/event", (session, event) => {
+		if (typeof session?.id !== "string" || event === void 0 || event.type !== "session/title") return;
+		const svc = ctx.sessionTitle;
+		if (svc === void 0 || typeof svc.get !== "function") return;
+		let title = "";
+		try {
+			title = svc.get(session)?.title ?? "";
+		} catch {}
+		if (typeof title !== "string" || title.trim() === "") return;
+		const ledger = host.ledger;
+		const task = ledger.document.tasks.find((entry) => entry.id === `auto-${session.id}` && entry.archivedAt === void 0);
+		if (task === void 0) return;
+		const nextTitle = titleFrom(title.trim());
+		if (task.title === nextTitle) return;
+		task.title = nextTitle;
+		task.updatedAt = ledger.now();
+		ledger.commit();
 	}, { global: true });
 	/** Startup self-heal for legacy rows left by older builds: only ever end
 	* up as running (if truly executing) or done/failed — never "todo". */
