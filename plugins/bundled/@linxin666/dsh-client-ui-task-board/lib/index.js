@@ -2715,6 +2715,40 @@ function applyImpl(ctx, config) {
 	ctx.on("agent/status", ({ agent, status }) => {
 		setAutoTaskStatus(agent.id, status);
 	}, { global: true });
+	/** Startup self-heal: auto tasks stamped "running" by an older release
+	* whose sessions are actually idle (or gone) must not keep showing as
+	* running forever. Reconcile every open auto task against the real
+	* running state once shortly after boot; running agents will flip it back
+	* through agent/status as they tick. */
+	const reconcileAllAutoStatus = async () => {
+		if (!host.active) return;
+		const runningIds = /* @__PURE__ */ new Set();
+		try {
+			const response = await host.runner.api.sessions.list(request({}));
+			if (response.result.ok) for (const item of response.result.value.items) {
+				if (item.running === true && typeof item.sessionId === "string") runningIds.add(item.sessionId);
+			}
+		} catch {}
+		const ledger = host.ledger;
+		let changed = false;
+		ledger.document.tasks = ledger.document.tasks.map((task) => {
+			if (task.auto !== true || task.archivedAt !== void 0) return task;
+			const openExec = task.executions.find((execution) => execution.sessionId !== void 0 && execution.endedAt === void 0);
+			if (openExec === void 0) return task;
+			const next = runningIds.has(openExec.sessionId) ? "running" : "todo";
+			if (task.status === next) return task;
+			changed = true;
+			return {
+				...task,
+				status: next,
+				updatedAt: ledger.now()
+			};
+		});
+		if (changed) ledger.commit();
+	};
+	setTimeout(() => {
+		reconcileAllAutoStatus().catch(() => {});
+	}, 300);
 }
 //#endregion
 export { Config, DEFAULT_PROXY_TOKEN_ENV, TASK_BOARD_GUIDANCE, TASK_BOARD_SETTINGS_NAMESPACE, apply, inject, resolveProxyAccess };
