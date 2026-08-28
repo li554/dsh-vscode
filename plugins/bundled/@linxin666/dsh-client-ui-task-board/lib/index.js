@@ -2641,9 +2641,11 @@ function applyImpl(ctx, config) {
 	const scanHistory = async (sessionId) => {
 		let title = "";
 		let firstUserText = "";
+		let lastUserText = "";
 		let beforeSeq;
-		let foundTitleAt = Number.MAX_SAFE_INTEGER;
-		let foundUserAt = Number.MAX_SAFE_INTEGER;
+		let foundTitleAt = -1;
+		let foundFirstAt = Number.MAX_SAFE_INTEGER;
+		let foundLastAt = -1;
 		for (let page = 0; page < 100; page += 1) {
 			let response;
 			try {
@@ -2665,32 +2667,36 @@ function applyImpl(ctx, config) {
 				if (event.seq < oldestSeq) oldestSeq = event.seq;
 				if (event.type === "session/title") {
 					const text = typeof event.data?.title === "string" ? event.data.title.trim() : "";
-					if (text !== "" && event.seq < foundTitleAt) {
+					if (text !== "" && event.seq > foundTitleAt) {
 						foundTitleAt = event.seq;
 						title = text;
 					}
-				} else if (event.type === "user/message" && event.seq < foundUserAt) {
-					const text = titleTextOf(event.data);
-					if (text !== "") {
-						foundUserAt = event.seq;
-						firstUserText = text;
+				} else {
+					let text = "";
+					if (event.type === "user/message") text = titleTextOf(event.data);
+					else if (event.type === "agent/inbox/spliced") {
+						for (const inserted of event.data?.inserted ?? []) {
+							if (inserted?.source?.kind !== "user") continue;
+							text = titleTextOf({ content: inserted.content });
+							if (text !== "") break;
+						}
 					}
-				} else if (event.type === "agent/inbox/spliced" && event.seq < foundUserAt) {
-					for (const inserted of event.data?.inserted ?? []) {
-						if (inserted?.source?.kind !== "user") continue;
-						const text = titleTextOf({ content: inserted.content });
-						if (text !== "") {
-							foundUserAt = event.seq;
+					if (text !== "") {
+						if (event.seq < foundFirstAt) {
+							foundFirstAt = event.seq;
 							firstUserText = text;
 						}
-						break;
+						if (event.seq > foundLastAt) {
+							foundLastAt = event.seq;
+							lastUserText = text;
+						}
 					}
 				}
 			}
 			if (!response.result.value.hasMore || oldestSeq === Number.MAX_SAFE_INTEGER || oldestSeq === beforeSeq) break;
 			beforeSeq = oldestSeq;
 		}
-		return { title, firstUserText };
+		return { title, firstUserText, lastUserText };
 	};
 	const readTaskInfo = async (sessionId) => {
 		for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -2698,7 +2704,7 @@ function applyImpl(ctx, config) {
 			if (info.firstUserText !== "" || info.title !== "") return info;
 			if (attempt < 4) await sleep(250);
 		}
-		return { title: "", firstUserText: "" };
+		return { title: "", firstUserText: "", lastUserText: "" };
 	};
 	const refreshTaskInfo = async (sessionId) => {
 		const info = await readTaskInfo(sessionId);
@@ -2706,13 +2712,13 @@ function applyImpl(ctx, config) {
 		const task = ledger.document.tasks.find((entry) => entry.id === `auto-${sessionId}` && entry.archivedAt === void 0);
 		if (task === void 0) return;
 		let changed = false;
-		if (task.prompt === "" && info.firstUserText !== "") {
-			task.prompt = info.firstUserText;
+		if (info.lastUserText !== "" && task.prompt !== info.lastUserText) {
+			task.prompt = info.lastUserText;
 			changed = true;
 		}
 		let nextTitle = task.title;
 		if (info.title !== "") nextTitle = titleFrom(info.title);
-		else if (task.title === "新会话" && info.firstUserText !== "") nextTitle = titleFrom(info.firstUserText);
+		else if (task.title === "新会话" && info.lastUserText !== "") nextTitle = titleFrom(info.lastUserText);
 		if (nextTitle !== task.title) {
 			task.title = nextTitle;
 			changed = true;
@@ -2730,50 +2736,97 @@ function applyImpl(ctx, config) {
 		if (!host.active || sessionId === void 0) return;
 		const ledger = host.ledger;
 		if (runningNow) {
-			// First real execution: create the running task if none is open yet.
-			let exists = false;
+			// Re-activate or create: a session must occupy exactly one auto task —
+			// re-runs flip the existing (possibly done/archived) card back to
+			// running with a fresh execution instead of spawning duplicates.
+			let target;
+			const duplicates = [];
 			for (const task of ledger.document.tasks) {
-				if (task.auto !== true || task.archivedAt !== void 0) continue;
-				if (task.executions.some((execution) => execution.sessionId === sessionId && execution.endedAt === void 0)) {
-					exists = true;
-					if (task.status !== "running") {
-						task.status = "running";
-						task.updatedAt = ledger.now();
-						ledger.commit();
-					}
-					break;
-				}
+				if (task.auto !== true) continue;
+				if (!task.executions.some((execution) => execution.sessionId === sessionId)) continue;
+				if (target === void 0) target = task;
+				else duplicates.push(task);
 			}
-			if (!exists) {
-				const now = ledger.now();
-				const info = await readTaskInfo(sessionId);
-				const title = info.title !== "" ? info.title : info.firstUserText;
-				const prompt = info.firstUserText;
-				ledger.document.tasks.push({
-					id: `auto-${sessionId}`,
-					title: titleFrom(title),
-					description: "",
-					prompt,
-					status: "running",
-					createdAt: now,
-					updatedAt: now,
-					executions: [{
+			if (target !== void 0) {
+				let changed = false;
+				if (duplicates.length > 0) {
+					for (const duplicate of duplicates) {
+						for (const execution of duplicate.executions) target.executions.push(execution);
+						if (typeof duplicate.createdAt === "number" && duplicate.createdAt < target.createdAt) target.createdAt = duplicate.createdAt;
+					}
+					target.executions.sort((a, b) => (a.startedAt ?? 0) - (b.startedAt ?? 0));
+					for (let i = ledger.document.tasks.length - 1; i >= 0; i -= 1) {
+						if (duplicates.includes(ledger.document.tasks[i])) ledger.document.tasks.splice(i, 1);
+					}
+					changed = true;
+				}
+				if (target.archivedAt !== void 0) {
+					target.archivedAt = void 0;
+					changed = true;
+				}
+				if (target.status !== "running") {
+					target.status = "running";
+					changed = true;
+				}
+				const hasOpen = target.executions.some((execution) => execution.sessionId === sessionId && execution.endedAt === void 0);
+				if (!hasOpen) {
+					// A finished previous round: this is a new instruction — append the
+					// execution and refresh title/prompt to the latest instruction.
+					target.executions.push({
 						id: crypto.randomUUID(),
 						sessionId,
-						startedAt: now,
+						startedAt: ledger.now(),
 						endedAt: void 0,
 						result: void 0,
 						error: void 0
-					}],
-					auto: true
-				});
-				ledger.commit();
-				for (const delayMs of [2e3, 8e3]) {
-					setTimeout(() => {
-						if (!host.active) return;
-						refreshTaskInfo(sessionId).catch(() => {});
-					}, delayMs);
+					});
+					changed = true;
+					const info = await readTaskInfo(sessionId);
+					const title = info.title !== "" ? info.title : info.lastUserText !== "" ? info.lastUserText : info.firstUserText;
+					if (title !== "") target.title = titleFrom(title);
+					if (info.lastUserText !== "") target.prompt = info.lastUserText;
+					for (const delayMs of [2e3, 8e3]) {
+						setTimeout(() => {
+							if (!host.active) return;
+							refreshTaskInfo(sessionId).catch(() => {});
+						}, delayMs);
+					}
 				}
+				if (changed) {
+					target.updatedAt = ledger.now();
+					ledger.commit();
+				}
+				return;
+			}
+			// First real execution: create the running task if none is open yet.
+			const now = ledger.now();
+			const info = await readTaskInfo(sessionId);
+			const title = info.title !== "" ? info.title : info.firstUserText;
+			const prompt = info.firstUserText;
+			ledger.document.tasks.push({
+				id: `auto-${sessionId}`,
+				title: titleFrom(title),
+				description: "",
+				prompt,
+				status: "running",
+				createdAt: now,
+				updatedAt: now,
+				executions: [{
+					id: crypto.randomUUID(),
+					sessionId,
+					startedAt: now,
+					endedAt: void 0,
+					result: void 0,
+					error: void 0
+				}],
+				auto: true
+			});
+			ledger.commit();
+			for (const delayMs of [2e3, 8e3]) {
+				setTimeout(() => {
+					if (!host.active) return;
+					refreshTaskInfo(sessionId).catch(() => {});
+				}, delayMs);
 			}
 			return;
 		}
@@ -2784,7 +2837,6 @@ function applyImpl(ctx, config) {
 			for (const execution of task.executions) {
 				if (execution.sessionId === sessionId && execution.endedAt === void 0) {
 					toSettle.push({ taskId: task.id, executionId: execution.id });
-					break;
 				}
 			}
 		}
@@ -2826,7 +2878,9 @@ function applyImpl(ctx, config) {
 				if (text !== "") break;
 			}
 			if (text !== "") {
-				if (task.prompt === "") {
+				// The newest instruction is what the current execution runs — keep
+				// prompt in sync so a re-run card reflects the latest message.
+				if (task.prompt !== text) {
 					task.prompt = text;
 					changed = true;
 				}
@@ -2843,8 +2897,36 @@ function applyImpl(ctx, config) {
 	}, { global: true });
 	/** Startup self-heal for legacy rows left by older builds: only ever end
 	* up as running (if truly executing) or done/failed — never "todo". */
+	/** Merge duplicate auto cards that share one session (legacy data) into a
+	* single card so the done panel never shows repeated conversations. */
+	const dedupeAutoTasks = () => {
+		const ledger = host.ledger;
+		const keep = /* @__PURE__ */ new Map();
+		const duplicates = [];
+		for (const task of ledger.document.tasks) {
+			if (task.auto !== true) continue;
+			const target = keep.get(task.id);
+			if (target === void 0) {
+				keep.set(task.id, task);
+				continue;
+			}
+			for (const execution of task.executions) target.executions.push(execution);
+			if (typeof task.createdAt === "number" && task.createdAt < target.createdAt) target.createdAt = task.createdAt;
+			if (task.archivedAt === void 0) target.archivedAt = void 0;
+			if (task.status === "running") target.status = "running";
+			duplicates.push(task);
+		}
+		if (duplicates.length === 0) return;
+		for (const target of keep.values()) target.executions.sort((a, b) => (a.startedAt ?? 0) - (b.startedAt ?? 0));
+		const removed = /* @__PURE__ */ new Set(duplicates);
+		for (let i = ledger.document.tasks.length - 1; i >= 0; i -= 1) {
+			if (removed.has(ledger.document.tasks[i])) ledger.document.tasks.splice(i, 1);
+		}
+		ledger.commit();
+	};
 	const reconcileAllAutoStatus = async () => {
 		if (!host.active) return;
+		dedupeAutoTasks();
 		const runningIds = /* @__PURE__ */ new Set();
 		try {
 			const response = await host.runner.api.sessions.list(request({}));

@@ -31,8 +31,10 @@ const MAX_JSON_BODY_BYTES = 512 * 1024
 
 const ZSTD_MAGIC = 4247762216
 
-/** DSH home directory. */
+/** DSH home directory — the extension host exports DSH_HOME, so prefer it over ~/.dsh. */
 export function dshHome() {
+  const override = process.env.DSH_HOME
+  if (typeof override === 'string' && override.trim() !== '') return override
   return join(homedir(), '.dsh')
 }
 

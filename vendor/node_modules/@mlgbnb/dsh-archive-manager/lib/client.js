@@ -229,6 +229,9 @@
         var pollRef = useRef(null);
         var toastRef = useRef(null);
         var composingRef = useRef(false);
+        // The search input stays uncontrolled: the 2s archive poll re-renders the
+        // card, and a controlled value would wipe in-flight IME composition.
+        var searchInputRef = useRef(null);
 
         function showToast(kind, msg) {
           if (toastRef.current) { clearTimeout(toastRef.current); toastRef.current = null; }
@@ -432,12 +435,13 @@
             h('span', { className: 'cdx-am-search-icon' }, IconSearch(14)),
             h('input', {
               type: 'text', className: 'cdx-am-search-input', placeholder: t('searchPlaceholder'),
-              value: query,
+              ref: searchInputRef,
+              defaultValue: '',
               onCompositionStart: function () { composingRef.current = true; },
               onCompositionEnd: function (e) { composingRef.current = false; setQuery(e.target.value); },
-              onChange: function (e) { if (!composingRef.current) setQuery(e.target.value); }
+              onChange: function (e) { setQuery(e.target.value); }
             }),
-            query ? h('button', { type: 'button', className: 'cdx-am-search-clear', title: t('clearSearch'), onClick: function () { setQuery(''); } }, IconClose(14)) : null
+            query ? h('button', { type: 'button', className: 'cdx-am-search-clear', title: t('clearSearch'), onClick: function () { setQuery(''); if (searchInputRef.current) searchInputRef.current.value = ''; } }, IconClose(14)) : null
           ),
           h('div', { className: 'cdx-am-filter-row' },
             h('div', { className: 'cdx-am-dropdown-container' },

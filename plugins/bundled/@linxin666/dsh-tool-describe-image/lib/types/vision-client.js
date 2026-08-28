@@ -12,6 +12,7 @@ import { readFile, realpath, stat } from 'node:fs/promises';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { ATTACHMENT_REF_GUIDANCE, parseImageAttachmentRef, parseMarkdownAttachmentReference } from "./attachment-reference.js";
 import { attachmentRefById } from "./attach-routes.js";
+import { compressIfNeeded } from "./image-compress.js";
 import { sniffMimeType } from "./media.js";
 import { assertImageUrlAllowed } from "./url-guard.js";
 export { parseImageAttachmentRef } from "./attachment-reference.js";
@@ -63,12 +64,12 @@ function toImage(bytes, source) {
     }
     return { bytes, mimeType };
 }
-/** Bound-check then sniff one loaded buffer — the shared tail of every input branch. */
-function finishLoad(bytes, source, maxBytes) {
+/** Bound-check, sniff, then compress one loaded buffer — the shared tail of every input branch. */
+async function finishLoad(bytes, source, maxBytes) {
     if (bytes.length > maxBytes) {
         throw new Error(`describe-image: image is ${bytes.length} bytes, above the ${maxBytes}-byte bound`);
     }
-    return toImage(bytes, source);
+    return compressIfNeeded(toImage(bytes, source));
 }
 /**
  * Load one image from a local absolute path, an http(s) URL, a complete durable attachment

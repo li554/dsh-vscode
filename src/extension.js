@@ -145,6 +145,7 @@ const BUNDLED_PLUGINS = [
   "dsh-miraculous-standard",
   "dsh-memory-evolve",
   "dsh-recall-plugin",
+  "@dsh-external/dsh-diff-review",
   "@dsh-external/dsh-super-injector"
 ];
 /** Plugins that older vsix releases bundled but have since been retired

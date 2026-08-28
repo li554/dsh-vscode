@@ -14,6 +14,7 @@ import { isAbsolute, relative, resolve, sep } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { ATTACHMENT_REF_GUIDANCE, parseImageAttachmentRef, parseMarkdownAttachmentReference } from './attachment-reference.ts'
 import { attachmentRefById } from './attach-routes.ts'
+import { compressIfNeeded } from './image-compress.ts'
 import { sniffMimeType, type ImageMimeType } from './media.ts'
 import { assertImageUrlAllowed } from './url-guard.ts'
 import type { ResolvedConfig } from './config-resolve.ts'
@@ -76,12 +77,14 @@ function toImage(bytes: Buffer, source: string): LoadedImage {
   return { bytes, mimeType }
 }
 
-/** Bound-check then sniff one loaded buffer — the shared tail of every input branch. */
-function finishLoad(bytes: Buffer, source: string, maxBytes: number): LoadedImage {
+/** Bound-check, sniff, then compress one loaded buffer — the shared tail of every input branch. */
+async function finishLoad(bytes: Buffer, source: string, maxBytes: number): Promise<LoadedImage> {
   if (bytes.length > maxBytes) {
     throw new Error(`describe-image: image is ${bytes.length} bytes, above the ${maxBytes}-byte bound`)
   }
-  return toImage(bytes, source)
+  const compressed = await compressIfNeeded(toImage(bytes, source))
+  // The pipeline only rewrites to image/jpeg and otherwise passes the sniffed type through.
+  return { bytes: compressed.bytes, mimeType: compressed.mimeType as ImageMimeType }
 }
 
 /**

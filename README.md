@@ -51,6 +51,7 @@
 | `dsh-client-auto-continue` | [HsiangNianian/dsh-auto-continue](https://github.com/HsiangNianian/dsh-auto-continue) | 无 |
 | `@linxin666/dsh-*`（会话恢复、桌面启动器、医疗辅助、宠物、UI 面板等） | [zhu1090093659/dsh-web-ui](https://github.com/zhu1090093659/dsh-web-ui) / linxin666 生态 | 无。`dsh-ssh`、`dsh-client-ui-skin-center` 因原生 ABI 无法在 VS Code 内嵌 Node 中加载而被排除 |
 | `dsh-miraculous-standard`、`@dsh-external/dsh-super-injector` | 社区包 | 无 |
+| `@dsh-external/dsh-diff-review` | [Nomit8088/dsh-diff-review](https://github.com/Nomit8088/dsh-diff-review) | 无（自包含打包：`lib` + 内嵌 `diff` 依赖） |
 | `_hostdeps/`（cosmokit、fflate、jpeg-js、schemastery） | npm 包 | 内置以便非平台依赖离线解析 |
 
 ## 🛠️ 从源码构建
