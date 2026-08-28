@@ -656,9 +656,12 @@ window.__ModuleLoader__.load({
 				console.error("dsh-diff-review: failed to register diff-review-tail conversation definition", error);
 			}
 			// Register the review tab as soon as (and each time) the sidebar service
-		// becomes available — ctx.inject defers until the provider is published.
-		ctx.inject(["betterSidebar"], () => {
-			ctx.betterSidebar.registerTab({
+		// becomes available. The callback receives its OWN fiber context whose
+		// inject list contains "betterSidebar" — accessing ctx.betterSidebar on
+		// the outer (non-injecting) context throws "cannot get property
+		// without inject", which killed every previous registration attempt.
+		ctx.inject(["betterSidebar"], (sidebarCtx) => {
+			sidebarCtx.effect(() => sidebarCtx.betterSidebar.registerTab({
 				id: "@dsh-external/dsh-diff-review:review",
 				title: "审阅",
 				order: 90,
@@ -681,7 +684,7 @@ window.__ModuleLoader__.load({
 					strokeLinecap: "round"
 				})),
 				component: ReviewSidebarTab
-			});
+			}), "dsh-diff-review: review tab");
 			return () => {};
 		});
 		}
