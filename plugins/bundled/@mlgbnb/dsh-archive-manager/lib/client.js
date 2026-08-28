@@ -226,6 +226,12 @@
         // Preview modal state: { open, sid, title, loading, data, error }
         var a10 = useState(null); var previewModal = a10[0], setPreviewModal = a10[1];
 
+        // Confirm modal state: { message, danger }. window.confirm is disabled
+        // inside the VS Code webview iframe (silently returns false), which made
+        // every delete button a no-op — hence this in-app dialog.
+        var a11 = useState(null); var confirmModal = a11[0], setConfirmModal = a11[1];
+        var confirmResolveRef = useRef(null);
+
         var pollRef = useRef(null);
         var toastRef = useRef(null);
         var composingRef = useRef(false);
@@ -238,6 +244,21 @@
           if (kind === 'success') { setSuccess(msg); setError(null); }
           else { setError(msg); setSuccess(null); }
           toastRef.current = setTimeout(function () { setError(null); setSuccess(null); toastRef.current = null; }, 3500);
+        }
+
+        /** In-app replacement for window.confirm (blocked inside the webview). */
+        function askConfirm(message) {
+          return new Promise(function (resolve) {
+            if (confirmResolveRef.current) { try { confirmResolveRef.current(false); } catch (e) {} }
+            confirmResolveRef.current = resolve;
+            setConfirmModal({ message: message, danger: true });
+          });
+        }
+        function settleConfirm(ok) {
+          var resolve = confirmResolveRef.current;
+          confirmResolveRef.current = null;
+          setConfirmModal(null);
+          if (resolve) { try { resolve(ok); } catch (e) {} }
         }
 
         function load() {
@@ -296,55 +317,61 @@
 
         function del(sid, title) {
           if (busy) return;
-          if (!confirm(fmt(t, 'confirmDelete', title || sid))) return;
-          setBusy(true);
-          fetchJson(API_BASE + '/delete', {
-            method: 'POST', headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ sessionId: sid })
-          }).then(function () {
-            setBusy(false);
-            if (previewModal && previewModal.sid === sid) setPreviewModal(null);
-            showToast('success', fmt(t, 'deleted'));
-            load();
-          }).catch(function (e) {
-            setBusy(false);
-            showToast('error', fmt(t, 'deleteFailed') + ': ' + (e.message || String(e)));
+          askConfirm(fmt(t, 'confirmDelete', title || sid)).then(function (ok) {
+            if (!ok) return;
+            setBusy(true);
+            fetchJson(API_BASE + '/delete', {
+              method: 'POST', headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ sessionId: sid })
+            }).then(function () {
+              setBusy(false);
+              if (previewModal && previewModal.sid === sid) setPreviewModal(null);
+              showToast('success', fmt(t, 'deleted'));
+              load();
+            }).catch(function (e) {
+              setBusy(false);
+              showToast('error', fmt(t, 'deleteFailed') + ': ' + (e.message || String(e)));
+            });
           });
         }
 
         function delWs(wsTitle, sids) {
           if (busy || !sids || sids.length === 0) return;
-          if (!confirm(fmt(t, 'confirmDeleteWs', wsTitle, sids.length))) return;
-          setBusy(true);
-          setOpenMenu(null);
-          fetchJson(API_BASE + '/delete', {
-            method: 'POST', headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ sessionIds: sids })
-          }).then(function () {
-            setBusy(false);
-            showToast('success', fmt(t, 'deletedWsToast', wsTitle));
-            load();
-          }).catch(function (e) {
-            setBusy(false);
-            showToast('error', fmt(t, 'deleteWsFailed') + ': ' + (e.message || String(e)));
+          askConfirm(fmt(t, 'confirmDeleteWs', wsTitle, sids.length)).then(function (ok) {
+            if (!ok) return;
+            setBusy(true);
+            setOpenMenu(null);
+            fetchJson(API_BASE + '/delete', {
+              method: 'POST', headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ sessionIds: sids })
+            }).then(function () {
+              setBusy(false);
+              showToast('success', fmt(t, 'deletedWsToast', wsTitle));
+              load();
+            }).catch(function (e) {
+              setBusy(false);
+              showToast('error', fmt(t, 'deleteWsFailed') + ': ' + (e.message || String(e)));
+            });
           });
         }
 
         function delAll() {
           if (busy || archives.length === 0) return;
-          if (!confirm(fmt(t, 'confirmDeleteAll', archives.length))) return;
-          setBusy(true);
-          fetchJson(API_BASE + '/delete-all', {
-            method: 'POST', headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({})
-          }).then(function (r) {
-            setBusy(false);
-            var n = r && Array.isArray(r.removed) ? r.removed.length : archives.length;
-            showToast('success', fmt(t, 'deletedAllToast', n));
-            load();
-          }).catch(function (e) {
-            setBusy(false);
-            showToast('error', fmt(t, 'deleteAllFailed') + ': ' + (e.message || String(e)));
+          askConfirm(fmt(t, 'confirmDeleteAll', archives.length)).then(function (ok) {
+            if (!ok) return;
+            setBusy(true);
+            fetchJson(API_BASE + '/delete-all', {
+              method: 'POST', headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({})
+            }).then(function (r) {
+              setBusy(false);
+              var n = r && Array.isArray(r.removed) ? r.removed.length : archives.length;
+              showToast('success', fmt(t, 'deletedAllToast', n));
+              load();
+            }).catch(function (e) {
+              setBusy(false);
+              showToast('error', fmt(t, 'deleteAllFailed') + ': ' + (e.message || String(e)));
+            });
           });
         }
 
@@ -598,6 +625,32 @@
                 }, IconTrash(13), h('span', null, t('deletePermanently')))
               )
             )
+          ) : null,
+
+          /* Confirm Modal (replaces window.confirm, blocked in webview) */
+          confirmModal ? h('div', {
+            className: 'cdx-am-modal-backdrop',
+            onClick: function (e) { if (e.target === e.currentTarget) settleConfirm(false); }
+          },
+            h('div', { className: 'cdx-am-modal', style: { maxWidth: '460px' } },
+              h('div', { className: 'cdx-am-modal-header' },
+                h('h3', { className: 'cdx-am-modal-title' }, t('confirmTitle'))
+              ),
+              h('div', { className: 'cdx-am-modal-body' },
+                h('div', { style: { whiteSpace: 'pre-line', fontSize: '13px', lineHeight: '1.6', color: 'var(--dsw-alias-label-primary, inherit)' } },
+                  confirmModal.message)
+              ),
+              h('div', { className: 'cdx-am-modal-footer' },
+                h('button', {
+                  type: 'button', className: 'cdx-am-btn-action cdx-am-btn-preview',
+                  onClick: function () { settleConfirm(false); }
+                }, t('confirmCancel')),
+                h('button', {
+                  type: 'button', className: 'cdx-am-btn-action cdx-am-btn-danger',
+                  onClick: function () { settleConfirm(true); }
+                }, t('confirmOk'))
+              )
+            )
           ) : null
         );
       }
@@ -620,6 +673,7 @@
         deleteFailed: '删除失败', deleteWsFailed: '删除项目归档失败',
         confirmDelete: '确认从磁盘彻底物理删除会话「{0}」？\n此操作将删除 session.jsonl.zstd 文件并清理所有记录，无法恢复！',
         confirmDeleteWs: '确认彻底物理删除「{0}」项目下的全部 {1} 个归档会话？\n磁盘文件将全部移除，无法恢复！',
+        confirmTitle: '操作确认', confirmOk: '确认删除', confirmCancel: '取消',
         restoredToast: '已恢复会话「{0}」到侧边栏。', deletedWsToast: '已彻底删除「{0}」项目下的所有归档会话。'
       };
       var en = {
@@ -632,6 +686,7 @@
         deleteAll: 'Delete all', deleteAllTip: 'Permanently delete all archived sessions (including disk files)',
         deletedAllToast: 'Permanently deleted all {0} archived sessions.', deleteAllFailed: 'Failed to delete all archives',
         confirmDeleteAll: 'Permanently delete ALL {0} archived sessions?\nAll disk files and records will be removed and cannot be undone!',
+        confirmTitle: 'Confirm', confirmOk: 'Delete', confirmCancel: 'Cancel',
         deletePermanently: 'Delete', preview: 'View', viewDetail: 'View chat history',
         unarchive: 'Restore', unarchiveTip: 'Restore to sidebar', close: 'Close',
         loading: 'Loading archived chats...', empty: 'No archived conversations.', noMatch: 'No matching archived chats.',
