@@ -594,12 +594,16 @@ window.__ModuleLoader__.load({
 		const inject = ["slots"];
 		const TAIL_KIND = "diff-review-tail";
 		function apply(ctx) {
+		// dsh-better-sidebar publishes its service at its own apply time; plugins
+		// load alphabetically (@dsh-external/... comes first), so capturing the
+		// service once here would forever hold `undefined` and silently swallow
+		// every card click. Resolve it lazily per click instead.
+		const openReview = (fileKey) => {
 			const betterSidebar = ctx.get("betterSidebar");
-			const openReview = (fileKey) => {
-				if (betterSidebar === void 0) return;
-				if (fileKey !== void 0) requestReviewFile(fileKey);
-				betterSidebar.openTab({ type: "@dsh-external/dsh-diff-review:review" });
-			};
+			if (betterSidebar === void 0) return;
+			if (fileKey !== void 0) requestReviewFile(fileKey);
+			betterSidebar.openTab({ type: "@dsh-external/dsh-diff-review:review" });
+		};
 			const face = { openReview };
 			try {
 				ctx.slots.register({
@@ -651,7 +655,10 @@ window.__ModuleLoader__.load({
 			} catch (error) {
 				console.error("dsh-diff-review: failed to register diff-review-tail conversation definition", error);
 			}
-			if (betterSidebar !== void 0) betterSidebar.registerTab({
+			// Register the review tab as soon as (and each time) the sidebar service
+		// becomes available — ctx.inject defers until the provider is published.
+		ctx.inject(["betterSidebar"], () => {
+			ctx.betterSidebar.registerTab({
 				id: "@dsh-external/dsh-diff-review:review",
 				title: "审阅",
 				order: 90,
@@ -675,6 +682,8 @@ window.__ModuleLoader__.load({
 				})),
 				component: ReviewSidebarTab
 			});
+			return () => {};
+		});
 		}
 		//#endregion
 		exports.apply = apply;
