@@ -5,5 +5,7 @@
 *.vsix
 vsce*.log
 .smoke/**
+.review-debug/**
 pnpm-lock.yaml
 pnpm-workspace.yaml
+trae_add_opencode_models.py

@@ -1,7 +1,32 @@
-import os, zipfile, time
+import os, shutil, zipfile, time
 
 ROOT = r"D:/PycharmProjects/Work/dsh-vscode"
 OUT = os.path.join(ROOT, "dsh-vscode.vsix")
+
+RIPGREP_PKGS = ("ripgrep", "ripgrep-win32-x64")
+
+def ensure_ripgrep(root):
+    """The packaged host resolves @vscode/ripgrep at runtime (glob/grep never
+    use a system rg). Keep the packaged binary in the vendor tree so a freshly
+    installed extension works out of the box; auto-mirror it from the dev
+    node_modules tree and fail loudly instead of shipping a broken extension."""
+    src_base = os.path.join(root, "node_modules", "@vscode")
+    dst_base = os.path.join(root, "vendor", "node_modules", "@vscode")
+    for pkg in RIPGREP_PKGS:
+        src = os.path.join(src_base, pkg)
+        dst = os.path.join(dst_base, pkg)
+        if os.path.isdir(src) and not os.path.isdir(dst):
+            print(f"vendor missing {pkg}; copying from node_modules", flush=True)
+            os.makedirs(dst_base, exist_ok=True)
+            shutil.copytree(src, dst)
+    rg_exe = os.path.join(dst_base, "ripgrep-win32-x64", "bin", "rg.exe")
+    if not os.path.isfile(rg_exe):
+        raise RuntimeError(
+            "ripgrep binary not packaged: expected " + rg_exe
+            + " (run npm install / fix-dsh-ripgrep.ps1 first)"
+        )
+    return rg_exe
+
 t0 = time.time()
 count = 0
 
@@ -13,6 +38,7 @@ def add(zf, src, arc):
         print(f"  {count} files, {time.time()-t0:.0f}s", flush=True)
 
 with zipfile.ZipFile(OUT, "w", zipfile.ZIP_DEFLATED, compresslevel=1) as zf:
+    ensure_ripgrep(ROOT)
     zf.write(os.path.join(ROOT, ".smoke", "meta", "[Content_Types].xml"), "[Content_Types].xml")
     zf.write(os.path.join(ROOT, ".smoke", "meta", "extension.vsixmanifest"), "extension.vsixmanifest")
     add(zf, os.path.join(ROOT, "package.json"), "extension/package.json")

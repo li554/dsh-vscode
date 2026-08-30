@@ -1,0 +1,463 @@
+
+
+Home
+ / 
+Artifacts
+
+ / 
+
+内容创作
+
+ / 
+
+dsh-np-ppt
+
+dsh-np-ppt
+
+原生 DSH (DeepSeek Harness) 插件：PPT 演示文稿专家，内置 PPTD DSL 引擎、55173 所见即所得可视化编辑器、Python-PPTX 高保真离线编译内核与一键导出 PPTX。 | Native DSH plugin: PPT presentation expert with PPTD DSL engine, 55173 WYSIWYG editor, Python-PPTX offline compiler & 1-click PPTX export.
+
+Plugin
+
+内容创作
+
+开发
+
+文件
+
+验证
+
+L3 · 安装规范
+
+风险
+
+低风险
+
+健康
+
+活跃
+
+信任
+
+金
+
+功能介绍
+AI
+
+PPT presentation expert with DSL engine, visual editor, offline PPTX compilation and one-click export.
+
+Built-in PPTD DSL engine for slide definitions
+
+WYSIWYG visual editor for real-time preview
+
+One-click export to PPTX via Python-PPTX
+
+由 AI 基于 README 自动生成，仅供参考。
+
+安装
+
+dsh plugin --profile web add github:z953218350/dsh-np-ppt
+
+已验证 2594d90999ec13de1e3d45b98a77ea940bf78c97
+
+安装方式: GitHub · 
+安装规范已验证 (L3)
+
+验证记录
+L3
+
+ID: dsh-np-ppt-20260824T162219Z · profile: standard
+
+DSH CLI: -
+
+验证版本
+
+2594d90999ec13de1e3d45b98a77ea940bf78c97
+
+github
+
+L1
+
+passed
+
+L2
+
+passed
+
+L3
+
+passed
+
+L4
+
+not_tested
+
+L5
+
+not_tested
+
+签发：2026-08-24 · 有效至：2026-08-31
+
+查看检查项与证据
+
+L1 · passed
+
+L1.1_GITHUB_ACCESSIBLE
+
+passed
+
+source: local-cache · method: repo.head · captured 2026-08-24
+
+L2 · passed
+
+L2.1_MANIFEST_PARSEABLE
+
+passed
+
+source: local-cache · method: manifest.parse · captured 2026-08-24
+
+L3 · passed
+
+L3.1_INSTALL_COMMAND_PARSED
+
+passed
+
+source: registry-verification · method: install.spec.parse · captured 2026-08-24
+
+L3.2_DSH_VERSION_DECLARED
+
+passed
+
+source: registry-verification · method: dsh.version.declare · captured 2026-08-24
+
+L4 · not_tested
+
+L4.0_PROFILE
+
+not_tested
+
+L4 not required by profile standard
+
+L5 · not_tested
+
+L5.0_PROFILE
+
+not_tested
+
+L5 not required by profile standard
+
+兼容性
+
+DSH Version
+
+Status
+
+unknown
+
+安装规范已验证 (L3)
+
+要求
+
+• Node.js: v24.14.0
+
+• DSH: unknown
+
+• External credentials: 未检测到
+
+作者徽章
+
+将官方徽章嵌入你的 README，展示插件的安全与安装检测状态：
+
+`[![dsh.so risk](https://www.dsh.so/badge/dsh-np-ppt.svg)](https://www.dsh.so/artifact/dsh-np-ppt/)`
+
+`[![dsh.so install](https://www.dsh.so/badge/install/dsh-np-ppt.svg)](https://www.dsh.so/artifact/dsh-np-ppt/)`
+
+安全报告
+
+自动静态扫描，非人工审核。
+
+DSH.SO VET
+
+PASSED
+
+2594d9
+
+安全审查
+
+自动审查 · 每日更新
+
+PASSED
+
+vet 静态分析未发现可疑行为，判定为干净（clean）。
+
+0
+ 严重
+
+·
+
+0
+ 高
+
+·
+
+1
+ 中
+
+·
+
+94
+ 分数
+
+版本绑定
+
+插件版本
+
+1.0.0
+
+dsh 清单
+
+扫描版本
+
+2594d90999ec
+
+2026-08-28
+
+当前版本
+
+2594d90999ec
+
+vet 判定
+
+clean · git
+
+分数 94
+
+vet 为 AST 静态扫描（npm 发布物或 git 源码）。
+
+免责声明：这是自动化静态分析，不构成安全保证。安装前请自行审查。
+
+风险详情
+
+未发现严重或警告级问题。
+
+活跃度
+
+最近提交 
+2026-08-14
+ · 活跃度：
+活跃
+
+• 仓库创建: 
+2026-08-15
+
+• 星标: 
+★ 3
+ · 复刻: 
+0
+
+• 健康度: 
+活跃
+ — 近 30 天有提交
+
+来源
+
+GitHub: 
+github.com/z953218350/dsh-np-ppt
+
+速览
+
+星标
+
+★ 3
+
+复刻
+
+0
+
+许可证
+
+MIT
+
+创建于
+
+2026-08-15
+
+更新于
+
+08-16
+
+作者
+
+@z953218350
+
+信任因子
+
+✓
+ 许可证：MIT
+
+✓
+ 持续维护
+
+✓
+ 安全审计: 已完成 · 低风险
+
+✓
+ 低风险已验证
+
+✓
+ 安装规范已验证 (L3)
+
+✗
+ 沙盒安装已测 (L4)
+
+信任度：
+金
+ — 安装规范已验证，低风险审计通过。
+
+探索
+
+内容创作 
+· 分类
+
+开发 
+· 分类
+
+文件 
+· 使用场景
+
+更多 内容创作 插件
+ · 
+更多 文件 插件
+
+相关插件
+
+deepseek-harness
+
+open-design
+
+ruflo
+
+插件说明
+
+dsh-np-ppt 是什么 DeepSeek Harness 插件？
+
+dsh-np-ppt 是一个由 
+@z953218350
+ 维护的 DeepSeek Harness 插件。dsh.so 将其收录为内容创作插件，适合文件场景，并公开 GitHub 来源、声明式安装命令和自动静态安全扫描结果。
+
+如何安装 dsh-np-ppt？
+
+在 DeepSeek Harness（
+dsh
+）环境中运行 
+dsh plugin --profile web add github:z953218350/dsh-np-ppt
+该命令从插件 manifest 解析得到，安装规范已验证（L3）；运行时沙盒安装测试未必已执行。
+
+这个页面的安全扫描是人工审计吗？
+
+不是。扫描是对仓库源码的自动化启发式检查，可能出现误报；它不是人工安全审计，也不代表背书。安装前请自行审查仓库与权限申请。
+
+"DeepSeek Harness（
+dsh
+）是由 DeepSeek AI 开发的开源 agent harness（智能体框架）。它采用一切皆插件的架构，并由 Cordis 驱动。"
+— 
+
+DeepSeek Harness 中文 README
+
+来源：
+GitHub 仓库
+ · 
+DeepSeek Harness
+ · 
+安全扫描数据
+ · 由 
+dsh.so
+ 维护 · 最近更新 
+2026-08-16
+
+这页有帮助吗？
+
+有用
+
+没用
+
+感谢反馈！
+
+写下原因 →
+
+ 
+
+dsh
+
+.so
+
+飞书群
+
+微信群
+
+dsh.so 是独立社区资源，与 DeepSeek AI 无隶属关系。插件数据遵循「绝不猜测，只靠验证」原则——状态区分作者
+声明
+与 dsh.so 独立
+验证
+。
+
+插件数据聚合自公开来源（GitHub 与 npm 注册表），可自由复用——注明来源 
+dsh.so
+ 即可。
+
+探索
+
+插件市场
+
+DSH 插件
+
+使用场景
+
+分类
+
+验证标准
+
+安全审计
+
+扫描报告
+
+安全周报
+
+开放数据接口
+
+开发文档
+
+更新日志
+
+关于我们
+
+参与
+
+提交插件
+
+投稿追踪
+
+反馈
+
+加入社区
+
+官方资源
+
+官方仓库
+
+更新日志
+
+架构文档
+
+社区讨论
+
+© 2026 dsh.so — 独立社区项目。
+
+隐私政策
+ · 
+服务条款
+ · 
+hello@dsh.so
+ · 站点内容 CC BY-SA 4.0 · 代码 © 2026 dsh.so，保留所有权利
+
+ 
+

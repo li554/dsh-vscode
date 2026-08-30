@@ -1,4 +1,0 @@
-# dsh-diff-review bundle 层：向 profile 的 cordis 树插入插件行。
-- insert:
-    - id: diff-review
-      name: '@dsh-external/dsh-diff-review'

@@ -140,12 +140,14 @@ const BUNDLED_PLUGINS = [
   "@linxin666/dsh-pet",
   "@linxin666/dsh-tool-describe-image",
   "@mlgbnb/dsh-archive-manager",
+  "@canglongcl/dsh-web-review",
+  "@huanlin/dsh-plugin-better-sidebar-plugin-office",
   "dsh-better-sidebar",
   "dsh-client-auto-continue",
+  "dsh-file-review",
   "dsh-miraculous-standard",
   "dsh-memory-evolve",
   "dsh-recall-plugin",
-  "@dsh-external/dsh-diff-review",
   "@dsh-external/dsh-super-injector"
 ];
 /** Plugins that older vsix releases bundled but have since been retired
@@ -154,7 +156,7 @@ const BUNDLED_PLUGINS = [
  * manifest's `bundles` list AND a transplanted tree under
  * <profile>/node_modules — so they must be pruned on every boot, otherwise a
  * stale profile keeps surfacing the removed plugin's UI and settings. */
-const RETIRED_PLUGINS = ["@linxin666/dsh-remote-web-ui", "dsh-easyrewrite", "dsh-mnemon"];
+const RETIRED_PLUGINS = ["@linxin666/dsh-remote-web-ui", "dsh-easyrewrite", "dsh-mnemon", "@dsh-external/dsh-diff-review"];
 /** Platform web profile bundles. They must ALWAYS precede the baked plugins:
  * they provide webServer (and the other services every UI bundle waits on).
  * On a fresh DSH_HOME (brand-new install) there is no manifest yet, so without
@@ -271,6 +273,34 @@ function transplantBundledPlugins(profileDir) {
   const bundled = path.join(__dirname, "..", "plugins", "bundled");
   if (!fs.existsSync(bundled)) return;
   const modules = path.join(profileDir, "node_modules");
+  // Fast path: when the extension version AND every bundled package version
+  // are unchanged since the last transplant, skip the copy. Re-copying the
+  // whole self-contained tree (~64 MB, ~2100 files) on every boot was the
+  // single largest startup cost and the reason the panel needed several tab
+  // switches before first paint. Any version change (vsix upgrade or a
+  // plugin's package.json inside plugins/bundled) invalidates the marker and
+  // the force-overwrite below still propagates it, exactly as before.
+  const markerPath = path.join(modules, ".dsh-baked-marker.json");
+  const fingerprint = {};
+  const collect = (dir, prefix) => {
+    for (const entry of fs.readdirSync(dir)) {
+      const src = path.join(dir, entry);
+      if (!fs.statSync(src).isDirectory()) continue;
+      if (entry.startsWith("@")) { collect(src, prefix + entry + "/"); continue; }
+      if (prefix === "" && entry === "_hostdeps") { collect(src, "_hostdeps/"); continue; }
+      let v = "0";
+      try { v = String(JSON.parse(fs.readFileSync(path.join(src, "package.json"), "utf8")).version ?? "0"); } catch { /* unversioned dir */ }
+      fingerprint[prefix + entry] = v;
+    }
+  };
+  collect(bundled, "");
+  const extVersion = String(extensionContext?.extension?.packageJSON?.version ?? "unknown");
+  let previous = null;
+  try { previous = JSON.parse(fs.readFileSync(markerPath, "utf8")); } catch { /* first boot or wiped profile */ }
+  if (previous && previous.extVersion === extVersion && JSON.stringify(previous.packages) === JSON.stringify(fingerprint)) {
+    log("baked-in ecosystem plugins unchanged since last boot — transplant skipped (" + Object.keys(fingerprint).length + " packages)");
+    return;
+  }
   fs.mkdirSync(modules, { recursive: true });
   let copied = 0;
   for (const entry of fs.readdirSync(bundled)) {
@@ -294,6 +324,7 @@ function transplantBundledPlugins(profileDir) {
       try { fs.cpSync(src, path.join(modules, entry), { recursive: true, force: true }); copied++; } catch { /* skip */ }
     }
   }
+  try { fs.writeFileSync(markerPath, JSON.stringify({ extVersion, packages: fingerprint }, null, 2) + "\n"); } catch { /* best effort */ }
   log("baked-in ecosystem plugins enabled into profile " + profileDir + " (" + copied + " self-contained entry packages)");
 }
 
@@ -428,11 +459,11 @@ function shellHtml(port) {
   content="default-src 'none'; frame-src http://127.0.0.1:* http://localhost:*; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
 </head>
 <body style="margin:0;padding:0;overflow:hidden;background:#1e1e1e">
-<div id="boot" style="position:absolute;inset:0;z-index:2;display:flex;align-items:center;justify-content:center;
+<div id="boot" style="position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;
   color:var(--vscode-descriptionForeground);font-family:var(--vscode-font-family);background:#1e1e1e">
 Starting DeepSeek Harness…
 </div>
-<iframe id="app" title="DeepSeek Harness" src="${src}"
+<iframe id="app" title="DeepSeek Harness" src="about:blank"
   style="position:absolute;inset:0;width:100%;height:100%;border:0;z-index:1"
   allow="clipboard-read; clipboard-write; autoplay"></iframe>
 <script>
@@ -449,20 +480,45 @@ Starting DeepSeek Harness…
 
   const appFrame = document.getElementById('app');
   const boot = document.getElementById('boot');
-  const hideBoot = () => { if (boot) boot.style.display = 'none'; };
-  appFrame.addEventListener('load', hideBoot);
+  // The iframe stays on about:blank until the extension says the host is up
+  // ('reload' message): the app then boots EXACTLY ONCE, directly against a
+  // listening host. A 0.2.33/0.2.34 bug bounced the iframe mid-boot onto
+  // "/&ts=..." (a shell-page location.search leak) which the server answers
+  // with 404 — killing every boot with a blank page.
+  let appRequested = false;
+  let tickTimer = null, fallbackTimer = null;
+  const stopWaiting = () => {
+    if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
+    if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
+  };
+  const hideBoot = () => { stopWaiting(); if (boot) boot.style.display = 'none'; };
   appFrame.addEventListener('error', () => report('dsh:iframe-error'));
-  // Safety net: even if the postMessage 'reload' never arrives, drop the
-  // overlay a short while after load — the iframe will have started loading
-  // the (now-ready) host on its own by then.
-  setTimeout(hideBoot, 2500);
+  // Render path: after the reload bounce, an iframe 'load' means the real app
+  // answered — hide the overlay. (about:blank loads before that are ignored.)
+  appFrame.addEventListener('load', () => {
+    if (!appRequested) return;
+    report('dsh:iframe-load');
+    hideBoot();
+  });
+  // Handshake: the extension answers our 'dsh:shell-ready' with 'reload'
+  // whenever the host is already up (and sends one when the host becomes
+  // ready) — a deterministic handshake that cannot race the webview load,
+  // because resolve-time postMessages sent before this script runs are
+  // silently dropped.
+  const status = document.createElement('div');
+  status.style.cssText = 'margin-top:10px;font-size:12px;opacity:.75';
+  boot.appendChild(status);
+  const t0 = Date.now();
+  tickTimer = setInterval(() => { status.textContent = 'starting DSH host… ' + Math.round((Date.now() - t0) / 1000) + 's'; }, 1000);
 
   window.addEventListener('message', (event) => {
     if (event.data && event.data.command === 'reload') {
       report('dsh:reload-received');
-      hideBoot();
-      appFrame.src = '${src}' + (location.search ? '&' : '?') + 'ts=' + Date.now();
-      setTimeout(hideBoot, 3000);
+      status.textContent = 'loading interface…';
+      appRequested = true;
+      appFrame.src = '${src}?ts=' + Date.now();
+      // Fallback in case the load event never surfaces.
+      fallbackTimer = setTimeout(hideBoot, 8000);
     }
   });
 </script>
@@ -507,11 +563,20 @@ const provider = {
     view.badge = { tooltip: "Starting DeepSeek Harness…", value: 1 };
     view.webview.html = shellHtml(hp);
 
+    // NOTE: deliberately NO send-side dedupe. The resolve-time send usually
+    // lands before the shell script runs and is silently dropped; suppressing
+    // the shell-ready handshake that follows within 500ms left the overlay up
+    // forever (the 0.2.33 first-open regression). Duplicate reloads are
+    // harmless — the shell just re-navigates the iframe.
+    const bounceShellIframe = (why) => {
+      log("reload shell iframe (" + why + ")");
+      try { view.webview.postMessage({ command: "reload" }); } catch { /* best effort */ }
+    };
+
     const showRealUi = (port) => {
       if (currentView !== view) return;
       view.badge = undefined;
-      log("host ready -> reload shell iframe to " + port);
-      try { view.webview.postMessage({ command: "reload" }); } catch { /* best effort */ }
+      bounceShellIframe("host ready on " + port);
     };
 
     view.onDidChangeVisibility?.((visible) => {
@@ -529,6 +594,16 @@ const provider = {
 
     view.webview.onDidReceiveMessage((msg) => {
       log("[webview] " + (msg.command || "msg") + (msg.detail ? " :: " + msg.detail : ""));
+      if (msg.command === "dsh:shell-ready" && hostPort > 0) {
+        // Deterministic warm-start handshake. The resolve-time postMessage
+        // races the webview content load — messages posted before the shell
+        // script runs are silently dropped, which is why the first open of an
+        // already-running host stayed dead until a tab switch re-resolved the
+        // view. The shell reports ready only AFTER its script runs, so
+        // replying here always reaches a listening shell.
+        view.badge = undefined;
+        bounceShellIframe("shell-ready handshake");
+      }
       if (msg.command === "restart") void restartHost();
       if (msg.command === "logs") { if (output) output.show(); }
       if (msg.command === "reset") void resetProfileAndRestart();

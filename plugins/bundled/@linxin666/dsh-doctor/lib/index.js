@@ -663,6 +663,30 @@ async function waitForSupervisor(deps) {
 //#endregion
 //#region src/core/store.ts
 let atomicWriteSequence = 0;
+const RENAME_RETRY_DELAYS_MS = [200, 600, 1400];
+/** rename(2) on Windows fails with EPERM/EBUSY/EACCES when the destination is
+ * transiently held open (AV real-time scan of the fresh file, a concurrent
+ * reader during host boot, lingering handles of a just-killed previous host).
+ * The failure is transient — retry with backoff before giving up. */
+async function renameWithRetry(from, to) {
+	let lastError;
+	try {
+		return await rename(from, to);
+	} catch (error) {
+		lastError = error;
+	}
+	const code = lastError && lastError.code;
+	if (code !== "EPERM" && code !== "EBUSY" && code !== "EACCES") throw lastError;
+	for (const ms of RENAME_RETRY_DELAYS_MS) {
+		await new Promise((resolve) => setTimeout(resolve, ms));
+		try {
+			return await rename(from, to);
+		} catch (error) {
+			lastError = error;
+		}
+	}
+	throw lastError;
+}
 async function writeJsonAtomic(path, value, mode = 384) {
 	await mkdir(dirname(path), {
 		recursive: true,
@@ -671,7 +695,7 @@ async function writeJsonAtomic(path, value, mode = 384) {
 	const temporary = `${path}.tmp-${process.pid}-${Date.now()}-${atomicWriteSequence += 1}`;
 	try {
 		await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode });
-		await rename(temporary, path);
+		await renameWithRetry(temporary, path);
 	} catch (error) {
 		await rm(temporary, { force: true }).catch(() => void 0);
 		throw error;
