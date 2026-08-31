@@ -1,0 +1,26 @@
+{
+  "name": "@dsh-vscode/p2h-bridge",
+  "version": "0.1.0",
+  "description": "PPT<->HTML bridge for dsh-vscode: slides_import/slides_export host tools, /html-slides static preview route on the host webServer, and the composer-dock import capsule (design doc: docs/superpowers/specs/2026-08-29-dsh-ppt-html-review-workflow-design.md)",
+  "type": "module",
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./lib/*": "./lib/*",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-slots"
+      ],
+      "platform": "web"
+    }
+  }
+}

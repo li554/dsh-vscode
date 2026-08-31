@@ -141,6 +141,7 @@ const BUNDLED_PLUGINS = [
   "@linxin666/dsh-tool-describe-image",
   "@mlgbnb/dsh-archive-manager",
   "@canglongcl/dsh-web-review",
+  "@dsh-vscode/p2h-bridge",
   "@huanlin/dsh-plugin-better-sidebar-plugin-office",
   "dsh-better-sidebar",
   "dsh-client-auto-continue",

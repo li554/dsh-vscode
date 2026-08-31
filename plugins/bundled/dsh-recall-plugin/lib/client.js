@@ -1272,10 +1272,14 @@ window.__ModuleLoader__.load({
         // keyed slot 显式用低于默认 0 的 priority 注册：默认 0 通常被平台/
         // 其他插件的渲染器占据，不指定 priority 会因 keyed slot 冲突拒载
         // 整个插件；lowest renders，负值恰好覆盖默认渲染器实现撤回 UI。
-        // priority -1 也可能被别的机器上的插件占用（同样抛冲突），所以
-        // 递减重试三次——最坏情况只是撤回按钮不渲染，绝不让插件加载失败。
+        // 注意：conversation.chat.node 是「每个 key 单个 winner」的 keyed
+        // slot，只有 priority 最低的注册者真正渲染 user 节点。dsh-file-review
+        // 用 priority -10 抢占 user 节点，本插件旧的 -1..-3 会被它静默遮蔽
+        // （不同 priority 不抛冲突，撤回按钮直接消失）。故起点必须低于 -10。
+        // 起始 priority 仍可能被别的插件占用（同样抛冲突），所以递减重试
+        // 三次——最坏情况只是撤回按钮不渲染，绝不让插件加载失败。
         let mounted = false
-        for (let priority = -1; priority >= -3 && !mounted; priority--) {
+        for (let priority = -11; priority >= -13 && !mounted; priority--) {
           try {
             slots.inject('conversation.chat.node', () => slots.register(
               { name: 'conversation.chat.node', key: 'user', priority },
@@ -1283,7 +1287,7 @@ window.__ModuleLoader__.load({
             ))
             mounted = true
           } catch (error) {
-            if (priority === -3) console.error('[dsh-recall-plugin] slot register failed:', error)
+            if (priority === -13) console.error('[dsh-recall-plugin] slot register failed:', error)
           }
         }
 

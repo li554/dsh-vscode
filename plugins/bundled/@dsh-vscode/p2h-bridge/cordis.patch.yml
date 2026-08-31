@@ -1,0 +1,4 @@
+# p2h-bridge bundle layer (mount shape mirrors dsh-recall-plugin / dsh-web-review).
+- insert:
+    - id: p2h-bridge
+      name: "@dsh-vscode/p2h-bridge"
