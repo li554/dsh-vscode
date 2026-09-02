@@ -19,6 +19,12 @@ plugins/node_modules/
 # platform-shim binaries inside the vendored tree (runtime tools, not source).
 # vendor/node_modules itself is committed (the shipped platform tree).
 vendor/node_modules/.bin/
+
+# temporary build artifacts
+.tmp-smoke/
+.tmp-npm-cache/
+.tmp-vendor/
+*.tgz
 # test/debug residue (not part of the build)
 /file-review-test*.md
 /.review-debug/

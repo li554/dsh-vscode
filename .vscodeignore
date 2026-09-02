@@ -9,3 +9,8 @@ vsce*.log
 pnpm-lock.yaml
 pnpm-workspace.yaml
 trae_add_opencode_models.py
+.tmp-smoke/**
+.tmp-npm-cache/**
+.tmp-vendor/**
+detail/**
+plugins/node_modules/**

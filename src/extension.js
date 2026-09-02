@@ -146,6 +146,7 @@ const BUNDLED_PLUGINS = [
   "dsh-better-sidebar",
   "dsh-client-auto-continue",
   "dsh-file-review",
+  "dsh-free-search",
   "dsh-miraculous-standard",
   "dsh-memory-evolve",
   "dsh-recall-plugin",
@@ -270,6 +271,30 @@ function syncBakedPresets(home) {
  * react / @deepseek-ai/* are deliberately NOT shipped — the vendored fallback
  * (and the running host itself) provides the single instance of that realm.
  */
+/**
+ * Copy a dir as a REAL package tree. A destination that is a symlink/junction
+ * (e.g. a pnpm `link:` dependency pointing back at plugins/bundled) must be
+ * removed first: fs.cpSync(force) copies THROUGH the link into its target, and
+ * even a successful copy leaves the plugin resolving against plugins/bundled —
+ * where _hostdeps is NOT a node_modules dir — so bare-specifier deps (e.g.
+ * @dsh-vscode/p2h-bridge -> docgen-utils) fail with ERR_MODULE_NOT_FOUND.
+ */
+function copyReal(src, dest) {
+  try { if (fs.lstatSync(dest).isSymbolicLink()) fs.rmSync(dest, { recursive: true, force: true }); } catch { /* not present */ }
+  fs.cpSync(src, dest, { recursive: true, force: true });
+}
+/**
+ * True if any bundled plugin was transplanted into the profile as a
+ * symlink/junction (stale pnpm `link:`). The fast-path marker only tracks
+ * package versions, so it would otherwise skip the fix and keep the broken link.
+ */
+function hasBundledLink(modules) {
+  for (const name of BUNDLED_PLUGINS) {
+    const p = path.join(modules, ...name.split("/"));
+    try { if (fs.lstatSync(p).isSymbolicLink()) return true; } catch { /* not transplanted yet */ }
+  }
+  return false;
+}
 function transplantBundledPlugins(profileDir) {
   const bundled = path.join(__dirname, "..", "plugins", "bundled");
   if (!fs.existsSync(bundled)) return;
@@ -298,7 +323,7 @@ function transplantBundledPlugins(profileDir) {
   const extVersion = String(extensionContext?.extension?.packageJSON?.version ?? "unknown");
   let previous = null;
   try { previous = JSON.parse(fs.readFileSync(markerPath, "utf8")); } catch { /* first boot or wiped profile */ }
-  if (previous && previous.extVersion === extVersion && JSON.stringify(previous.packages) === JSON.stringify(fingerprint)) {
+  if (previous && previous.extVersion === extVersion && JSON.stringify(previous.packages) === JSON.stringify(fingerprint) && !hasBundledLink(modules)) {
     log("baked-in ecosystem plugins unchanged since last boot — transplant skipped (" + Object.keys(fingerprint).length + " packages)");
     return;
   }
@@ -310,10 +335,10 @@ function transplantBundledPlugins(profileDir) {
     if (entry.startsWith("@")) {
       const scope = path.join(bundled, entry);
       for (const sub of fs.readdirSync(scope)) {
-        try { fs.cpSync(path.join(scope, sub), path.join(modules, entry, sub), { recursive: true, force: true }); copied++; } catch { /* skip */ }
+        try { copyReal(path.join(scope, sub), path.join(modules, entry, sub)); copied++; } catch { /* skip */ }
       }
     } else {
-      try { fs.cpSync(src, path.join(modules, entry), { recursive: true, force: true }); copied++; } catch { /* skip */ }
+      try { copyReal(src, path.join(modules, entry)); copied++; } catch { /* skip */ }
     }
   }
   // flatten _hostdeps/* so each dep is resolvable at <profile>/node_modules/<dep>
@@ -322,7 +347,7 @@ function transplantBundledPlugins(profileDir) {
     for (const entry of fs.readdirSync(hostdeps)) {
       const src = path.join(hostdeps, entry);
       if (!fs.statSync(src).isDirectory()) continue;
-      try { fs.cpSync(src, path.join(modules, entry), { recursive: true, force: true }); copied++; } catch { /* skip */ }
+      try { copyReal(src, path.join(modules, entry)); copied++; } catch { /* skip */ }
     }
   }
   try { fs.writeFileSync(markerPath, JSON.stringify({ extVersion, packages: fingerprint }, null, 2) + "\n"); } catch { /* best effort */ }
@@ -457,7 +482,7 @@ function shellHtml(port) {
 <head>
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy"
-  content="default-src 'none'; frame-src http://127.0.0.1:* http://localhost:*; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
+  content="default-src 'none'; frame-src http://127.0.0.1:* http://localhost:* http://*.localhost:*; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
 </head>
 <body style="margin:0;padding:0;overflow:hidden;background:#1e1e1e">
 <div id="boot" style="position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;

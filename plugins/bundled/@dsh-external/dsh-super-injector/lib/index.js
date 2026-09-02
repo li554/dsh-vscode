@@ -8587,15 +8587,20 @@ function apply(ctx, config) {
 				if (hostLatest > 0 && hostLatest - mt > 8e3) warn.push("lib/index.js 过期（src 修改晚于构建 8s+，疑似漏 npm run build——重载会跑旧代码）");
 			}
 			if (hasClient) {
-				const libClient = join(base, "lib", "client.js");
-				if (!existsSync(libClient)) block.push("lib/client.js 不存在（package.json 声明了 dsh.client 但没构建 client——先 npm run build:client，否则前端必挂）");
+				let clientRel = "lib/client.js";
+				try {
+					const clientExport = JSON.parse(readFileSync(pkgPath, "utf8")).exports?.["./client"];
+					if (typeof clientExport === "string") clientRel = clientExport.replace(/^\.\//, "");
+				} catch {}
+				const libClient = join(base, ...clientRel.split("/"));
+				if (!existsSync(libClient)) block.push(clientRel + " 不存在（package.json 声明了 dsh.client 但没构建 client——先 npm run build:client，否则前端必挂）");
 				else try {
-					if (!readFileSync(libClient, "utf8").includes("__ModuleLoader__")) block.push("lib/client.js 不是 tsdown bundle（缺 __ModuleLoader__ 特征——可能被 tsc 覆盖或手改，重新 npm run build:client）");
+					if (!readFileSync(libClient, "utf8").includes("__ModuleLoader__")) block.push(clientRel + " 不是 tsdown bundle（缺 __ModuleLoader__ 特征——可能被 tsc 覆盖或手改，重新 npm run build:client）");
 					let mt = 0;
 					try {
 						mt = statSync(libClient).mtimeMs;
 					} catch {}
-					if (clientLatest > 0 && clientLatest - mt > 8e3) warn.push("lib/client.js 过期（src/client 修改晚于构建 8s+，疑似漏 npm run build:client——前端会加载旧 UI）");
+					if (clientLatest > 0 && clientLatest - mt > 8e3) warn.push(clientRel + " 过期（src/client 修改晚于构建 8s+，疑似漏 npm run build:client——前端会加载旧 UI）");
 				} catch {}
 			}
 		} catch {}

@@ -17,7 +17,7 @@
  * sessionCwdOf() falls back to.
  */
 
-import { registerPreviewRoute, registerApiRoute } from './routes.js'
+import { registerPreviewRoute, registerDecksRoute, registerApiRoute } from './routes.js'
 import { registerTools } from './tools.js'
 
 export const name = 'p2h-bridge'
@@ -31,6 +31,8 @@ export function apply(ctx) {
 
   const preview = registerPreviewRoute(ctx)
   if (preview) disposers.push(preview)
+  const decks = registerDecksRoute(ctx)
+  if (decks) disposers.push(decks)
   const api = registerApiRoute(ctx)
   if (api) disposers.push(api)
   disposers.push(...registerTools(ctx))

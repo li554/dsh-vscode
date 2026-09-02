@@ -11623,7 +11623,7 @@ async function startIsolatedPreviewServer(bridgeSource) {
 			const next = createSession(navigateTarget, session.parentOrigin, session.handoffDepth + 1);
 			res.writeHead(200, noStoreHeaders({
 				"content-type": "text/html; charset=utf-8",
-				"content-security-policy": `default-src 'none'; script-src 'unsafe-inline'; frame-ancestors ${session.parentOrigin}`,
+				"content-security-policy": `default-src 'none'; script-src 'unsafe-inline'; frame-ancestors ${session.parentOrigin} vscode-webview: vscode-file:`,
 				"x-content-type-options": "nosniff"
 			}));
 			res.end(handoffDocument(session, next));
@@ -11679,7 +11679,7 @@ async function startIsolatedPreviewServer(bridgeSource) {
 				const next = createSession(result.handoff, session.parentOrigin, session.handoffDepth + 1);
 				res.writeHead(200, noStoreHeaders({
 					"content-type": "text/html; charset=utf-8",
-					"content-security-policy": `default-src 'none'; script-src 'unsafe-inline'; frame-ancestors ${session.parentOrigin}`,
+					"content-security-policy": `default-src 'none'; script-src 'unsafe-inline'; frame-ancestors ${session.parentOrigin} vscode-webview: vscode-file:`,
 					"x-content-type-options": "nosniff"
 				}));
 				res.end(handoffDocument(session, next));
@@ -11694,7 +11694,7 @@ async function startIsolatedPreviewServer(bridgeSource) {
 				res.writeHead(upstream.status, noStoreHeaders({
 					...headers,
 					...html ? {
-						"content-security-policy": `frame-ancestors ${session.parentOrigin}`,
+						"content-security-policy": `frame-ancestors ${session.parentOrigin} vscode-webview: vscode-file:`,
 						"x-content-type-options": "nosniff"
 					} : {}
 				}));
@@ -11706,7 +11706,7 @@ async function startIsolatedPreviewServer(bridgeSource) {
 				...headers,
 				...html ? {
 					"content-type": "text/html; charset=utf-8",
-					"content-security-policy": `frame-ancestors ${session.parentOrigin}`,
+					"content-security-policy": `frame-ancestors ${session.parentOrigin} vscode-webview: vscode-file:`,
 					"x-content-type-options": "nosniff"
 				} : {}
 			}));
@@ -11957,7 +11957,19 @@ function previewSessionsHandler(server) {
 			res.end("preview client JSON required");
 			return;
 		}
-		const origin = requestOrigin(req);
+		let origin = requestOrigin(req);
+		if (origin === void 0) {
+			const host = typeof req.headers.host === "string" ? req.headers.host : "";
+			// VS Code's webview port-mapping proxy re-issues embedded-GUI requests as
+			// clean loopback requests (no Origin / Sec-Fetch-Site) — the exact trust
+			// shape the DSH /api boundary already treats as extension-host trusted.
+			// Accept that shape here: the parent origin is the GUI origin served on
+			// this loopback host. Anything else (cross-site origin, remote host,
+			// browser-without-origin) still gets rejected below.
+			if (req.headers.origin === void 0 && req.headers["sec-fetch-site"] === void 0 && /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/u.test(host)) {
+				origin = `http://${host}`;
+			}
+		}
 		if (origin === void 0) {
 			res.writeHead(403, { "cache-control": "no-store" });
 			res.end("same-origin browser request required");

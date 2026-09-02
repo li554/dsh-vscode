@@ -1,0 +1,1 @@
+﻿{  "name": "docgen-utils", "version": "1.0.37", "description": "Utilities for converting HTML into DOCX and PPTX (trimmed slides-only vendored copy for @dsh-vscode/p2h-bridge; playwright/docx/rtf.js paths removed).", "type": "module", "exports": { "./*": { "import": "./dist/*.js" } } }

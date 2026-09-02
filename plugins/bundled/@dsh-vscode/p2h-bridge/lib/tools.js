@@ -1,40 +1,58 @@
 /**
  * p2h-bridge — agent tools: slides_import / slides_export.
  *
+ * Storage model v2 (user request 2026-08-31): every deck lives in its own folder
+ * <workspaceRoot>/.ppt/<deck>/ = source .pptx + html-slides/ + exported pptx.
+ * slides_import creates/refreshes the deck folder and sets it active; slides_export
+ * writes <deck>-modified.pptx beside the source (createIfAbsent -N suffixes).
+ *
  * Registration follows the dsh-tool-todo pattern (ctx.tools.register(defineTool({...}))).
- * Presentation: presentCall gives the generic card a meaningful title; presentResult of
- * slides_export declares `kind: 'edit'` + `locations` so the official
- * @deepseek-ai/dsh-client-ui-deliverables turn-tail row ("Produced files") renders the
- * .pptx chip with the stock openFile opener — no bespoke client code (design doc §4.1-②).
+ * presentResult of slides_export declares `kind: 'edit'` + `locations` so the official
+ * deliverables turn-tail row renders the .pptx chip with the stock openFile opener.
  */
 
 import path from 'node:path'
+import fs from 'node:fs'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { slidesRoot, workspaceRoot } from './routes.js'
+import { pptRoot, deckDir, deckNameFromFile, activeDeckName, listDecks, workspaceRoot } from './routes.js'
 import { importPptxToSlides } from './slides/import.mjs'
 import { exportSlidesToPptx } from './slides/export.mjs'
 
 const IMPORT_DESCRIPTION =
-  'Import a .pptx file into the workspace slide project at .html-slides/ (one slide-N.html per page ' +
-  'plus index.html and manifest.json). Use it to start the PPT→HTML review workflow: after calling this, ' +
-  'give the user the returned previewUrl to open in web-review for annotation, then edit the slide-N.html ' +
-  'files. Only inline-styled slides produced by this tool (or hand-written in the same dialect) export ' +
-  'faithfully; complex agent-authored CSS (flex/grid/external fonts) will lose layout on export.'
+  'Import a .pptx into its own deck folder at .ppt/<deck>/ (source .pptx copied in, converted ' +
+  'html-slides/ beside it, deck set active). Returns the per-deck previewUrl for web-review ' +
+  'annotation. Only inline-styled slides produced by this tool (or hand-written in the same ' +
+  'dialect) export faithfully; complex agent-authored CSS (flex/grid/external fonts) will lose layout on export.'
 
 const EXPORT_DESCRIPTION =
-  'Export the workspace slide project (.html-slides/, produced by slides_import and then edited) back to ' +
-  'a .pptx file. Defaults to <source>-modified.pptx next to the imported deck and never overwrites existing ' +
-  'files. Charts/SVG and CSS gradients are skipped with warnings; everything else (text boxes, shapes, ' +
-  'images, tables) converts through the 960x540 px inline-style dialect at 96 DPI.'
+  'Export a deck (default: the active one) back to a .pptx written INSIDE its folder ' +
+  '(.ppt/<deck>/<deck>-modified.pptx, never overwrites — -N suffixes). Charts/SVG reconstruct ' +
+  'as native editable shapes, gradients as native gradient fills; text boxes, shapes, images, ' +
+  'tables convert through the inline-style dialect.'
 
-function resolveSlidesDir(htmlDir) {
-  const root = slidesRoot()
-  if (!htmlDir) return root
-  const resolved = path.isAbsolute(htmlDir) ? path.normalize(htmlDir) : path.resolve(workspaceRoot(), htmlDir)
-  if (path.relative(root, resolved).startsWith('..')) {
-    throw new Error(`slides_export: htmlDir must stay inside the workspace slide project (${root})`)
+/** Resolve an htmlDir argument to a deck slides dir (deck name, or path inside .ppt). */
+function resolveDeckSlides(args) {
+  const decks = listDecks()
+  if (args?.deck) {
+    const name = String(args.deck)
+    const deck = decks.find((d) => d.name === name)
+    if (!deck) throw new Error(`slides_export: no such deck: ${name} (existing: ${decks.map((d) => d.name).join(', ') || 'none'})`)
+    return deckSlidesDirSafe(name)
   }
-  return resolved
+  if (args?.htmlDir) {
+    const resolved = path.isAbsolute(args.htmlDir) ? path.normalize(args.htmlDir) : path.resolve(workspaceRoot(), args.htmlDir)
+    if (!resolved.toLowerCase().includes(`${pptRoot().toLowerCase()}${path.sep}`)) {
+      throw new Error(`slides_export: htmlDir must stay inside the deck folders (${pptRoot()})`)
+    }
+    return resolved
+  }
+  const active = activeDeckName()
+  if (!active) throw new Error('slides_export: no deck imported yet (run slides_import first)')
+  return deckSlidesDirSafe(active)
+}
+
+function deckSlidesDirSafe(name) {
+  return deckDir(name) ? path.join(deckDir(name), 'html-slides') : null
 }
 
 export function registerTools(ctx) {
@@ -57,6 +75,7 @@ export function registerTools(ctx) {
             type: 'object',
             additionalProperties: false,
             properties: {
+              deck: { type: 'string', required: true },
               htmlDir: { type: 'string', required: true },
               slideCount: { type: 'integer', required: true },
               previewUrl: { type: 'string', required: true },
@@ -68,21 +87,41 @@ export function registerTools(ctx) {
             {
               type: 'text',
               text:
-                `Imported ${value.slideCount} slide(s) into ${value.htmlDir}.\n` +
+                `Imported ${value.slideCount} slide(s) into .ppt/${value.deck}/html-slides.\n` +
                 `Preview URL: ${value.previewUrl}\n` +
                 (value.warnings.length > 0 ? `Warnings:\n- ${value.warnings.join('\n- ')}` : 'No warnings.'),
             },
           ],
         },
         async execute(args) {
-          const htmlDir = slidesRoot()
-          const result = await importPptxToSlides(args.pptxPath, htmlDir)
+          const source = path.isAbsolute(args.pptxPath)
+            ? path.normalize(args.pptxPath)
+            : path.resolve(workspaceRoot(), args.pptxPath)
+          if (!fs.existsSync(source)) throw new Error(`slides_import: file not found: ${source}`)
+          const deck = deckNameFromFile(path.basename(source))
+          const dir = deckDir(deck)
+          fs.mkdirSync(dir, { recursive: true })
+          // Keep the source copy inside the deck folder (createIfAbsent -N suffixes).
+          let copy = path.join(dir, path.basename(source))
+          if (path.resolve(copy) !== path.resolve(source)) {
+            const dot = path.basename(source).lastIndexOf('.')
+            const base = path.basename(source)
+            for (let n = 1; fs.existsSync(copy); n++) {
+              copy = path.join(dir, `${base.slice(0, dot)}-${n}${base.slice(dot)}`)
+            }
+            fs.copyFileSync(source, copy)
+          }
+          const result = await importPptxToSlides(copy, path.join(dir, 'html-slides'))
           const port = ctx.webServer?.port ?? 37750
+          // Set the deck active (pointer file used by the tab and /html-slides alias).
+          const { writeActive } = await import('./routes.js')
+          writeActive(deck)
           return {
+            deck,
             htmlDir: result.htmlDir,
             slideCount: result.slideCount,
             slides: result.slides,
-            previewUrl: `http://127.0.0.1:${port}/html-slides/index.html`,
+            previewUrl: `http://127.0.0.1:${port}/p2h-bridge/decks/${encodeURIComponent(deck)}/html-slides/index.html`,
             warnings: [],
           }
         },
@@ -94,9 +133,9 @@ export function registerTools(ctx) {
         }),
         presentResult: (_args, result) => ({
           card: 'generic',
-          title: `Imported ${result?.slideCount ?? '?'} slide(s) → .html-slides/`,
+          title: `Imported ${result?.slideCount ?? '?'} slide(s) → .ppt/${result?.deck ?? ''}/html-slides`,
           kind: 'edit',
-          locations: [{ path: path.join(slidesRoot(), 'index.html') }],
+          locations: result?.deck ? [{ path: deckDir(result.deck) }] : undefined,
         }),
       }),
     ),
@@ -108,13 +147,17 @@ export function registerTools(ctx) {
         name: 'slides_export',
         description: EXPORT_DESCRIPTION,
         parameters: {
+          deck: {
+            type: 'string',
+            description: 'Deck name (folder under .ppt/); defaults to the active deck.',
+          },
           htmlDir: {
             type: 'string',
-            description: 'Slide project directory; defaults to the workspace .html-slides/.',
+            description: 'Advanced: explicit slide project directory inside .ppt/ (overrides deck).',
           },
           outPptx: {
             type: 'string',
-            description: 'Explicit output .pptx path (must not already exist); defaults to <source>-modified.pptx.',
+            description: 'Explicit output .pptx file name (written inside the deck folder, must not already exist).',
           },
         },
         output: {
@@ -137,14 +180,15 @@ export function registerTools(ctx) {
           ],
         },
         async execute(args) {
-          return exportSlidesToPptx(resolveSlidesDir(args?.htmlDir), args?.outPptx ?? null)
+          const slidesDir = resolveDeckSlides(args)
+          const outName = args?.outPptx ? path.basename(String(args.outPptx)) : null
+          return exportSlidesToPptx(slidesDir, outName ? path.join(path.dirname(slidesDir), outName) : null)
         },
         presentCall: (args) => ({
           card: 'generic',
-          title: 'Export slides → PPTX',
+          title: `Export slides → PPTX${args?.deck ? ` (${args.deck})` : ''}`,
           kind: 'edit',
-          rawInput: args?.outPptx ?? args?.htmlDir,
-          locations: args?.htmlDir ? [{ path: resolveSlidesDir(args.htmlDir) }] : undefined,
+          rawInput: args?.deck ?? args?.htmlDir,
         }),
         presentResult: (_args, result) => ({
           card: 'generic',

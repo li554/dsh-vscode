@@ -1,7 +1,7 @@
 {
   "name": "@dsh-vscode/p2h-bridge",
-  "version": "0.1.0",
-  "description": "PPT<->HTML bridge for dsh-vscode: slides_import/slides_export host tools, /html-slides static preview route on the host webServer, and the composer-dock import capsule (design doc: docs/superpowers/specs/2026-08-29-dsh-ppt-html-review-workflow-design.md)",
+  "version": "0.2.1",
+  "description": "PPT<->HTML bridge for dsh-vscode: slides_import/slides_export host tools, /html-slides static preview route on the host webServer, and the PPT manager sidebar tab (import / preview via the web-review preview tab / export / upload management; design doc: docs/superpowers/specs/2026-08-29-dsh-ppt-html-review-workflow-design.md)",
   "type": "module",
   "main": "./lib/index.js",
   "exports": {
