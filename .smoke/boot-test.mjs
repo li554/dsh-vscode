@@ -41,11 +41,13 @@ const entries = [
   "@linxin666/dsh-pet",
   "@linxin666/dsh-tool-describe-image",
   "@mlgbnb/dsh-archive-manager",
+  "dsh-auto-compact",
   "dsh-better-sidebar",
   "dsh-client-auto-continue",
   "dsh-memory-evolve",
   "dsh-recall-plugin",
   "dsh-miraculous-standard",
+  "dsh-zh-kit",
   "@dsh-external/dsh-super-injector"
 ];
 

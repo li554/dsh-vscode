@@ -1,0 +1,7 @@
+# dsh-zh-kit bundle patch：向 web 组合挂载 dsh-zh-kit。
+# host half —— agent/pre-step 第 1 步注入 <system-reminder> 简体中文优先指令；
+# client half —— 经 package.json 的 dsh.client 声明由 client 内核组合进页面，
+# 轨迹视图中文化与「人话」解释（纯 DOM 投影，不进模型请求）。
+- insert:
+    - id: dsh-zh-kit
+      name: dsh-zh-kit

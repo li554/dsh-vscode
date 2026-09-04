@@ -1,0 +1,10 @@
+﻿dsh-zh-kit is a fused derivative of two upstream plugins:
+
+* deepseek-harness-zh-cn (Apache-2.0) by imlishiyuan
+  - host-half Chinese-first agent prompting (agent/pre-step directive), LICENSE
+* dsh-trajectory-zh (MIT) by jun7799
+  - browser-half trajectory-view localization (lib/client.js), LICENSE-MIT
+
+This package is distributed under the Apache License 2.0 (see LICENSE). The
+MIT-covered portions remain additionally available under the terms of
+LICENSE-MIT.
