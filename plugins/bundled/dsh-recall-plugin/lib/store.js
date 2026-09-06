@@ -261,10 +261,6 @@ export function createRuntime(ctx, config) {
   // store 目录内部——降级目录本身已被排除规则覆盖，不再往项目根塞文件。
   // git init <dir> 会把真实 git-dir 建在 <dir>/.git，所以 repo 是仓库
   // 工作目录、git 是真实 git-dir——冒烟测试踩过的坑。
-  // maxFileBytes 从 config 注入 store：脚本模板（snapshot/diff/rollback
-  // 的超大文件剔除）按调用时从 store 读取，用户改 config 后下一条命令
-  // 即生效，无需重启——因此用 getter 跟随 config 热更新，而不是创建时
-  // 快照（settings 卡片改 maxFileBytes 后 store 缓存不重建）。
   function makeStore(dir, home) {
     const excludeFile = home
       ? dir.slice(0, dir.lastIndexOf(SEP)) + SEP + 'exclude.txt'
@@ -275,7 +271,6 @@ export function createRuntime(ctx, config) {
       git: dir + SEP + 'git' + SEP + '.git',
       home,
       excludeFile,
-      get maxFileBytes() { return config.maxFileBytes },
     }
   }
 

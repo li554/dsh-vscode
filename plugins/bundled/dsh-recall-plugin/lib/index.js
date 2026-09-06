@@ -291,6 +291,38 @@ export function apply(ctx, config) {
     return null
   }
 
+  // 冷会话/未预热快照的磁盘兜底解析：把磁盘 index.json + git tag 里的快照
+  // 载入内存，使 preview/execute 能像 live 快照一样工作。此前这三个端点
+  // 只查内存 state.snapshots/state.stores，冷会话或重启后快照仅落盘时
+  // 会误报「没有可用快照」导致无法回退。
+  async function resolveSnapshotOnDisk(id, sessionId) {
+    if (!id) return false
+    if (state.snapshots.has(id)) return true
+    const dump = await dumpStores()
+    const hints = new Map()
+    for (const [root, st] of state.stores.entries()) if (st && st.dir) hints.set(st.dir, root)
+    for (const [dir, info] of dump) {
+      const hit = (info.entries || []).find((e) => e && e.id === id)
+      if (!hit) continue
+      // 用条目自身字段优先还原 root；缺省时退化到 store 的 root 或内存映射
+      const root = (typeof hit.root === 'string' && hit.root) || info.root || hints.get(dir) || null
+      // 直接以 dump 目录构造 store，避免 resolveStore(root) 按 root 二次寻址到
+      // home 新 store——旧 fallback 快照可能仍在项目内 .dsh-recall-snapshots
+      const isFallback = typeof root === 'string' && dir === root + (rt.isWin ? '\\' : '/') + '.dsh-recall-snapshots'
+      const store = rt.storeFromDir(dir, !isFallback)
+      const keyRoot = root || dir
+      if (!state.stores.has(keyRoot)) state.stores.set(keyRoot, store)
+      // 载入该 store 的索引 → 填充 state.snapshots；再以 git tag 兜底重建孤儿
+      // （索引缺失/损坏时 diffFor/rollbackFor 仍能得到恢复目标）
+      try { await snaps.loadIndex(keyRoot, sessionId) } catch (error) { /* 索引损坏则依赖孤儿重建 */ }
+      if (!state.snapshots.has(id)) {
+        try { await snaps.rebuildOrphans(keyRoot, sessionId) } catch (error) { /* 孤儿重建失败按无快照处理 */ }
+      }
+      return state.snapshots.has(id)
+    }
+    return false
+  }
+
   // 统一错误映射：业务失败与系统异常分离，文案与诊断解耦。code 给
   // Client 做分支判断（BODY_TOO_LARGE 等），message 直接展示。
   function errBody(error) {
@@ -523,6 +555,9 @@ export function apply(ctx, config) {
 
     'snapshot-info': async (args) => {
       const id = args && args.messageId ? String(args.messageId) : ''
+      const sessionId = args && args.sessionId ? String(args.sessionId) : null
+      // 冷会话磁盘兜底：会话未在内存预热时，快照可能只落盘
+      await resolveSnapshotOnDisk(id, sessionId)
       const snap = state.snapshots.get(id)
       // 失败/跳过/熔断反馈（issue #7 失败可见性）：客户端轮询到 failed 即
       // 终止轮询并 toast，不再空等 20 次；has 时附带 skipped 让用户知道
@@ -534,6 +569,8 @@ export function apply(ctx, config) {
     'preview': async (args) => {
       const id = args && args.messageId ? String(args.messageId) : ''
       const sessionId = args && args.sessionId ? String(args.sessionId) : null
+      // 冷会话磁盘兜底后再计算 diff，否则历史会话的预览会误报「无快照」
+      await resolveSnapshotOnDisk(id, sessionId)
       const result = await enqueue(() => snaps.diffFor(id))
       if (result === null) return { ok: false, code: 'NO_SNAPSHOT', message: '该消息没有可用的项目快照' }
       const snap = state.snapshots.get(id)
@@ -544,6 +581,8 @@ export function apply(ctx, config) {
     'execute': async (args) => {
       const id = args && args.messageId ? String(args.messageId) : ''
       const sessionId = args && args.sessionId ? String(args.sessionId) : null
+      // 冷会话磁盘兜底：历史会话的回退必须能命中磁盘快照
+      await resolveSnapshotOnDisk(id, sessionId)
       const result = await enqueue(async () => {
         // 回退前自动打安全快照：回退覆盖工作区且不回写 index（旧的
         // 「当前状态」从此无任何快照可找回），用消息 ID 打 tag 会与该消息
@@ -627,7 +666,6 @@ export function apply(ctx, config) {
         values: {
           gcSnaps: cfg.gcSnaps,
           gcHours: cfg.gcHours,
-          maxFileBytes: cfg.maxFileBytes,
           baseExcludes: cfg.baseExcludes.slice(),
           refillDraft: cfg.refillDraft,
         },
@@ -645,7 +683,6 @@ export function apply(ctx, config) {
       const clean = {}
       if (patch.gcSnaps !== undefined) clean.gcSnaps = Number(patch.gcSnaps)
       if (patch.gcHours !== undefined) clean.gcHours = Number(patch.gcHours)
-      if (patch.maxFileBytes !== undefined) clean.maxFileBytes = Number(patch.maxFileBytes)
       if (patch.refillDraft !== undefined) clean.refillDraft = Boolean(patch.refillDraft)
       if (patch.baseExcludes !== undefined) {
         if (!Array.isArray(patch.baseExcludes)) return { ok: false, code: 'BAD_TYPE', message: 'baseExcludes 必须是字符串数组' }

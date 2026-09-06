@@ -18,18 +18,17 @@ import Schema from '@deepseek-ai/schemastery'
 export const Config = Schema.object({
   gcSnaps: Schema.number().default(50).description('每积累多少条快照触发一次 git gc'),
   gcHours: Schema.number().default(24).description('距上次 gc 超过多少小时触发（与条数先到先触发）'),
-  maxFileBytes: Schema.number().default(104857600).description('超过该字节数的文件不进快照、不被回退触碰'),
   // 排除表必须同时覆盖两种存储目录名：降级存储是项目内 .dsh-recall-snapshots/，
   // 而 home 存储目录名是 dsh-recall-snapshots/（无点）——工作区 root 恰为
   // HOME 时（容器 root=/root 等）它落在工作区内，漏排除会让 git add -A
   // 把影子仓库自己吞进去、快照全部失败（issue #6）
-  baseExcludes: Schema.array(Schema.string()).default(['.git', 'node_modules/', '.dsh-recall-snapshots/', 'dsh-recall-snapshots/']).description('基础排除表（gitignore 语法，优先级低于 exclude.txt）'),
+  baseExcludes: Schema.array(Schema.string()).default(['.git', 'node_modules/', '.dsh-recall-snapshots/', 'dsh-recall-snapshots/', 'dist/', 'build/', '.env', '*.zip', '*.7z', '*.tar', '*.gz', '*.bz2', '*.exe', '*.bin', '*.db', '*.sqlite', '*.log']).description('基础排除表（gitignore 语法，优先级低于 exclude.txt；含常见大文件/构建产物类型，照 RooCode 思路纯路径忽略、不按字节扫描）'),
   refillDraft: Schema.boolean().default(true).description('撤回后把被撤回的消息文本回填到输入框'),
 })
 
 // schema 默认值的运行时镜像：settings 服务未组装时 createConfig 直接以
 // 入口 config 解析，这组兜底与 Config 保持一致（改默认值两处同步改）
-const BASE_EXCLUDES = ['.git', 'node_modules/', '.dsh-recall-snapshots/', 'dsh-recall-snapshots/']
+const BASE_EXCLUDES = ['.git', 'node_modules/', '.dsh-recall-snapshots/', 'dsh-recall-snapshots/', 'dist/', 'build/', '.env', '*.zip', '*.7z', '*.tar', '*.gz', '*.bz2', '*.exe', '*.bin', '*.db', '*.sqlite', '*.log']
 
 export function createConfig(raw) {
   const cfg = raw && typeof raw === 'object' ? raw : {}
@@ -43,7 +42,6 @@ export function createConfig(raw) {
   // 环境变量优先（向后兼容），其次 config，最后默认值
   const gcSnaps = pickNumber(process.env.DSH_RECALL_GC_SNAPS, pickNumber(cfg.gcSnaps, 50, 1), 1)
   const gcHours = pickNumber(process.env.DSH_RECALL_GC_HOURS, pickNumber(cfg.gcHours, 24, 1), 1)
-  const maxFileBytes = pickNumber(cfg.maxFileBytes, 104857600, 1024)
 
   const baseExcludes = Array.isArray(cfg.baseExcludes) && cfg.baseExcludes.length
     ? cfg.baseExcludes.filter((p) => typeof p === 'string' && p.trim())
@@ -51,5 +49,5 @@ export function createConfig(raw) {
 
   const refillDraft = typeof cfg.refillDraft === 'boolean' ? cfg.refillDraft : true
 
-  return { gcSnaps, gcHours, maxFileBytes, baseExcludes, refillDraft }
+  return { gcSnaps, gcHours, baseExcludes, refillDraft }
 }

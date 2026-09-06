@@ -5757,7 +5757,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 			const seen = /* @__PURE__ */ new Set();
 			for (const value of marker.files) {
 				const file = parseFile(value, marker.schema);
-				if (file === null || seen.has(file.path) || marker.truncated === true && file.diffs.length > 0) return null;
+				if (file === null || seen.has(file.path)) return null;
 				seen.add(file.path);
 				files.push(file);
 			}

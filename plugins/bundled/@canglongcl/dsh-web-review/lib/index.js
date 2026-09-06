@@ -11536,8 +11536,10 @@ function noStoreHeaders(extra = {}) {
 /**
 * Start the independent loopback listener after the bridge artifact is built.
 * @param bridgeSource - compiled bridge artifact served into every frame.
+* @param options - `{ previewBodyLimitBytes }` request/response body cap for the proxy.
 */
-async function startIsolatedPreviewServer(bridgeSource) {
+async function startIsolatedPreviewServer(bridgeSource, options = {}) {
+	const previewLimitBytes = options.previewBodyLimitBytes ?? DEFAULT_PREVIEW_BODY_LIMIT_BYTES;
 	const sessions = /* @__PURE__ */ new Map();
 	const sockets = /* @__PURE__ */ new Set();
 	let port = 0;
@@ -11650,7 +11652,7 @@ async function startIsolatedPreviewServer(bridgeSource) {
 		}
 		let body;
 		if (method === "POST") try {
-			body = await readRequestBytes(req, 10485760);
+			body = await readRequestBytes(req, previewLimitBytes);
 		} catch (error) {
 			res.writeHead(413, noStoreHeaders());
 			res.end(error instanceof Error ? error.message : "body too large");
@@ -11701,7 +11703,7 @@ async function startIsolatedPreviewServer(bridgeSource) {
 				res.end();
 				return;
 			}
-			const payload = await readResponseBytes(upstream, 10485760);
+			const payload = await readResponseBytes(upstream, previewLimitBytes);
 			res.writeHead(upstream.status, noStoreHeaders({
 				...headers,
 				...html ? {
@@ -11793,8 +11795,13 @@ const uiSkillName = Schema.union([
 	Schema.const("better-interface"),
 	Schema.const("interface-review")
 ]);
+/** Default single request/response body cap for the isolated preview proxy (bytes). */
+const DEFAULT_PREVIEW_BODY_LIMIT_BYTES = 100 * 1024 * 1024;
 /** Runtime Cordis validator for this plugin's deployment configuration. */
-const Config = Schema.object({ autoLoadSkills: Schema.array(uiSkillName).default([...DEFAULT_AUTO_LOAD_SKILLS]) });
+const Config = Schema.object({
+	autoLoadSkills: Schema.array(uiSkillName).default([...DEFAULT_AUTO_LOAD_SKILLS]),
+	previewBodyLimitBytes: Schema.number().default(DEFAULT_PREVIEW_BODY_LIMIT_BYTES).description('隔离预览代理单次请求体/响应体上限（字节），PPT 等大资产预览超限时报 "upstream body exceeds"')
+});
 function skillDirectory(name) {
 	return new URL(`../skills/${name}/`, import.meta.url);
 }
@@ -11883,7 +11890,7 @@ async function apply(ctx, config) {
 	registerUiSkillProvider(ctx, config);
 	let previewServer;
 	await ctx.effect(async () => {
-		previewServer = await startIsolatedPreviewServer(await readBridgeSource());
+		previewServer = await startIsolatedPreviewServer(await readBridgeSource(), { previewBodyLimitBytes: config.previewBodyLimitBytes });
 		ctx.logger.info(`isolated preview server listening on 127.0.0.1:${String(previewServer.port)}`);
 		return async () => {
 			await previewServer?.close();

@@ -25,6 +25,9 @@ vendor/node_modules/.bin/
 .tmp-npm-cache/
 .tmp-vendor/
 *.tgz
+# local planning/scratch docs (not part of the build)
+/.trae/
+
 # test/debug residue (not part of the build)
 /file-review-test*.md
 /.review-debug/

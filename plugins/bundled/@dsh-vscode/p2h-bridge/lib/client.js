@@ -223,9 +223,12 @@ window.__ModuleLoader__.load({
 			const [confirming, setConfirming] = useState(null);
 			const fileRef = useRef(null);
 			const sessionId = scope?.sessionId ?? null;
+			const maxBytesRef = useRef(100 * 1024 * 1024);
+			const maxBytesLabel = () => `${Math.round(maxBytesRef.current / (1024 * 1024))}MB`;
 
 			const refresh = async () => {
 				const next = await apiJson(`${API}/state`);
+				if (Number.isFinite(next?.maxBytes) && next.maxBytes > 0) maxBytesRef.current = next.maxBytes;
 				setData(next);
 				return next;
 			};
@@ -257,9 +260,9 @@ window.__ModuleLoader__.load({
 				if (files.length === 0) return;
 				setNotice(files.length > 1 ? `正在导入 ${files.length} 个文件…` : null);
 				for (const file of files) {
-					if (file.size > 20 * 1024 * 1024) {
+					if (file.size > maxBytesRef.current) {
 						setNotice(null);
-						setError(`${file.name} 超过 20MB 上限，无法上传`);
+						setError(`${file.name} 超过 ${maxBytesLabel()} 上限，无法上传`);
 						continue;
 					}
 					const buffer = await file.arrayBuffer();

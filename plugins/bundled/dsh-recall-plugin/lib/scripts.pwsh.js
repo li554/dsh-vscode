@@ -22,11 +22,6 @@ export function psq(value) {
 // UTF-8 解码——不强制时含中文的用户名/路径会变乱码。PS 5.1 / 7 均支持。
 export const UTF8_PRELUDE = '$OutputEncoding = [Text.UTF8Encoding]::new($false)\ntry { [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false) } catch {}'
 
-// 超大文件跳过阈值：git 对象库对大文件极不友好，回退语义也不该被一个
-// 200MB 的构建产物拖垮。默认值与 config.js 的 maxFileBytes 一致；实际
-// 生效值以 store.maxFileBytes（用户 config 可调）经 oversizeBlock 注入为准。
-export const MAX_FILE_BYTES = 104857600
-
 // 去除 PS 5.1 Set-Content -Encoding utf8 写出的 BOM：JSON 解析前必须剥掉，
 // 否则 JSON.parse 把 BOM 当正文首字符直接抛错。
 export function stripBom(text) {
@@ -46,20 +41,6 @@ function dropGitlinksBlock() {
   ].join('\n')
 }
 
-// 剔除超大文件：扫描加 SilentlyContinue 是因为 EAP=Stop 下个别不可访问
-// 子目录（杀软锁定、异常 ACL、损坏 junction）的非致命错误会被升级为终止，
-// 整条快照作废；本扫描只用于排除超大文件，漏看个别文件是 fail-open，可接受。
-// 阈值按调用注入（store.maxFileBytes，config 可调），不读模块常量。
-// 依赖外层已定义的 $git/$g/$root。
-function oversizeBlock(maxBytes) {
-  return [
-    'Get-ChildItem -LiteralPath $root -Recurse -File -Force -ErrorAction SilentlyContinue | Where-Object { $_.Length -gt ' + String(maxBytes || MAX_FILE_BYTES) + ' } | ForEach-Object {',
-    "  $rel = $_.FullName.Substring($root.Length + 1).Replace('\\','/')",
-    '  & $git --literal-pathspecs --git-dir=$g update-index --force-remove -- $rel',
-    '}'
-  ].join('\n')
-}
-
 // 用户自定义排除同步：把基础排除表与用户 exclude.txt 合并重写进 info/exclude，
 // 再用 ls-files -i -c 找出「已被跟踪但命中排除」的条目从 index 清掉。
 // - 只用 --exclude-from 指 info/exclude，不用 --exclude-standard：后者会
@@ -75,7 +56,7 @@ function oversizeBlock(maxBytes) {
 function excludeSyncBlock(excludeFile, base) {
   // 兜底含两种存储目录名：降级为 .dsh-recall-snapshots/，home 存储为
   // dsh-recall-snapshots/（root=HOME 时落入工作区，漏排除会自吞，issue #6）
-  const baseList = (Array.isArray(base) && base.length ? base : ['.git', 'node_modules/', '.dsh-recall-snapshots/', 'dsh-recall-snapshots/']).map(psq).join(',')
+  const baseList = (Array.isArray(base) && base.length ? base : ['.git', 'node_modules/', '.dsh-recall-snapshots/', 'dsh-recall-snapshots/', 'dist/', 'build/', '.env', '*.zip', '*.7z', '*.tar', '*.gz', '*.bz2', '*.exe', '*.bin', '*.db', '*.sqlite', '*.log']).map(psq).join(',')
   return [
     "$exFile = " + psq(excludeFile),
     '$userPats = @()',
@@ -196,7 +177,6 @@ export function snapshotScript(root, store, gitExe, messageId, base) {
     'if ($addRc -ge 2) { throw ("git add fatal (exit " + $addRc + "): " + $addLog) }',
     "foreach ($m in [regex]::Matches($addLog, \"unable to index file '([^']+)'\") ) { Write-Output ('SNAP_SKIP ' + $m.Groups[1].Value) }",
     dropGitlinksBlock(),
-    oversizeBlock(store.maxFileBytes),
     '$tree = (& $git --git-dir=$g --work-tree=$root write-tree).Trim()',
     "$commit = (& $git --git-dir=$g -c user.name=dsh-recall -c user.email=recall@dsh.local commit-tree $tree -m ('snapshot ' + " + psq(messageId) + ")).Trim()",
     '& $git --git-dir=$g tag -f ' + psq('snap-' + messageId) + ' $commit | Out-Null',
@@ -226,7 +206,6 @@ export function diffScript(root, store, gitExe, tag, base) {
     '& $git --git-dir=$g --work-tree=$root add -A --ignore-errors',
     'if ($LASTEXITCODE -ge 2) { throw ("git add fatal (exit " + $LASTEXITCODE + ")") }',
     dropGitlinksBlock(),
-    oversizeBlock(store.maxFileBytes),
     '$curOut = & $git -c core.quotePath=false --git-dir=$g --work-tree=$root ls-files --stage',
     // 旧 tag 的树里可能仍有 gitlink（修复前留下的），从目标侧一并剔除，
     // 否则 diff 会报出“恢复 dsh-recall-plugin”这类幻影条目
@@ -279,7 +258,6 @@ export function rollbackScript(root, store, gitExe, tag, base) {
     '& $git --git-dir=$g --work-tree=$root add -A --ignore-errors',
     'if ($LASTEXITCODE -ge 2) { throw ("git add fatal (exit " + $LASTEXITCODE + ")") }',
     dropGitlinksBlock(),
-    oversizeBlock(store.maxFileBytes),
     // 同 diffScript：-z 的 NUL 输出会被 PowerShell 捕获丢弃，改为逐行 + quotePath=false
     '$curOut = & $git -c core.quotePath=false --git-dir=$g --work-tree=$root ls-files --stage',
     "$targetOut = @(& $git -c core.quotePath=false --git-dir=$g ls-tree -r " + psq(tag) + " | Where-Object { -not $_.StartsWith('160000') })",

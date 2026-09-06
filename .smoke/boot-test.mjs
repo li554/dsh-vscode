@@ -44,6 +44,7 @@ const entries = [
   "dsh-auto-compact",
   "dsh-better-sidebar",
   "dsh-client-auto-continue",
+  "dsh-file-review",
   "dsh-memory-evolve",
   "dsh-recall-plugin",
   "dsh-miraculous-standard",

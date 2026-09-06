@@ -1085,7 +1085,6 @@ window.__ModuleLoader__.load({
                 const next = {
                   gcSnaps: String(v.gcSnaps == null ? '' : v.gcSnaps),
                   gcHours: String(v.gcHours == null ? '' : v.gcHours),
-                  maxFileBytes: String(v.maxFileBytes == null ? '' : v.maxFileBytes),
                   baseExcludes: Array.isArray(v.baseExcludes) ? v.baseExcludes.join('\n') : '',
                   refillDraft: v.refillDraft !== false,
                 }
@@ -1109,7 +1108,7 @@ window.__ModuleLoader__.load({
           function save() {
             if (state.busy || !draft || !baseline) return
             const patch = {}
-            for (const key of ['gcSnaps', 'gcHours', 'maxFileBytes', 'baseExcludes', 'refillDraft']) {
+            for (const key of ['gcSnaps', 'gcHours', 'baseExcludes', 'refillDraft']) {
               if (draft[key] !== baseline[key]) patch[key] = draft[key]
             }
             if (!Object.keys(patch).length) {
@@ -1126,11 +1125,6 @@ window.__ModuleLoader__.load({
               const n = parseInt(patch.gcHours, 10)
               if (!Number.isFinite(n) || n < 1) { setState({ busy: false, message: 'gc 小时阈值必须是 >= 1 的整数', error: true }); return }
               clean.gcHours = n
-            }
-            if (patch.maxFileBytes !== undefined) {
-              const n = parseInt(patch.maxFileBytes, 10)
-              if (!Number.isFinite(n) || n < 1024) { setState({ busy: false, message: '文件大小上限必须是 >= 1024 的字节数', error: true }); return }
-              clean.maxFileBytes = n
             }
             if (patch.refillDraft !== undefined) clean.refillDraft = Boolean(patch.refillDraft)
             if (patch.baseExcludes !== undefined) {
@@ -1175,7 +1169,6 @@ window.__ModuleLoader__.load({
           return React.createElement('div', { className: 'dsh-recall-ex-card' },
             numRow('gcSnaps', 'gc 触发条数', '每积累多少条快照触发一次 git gc'),
             numRow('gcHours', 'gc 触发小时', '距上次 gc 超过多少小时触发（与条数先到先触发）'),
-            numRow('maxFileBytes', '文件大小上限', '超过该字节数的文件不进快照、不被回退触碰'),
             React.createElement('div', { className: 'dsh-recall-cfg-row', key: 'refillDraft' },
               React.createElement('div', { className: 'dsh-recall-cfg-line' },
                 React.createElement('label', { className: 'dsh-recall-cfg-label' }, '撤回后回填输入框'),

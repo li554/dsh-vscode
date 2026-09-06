@@ -227,17 +227,24 @@ export function createSnapshots(ctx, rt, config) {
   const MAX_CHANGES = 500
 
   async function diffFor(messageId) {
-    const snap = state.snapshots.get(String(messageId))
+    const id = String(messageId)
+    const snap = state.snapshots.get(id)
     if (!snap) return null
     const store = state.stores.get(snap.root)
     if (!store) return null
     // 8MB 上限：按平均每条 60 字节估算可容纳十余万条，正常项目远够；
-    // 真超限时报错文案与「JSON 半截解析失败」的真实原因脱节，需显式检测
-    const text = S.stripBom(await rt.runShell(S.diffScript(snap.root, store, state.gitExe, 'snap-' + messageId, BASE()), { timeoutMs: 600000, stdoutMaxBytes: 8388608 }))
+    // 真超限时报错文案与「JSON 半截解析失败」的真实原因脱节，需显式检测。
+    // 不做结果缓存：diff 已走轻量清单（见 scripts.*.diffScript，无全量整树扫描），
+    // preview 是低频操作，直接算即可；回退通常只有一次，「重复 preview」缓存省不下什么。
+    const text = S.stripBom(await rt.runShell(S.diffScript(snap.root, store, state.gitExe, 'snap-' + id, BASE()), { timeoutMs: 600000, stdoutMaxBytes: 8388608 }))
     const trimmed = text.trim()
-    if (!trimmed) return { changes: [], total: 0, truncated: false }
-    const all = parseChanges(trimmed)
-    return { changes: all.slice(0, MAX_CHANGES), total: all.length, truncated: all.length > MAX_CHANGES }
+    const result = !trimmed
+      ? { changes: [], total: 0, truncated: false }
+      : (() => {
+        const all = parseChanges(trimmed)
+        return { changes: all.slice(0, MAX_CHANGES), total: all.length, truncated: all.length > MAX_CHANGES }
+      })()
+    return result
   }
 
   async function rollbackFor(messageId) {

@@ -32,8 +32,7 @@ import path from 'node:path'
 import { importPptxToSlides } from './slides/import.mjs'
 import { exportSlidesToPptx } from './slides/export.mjs'
 
-const MAX_STATIC_BYTES = 20 * 1024 * 1024 // design doc C1: single file ≤ 20MB
-const MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+const DEFAULT_MAX_BYTES = 100 * 1024 * 1024 // design doc C1 cap, now configurable (default 100MB)
 const PPT_DIRNAME = '.ppt'
 const SLIDES_SUBDIR = 'html-slides'
 const LEGACY_SLIDES_DIRNAME = '.html-slides'
@@ -45,6 +44,11 @@ const LEGACY_PREVIEW_PREFIX = '/html-slides'
 /** The URL object handlers need — built from the request itself (host passes only req/res). */
 function urlOf(req) {
   return new URL(req.url ?? '/', 'http://x')
+}
+
+/** Resolve the configurable single-file limit (static serve + upload) from the plugin config. */
+function resolveMaxBytes(config) {
+  return Number.isFinite(config?.maxBytes) && config.maxBytes > 0 ? config.maxBytes : DEFAULT_MAX_BYTES
 }
 
 const MIME_BY_EXT = new Map([
@@ -362,7 +366,7 @@ function resolveInside(root, urlPath) {
   return target
 }
 
-function serveStatic(ctx, req, res, url, root, label) {
+function serveStatic(ctx, req, res, url, root, label, maxBytes) {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     sendJson(res, 405, { ok: false, error: 'preview route is GET/HEAD only' })
     return
@@ -381,8 +385,8 @@ function serveStatic(ctx, req, res, url, root, label) {
     sendJson(res, 404, { ok: false, error: `not found: ${path.basename(target)}` })
     return
   }
-  if (stat.size > MAX_STATIC_BYTES) {
-    sendJson(res, 413, { ok: false, error: `file exceeds ${MAX_STATIC_BYTES} bytes` })
+  if (stat.size > maxBytes) {
+    sendJson(res, 413, { ok: false, error: `file exceeds ${maxBytes} bytes` })
     return
   }
   const mime = MIME_BY_EXT.get(path.extname(target).toLowerCase()) ?? 'application/octet-stream'
@@ -435,7 +439,7 @@ async function importIntoDeck(ctx, absolutePptx, deckName) {
   return { deck, slideCount: result.slideCount, previewUrl: previewUrlForDeck(ctxPort(), deck) }
 }
 
-async function handleApi(ctx, req, res, url) {
+async function handleApi(ctx, req, res, url, maxBytes) {
   globalThis.__p2hPort = ctx?.webServer?.port ?? globalThis.__p2hPort ?? 37750
   if (!sameOrigin(req)) {
     sendJson(res, 403, { ok: false, error: 'cross-origin request rejected' })
@@ -457,6 +461,7 @@ async function handleApi(ctx, req, res, url) {
       root: `${PPT_DIRNAME}/`,
       active,
       decks,
+      maxBytes,
       previewUrl: activeDeck ? activeDeck.previewUrl : previewUrlForDeck(ctxPort(), ''),
     })
     return
@@ -465,12 +470,12 @@ async function handleApi(ctx, req, res, url) {
   if (req.method === 'POST' && pathname === `${API_PREFIX}/upload`) {
     let raw
     try {
-      raw = await readBody(req, Math.ceil(MAX_UPLOAD_BYTES * 4 / 3) + 64 * 1024)
+      raw = await readBody(req, Math.ceil(maxBytes * 4 / 3) + 64 * 1024)
     } catch (err) {
       const tooLarge = String(err?.message ?? '') === 'PAYLOAD_TOO_LARGE'
       sendJson(res, tooLarge ? 413 : 500, {
         ok: false,
-        error: tooLarge ? `upload exceeds ${MAX_UPLOAD_BYTES} bytes` : 'request body could not be read',
+        error: tooLarge ? `upload exceeds ${maxBytes} bytes` : 'request body could not be read',
       })
       return
     }
@@ -497,8 +502,8 @@ async function handleApi(ctx, req, res, url) {
       sendJson(res, 400, { ok: false, error: 'empty upload' })
       return
     }
-    if (data.length > MAX_UPLOAD_BYTES) {
-      sendJson(res, 413, { ok: false, error: `upload exceeds ${MAX_UPLOAD_BYTES} bytes` })
+    if (data.length > maxBytes) {
+      sendJson(res, 413, { ok: false, error: `upload exceeds ${maxBytes} bytes` })
       return
     }
     const deck = deckNameFromFile(name)
@@ -654,9 +659,10 @@ async function handleApi(ctx, req, res, url) {
 // ---------------------------------------------------------------------------
 
 /** prefix /html-slides — static preview of the ACTIVE deck (web-review compat). */
-export function registerPreviewRoute(ctx) {
+export function registerPreviewRoute(ctx, config) {
   const webServer = ctx.webServer
   if (!webServer?.register) return null
+  const maxBytes = resolveMaxBytes(config)
   return webServer.register({
     kind: 'prefix',
     path: LEGACY_PREVIEW_PREFIX,
@@ -670,7 +676,7 @@ export function registerPreviewRoute(ctx) {
         const url = urlOf(req)
         // Map /html-slides/<rest> → .ppt/<deck>/html-slides/<rest>
         const rest = url.pathname.slice(LEGACY_PREVIEW_PREFIX.length) || '/'
-        serveStatic(ctx, req, res, new URL(rest, url.origin), deckSlidesDir(deck), LEGACY_PREVIEW_PREFIX)
+        serveStatic(ctx, req, res, new URL(rest, url.origin), deckSlidesDir(deck), LEGACY_PREVIEW_PREFIX, maxBytes)
       } catch (error) {
         sendJson(res, 500, { ok: false, error: String(error?.message ?? error) })
       }
@@ -679,9 +685,10 @@ export function registerPreviewRoute(ctx) {
 }
 
 /** prefix /p2h-bridge/decks/<deck> — static preview of one deck's html-slides. */
-export function registerDecksRoute(ctx) {
+export function registerDecksRoute(ctx, config) {
   const webServer = ctx.webServer
   if (!webServer?.register) return null
+  const maxBytes = resolveMaxBytes(config)
   return webServer.register({
     kind: 'prefix',
     path: DECKS_PREFIX,
@@ -701,7 +708,7 @@ export function registerDecksRoute(ctx) {
           return
         }
         const fileRest = '/' + parts.slice(2).join('/')
-        serveStatic(ctx, req, res, new URL(fileRest, url.origin), slidesDir, DECKS_PREFIX)
+        serveStatic(ctx, req, res, new URL(fileRest, url.origin), slidesDir, DECKS_PREFIX, maxBytes)
       } catch (error) {
         sendJson(res, 500, { ok: false, error: String(error?.message ?? error) })
       }
@@ -710,16 +717,17 @@ export function registerDecksRoute(ctx) {
 }
 
 /** prefix /p2h-bridge/api — JSON API for the PPT manager tab. Returns a disposer, or null. */
-export function registerApiRoute(ctx) {
+export function registerApiRoute(ctx, config) {
   const webServer = ctx.webServer
   if (!webServer?.register) return null
   globalThis.__p2hPort = ctx.webServer?.port ?? 37750
+  const maxBytes = resolveMaxBytes(config)
   return webServer.register({
     kind: 'prefix',
     path: API_PREFIX,
     async handler(req, res) {
       try {
-        await handleApi(ctx, req, res, urlOf(req))
+        await handleApi(ctx, req, res, urlOf(req), maxBytes)
       } catch (error) {
         const message = String(error?.message ?? error)
         const code = message === 'PAYLOAD_TOO_LARGE' ? 413 : 500

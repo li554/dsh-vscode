@@ -26,10 +26,6 @@ export function psq(value) {
 // 的代码页问题。
 export const UTF8_PRELUDE = 'export LC_ALL=C'
 
-// 超大文件跳过阈值（字节），默认值与 config.js 的 maxFileBytes 一致；
-// 实际生效值以 store.maxFileBytes（用户 config 可调）经 oversizeBlock 注入为准
-export const MAX_FILE_BYTES = 104857600
-
 // bash/cat 输出无 BOM；保留同名导出维持两套模板接口一致（幂等无害）
 export function stripBom(text) {
   return text.replace(/^\uFEFF/, '')
@@ -45,20 +41,6 @@ function dropGitlinksBlock() {
     '  case "$e" in',
     "    160000\\ *) p=${e#*$'\\t'}; \"$git\" --literal-pathspecs --git-dir=\"$g\" update-index --force-remove -- \"$p\" ;;",
     '  esac',
-    'done'
-  ].join('\n')
-}
-
-// 剔除超大文件：find -print0 + read -d '' 按字节安全遍历（文件名含换行
-// 也不怕）；2>/dev/null 容忍个别不可访问子目录（杀软锁定、异常 ACL），
-// 漏看个别文件是 fail-open，可接受——与 pwsh 版同策略。
-// 阈值按调用注入（store.maxFileBytes，config 可调），不读模块常量。
-// 依赖外层已定义的 $git/$g/$root。
-function oversizeBlock(maxBytes) {
-  return [
-    'find "$root" -type f -size +' + String(maxBytes || MAX_FILE_BYTES) + 'c -print0 2>/dev/null | while IFS= read -r -d \'\' f; do',
-    '  rel=${f#"$root"/}',
-    '  "$git" --literal-pathspecs --git-dir="$g" update-index --force-remove -- "$rel"',
     'done'
   ].join('\n')
 }
@@ -175,7 +157,6 @@ export function snapshotScript(root, store, gitExe, messageId, base) {
     '  if [ -n "$sk" ]; then printf \'SNAP_SKIP %s\\n\' "$sk"; fi',
     'done',
     dropGitlinksBlock(),
-    oversizeBlock(store.maxFileBytes),
     'tree=$("$git" --git-dir="$g" --work-tree="$root" write-tree)',
     'commit=$("$git" --git-dir="$g" -c user.name=dsh-recall -c user.email=recall@dsh.local commit-tree "$tree" -m ' + psq('snapshot ' + messageId) + ')',
     '"$git" --git-dir="$g" tag -f ' + psq('snap-' + messageId) + ' "$commit" >/dev/null',
@@ -183,10 +164,12 @@ export function snapshotScript(root, store, gitExe, messageId, base) {
   ].join('\n')
 }
 
-// 当前清单/目标树清单落临时文件：两处复用（diff 与 rollback）。
-// 关键前置链与 pwsh 版对齐——gitlink 清理 → 排除同步 → add -A → 再清
-// gitlink → 超大剔除——少了 add -A 的话 ls-files 读到的还是上一次快照的
-// 旧 index，「当前清单」永远等于目标 tag，diff 恒空（调试踩过的坑）。
+// 当前清单/目标树清单落临时文件：diff 与 rollback 两处复用。
+// 关键前置链——gitlink 清理 → 排除同步 → add -A → 再清 gitlink——少了
+// add -A 的话 ls-files 读到的还是上一次快照的旧 index，「当前清单」永远
+// 等于目标 tag，diff 恒空（调试踩过的坑）。
+// 不做 size 扫描（RooCode 式纯路径 ignore）：大文件/产物靠 info/exclude
+// 排除，git add 天然跳过，无需 find 整树遍历。
 // 行格式：cur 为「mode sha stage<TAB>path」（取 sha=a[2]），target 为
 // 「mode type sha<TAB>path」（取 sha=a[3]）；grep 滤掉 gitlink（160000）行，
 // 无匹配时退出码 1，set -e 下统一 || true。
@@ -204,7 +187,6 @@ function collectListsBlock(store, gitExe, root, tag, base) {
     '"$git" --git-dir="$g" --work-tree="$root" add -A --ignore-errors || addrc=$?',
     '[ "$addrc" -le 1 ] || exit "$addrc"',
     dropGitlinksBlock(),
-    oversizeBlock(store.maxFileBytes),
     'tmpc=' + psq(store.dir + '/diff-cur.$$'),
     'tmpt=' + psq(store.dir + '/diff-tgt.$$'),
     '"$git" -c core.quotePath=false --git-dir="$g" --work-tree="$root" ls-files --stage | grep -v \'^160000 \' > "$tmpc" || true',

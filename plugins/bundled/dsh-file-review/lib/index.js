@@ -487,7 +487,7 @@ function parsePtcFileReviewMarker(value, expected) {
 	const seen = /* @__PURE__ */ new Set();
 	for (const value of marker.files) {
 		const file = parseFile(value, marker.schema);
-		if (file === null || seen.has(file.path) || marker.truncated === true && file.diffs.length > 0) return null;
+		if (file === null || seen.has(file.path)) return null;
 		seen.add(file.path);
 		files.push(file);
 	}
@@ -523,15 +523,38 @@ function boundedPtcFileReviewMarker(marker, maxBytes = PTC_FILE_REVIEW_MAX_BYTES
 		truncated: false
 	};
 	if (bytes(complete) <= maxBytes) return complete;
-	const truncated = {
-		...complete,
-		files: complete.files.map((file) => ({
-			...file,
-			diffs: []
-		})),
-		truncated: true
-	};
-	return bytes(truncated) <= maxBytes ? truncated : null;
+	// 超预算时需要截断。策略：优先清空「diff 体积最大」的文件，尽量让容量内的
+	// 文件保留真实 diff（渲染为路径 + 可撤销），只把超预算文件降级为空 diff
+	// （渲染为 complete:false 仅路径）。若清空全部 diff 后仅路径仍放不下（文件
+	// 数量极大），再按顺序截取能放下的前缀文件。该函数保证不返回 null → 总结
+	// 永不整体丢失（此前会在 files 过多时返回 null，导致整张总结卡片消失）。
+	const base = { ...complete };
+	const files = complete.files.map((file) => ({ ...file }));
+	let cur = bytes({ ...base, files });
+	// 阶段一：按 diff 体积降序清空，直到整体进入预算
+	const byDiffs = files
+		.map((file, index) => ({ index, diffBytes: bytes(file.diffs) }))
+		.sort((a, b) => b.diffBytes - a.diffBytes);
+	for (const { index } of byDiffs) {
+		if (cur <= maxBytes) break;
+		const saving = bytes(files[index].diffs);
+		files[index] = { ...files[index], diffs: [] };
+		cur -= saving;
+	}
+	// 阶段二：仍超预算（文件过多，仅路径也放不下）时，截取能放下的前缀
+	if (cur > maxBytes) {
+		const single = (file) => bytes({ path: file.path, diffs: [], source: file.source });
+		let kept = 0;
+		let acc = 0;
+		for (let index = 0; index < files.length; index++) {
+			const itemBytes = single(files[index]);
+			if (acc + itemBytes > maxBytes) break;
+			acc += itemBytes;
+			kept = index + 1;
+		}
+		files.length = Math.max(kept, 1); // 至少保留 1 条路径，杜绝空文件列表
+	}
+	return { ...base, files, truncated: true };
 }
 /** Build the invisible standard text block used as the durable carrier. */
 function markerBlock(marker) {
