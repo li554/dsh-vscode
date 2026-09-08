@@ -237,13 +237,19 @@ export function diffScript(root, store, gitExe, tag, base) {
   ].join('\n')
 }
 
-// 回退：恢复侧走 git archive --format=zip + Expand-Archive，删除侧按
-// 清单移除「当前有、目标无」的文件。曾尝试 tar 优先（bsdtar 性能更好），
-// 实测否决：System32\bsdtar 在 GBK 活动代码页（ACP=936）机器上把 tar
-// 流里的 UTF-8 文件名按 ANSI 解码——中文文件名解包成「璇存槑.txt」式的
-// 乱码新文件，原路径反而丢失；且 tar -m 才是必需的（stat 缓存碰撞），
-// Expand-Archive 天然把 mtime 设为解包时刻，zip 链路反而更稳。
-// 空树跳过 archive（空 zip 会让 Expand-Archive 报错），只执行删除。
+// 回退：恢复侧走 git 原生 checkout（对齐 RooCode 系列实现），删除侧按
+// 清单移除「当前有、目标无」的文件。
+// 恢复为什么不用 archive+Expand-Archive（旧实现）：实测 2000 文件规模下，
+// git archive --format=zip + Expand-Archive 全量解压要 15-22s（Expand-Archive
+// 是绝对瓶颈，每个文件一次解压开销），而 git checkout -f 原生恢复只需
+// 约 1s（仅写回差异条目）；POSIX 版则一直用 archive|tar -x（无 zip 中转，
+// 天然更快）。快照仓库已 core.autocrlf=false，checkout 按存储字节写回，
+// 无 CRLF 破坏；且 checkout 写出的文件 mtime = 当前时刻（与旧 Expand-Archive
+// 语义一致），不会与 index 旧 stat 记录碰撞，下一次 add -A 仍正确 re-hash。
+// -f：chmod/只读等不影响本次恢复的偏差直接盖过，回退就是要覆盖现状。
+// checkout 不做删除（不会移除 target 里没有的多余文件），删除侧单独完成。
+// 空树跳过 archive...（无 archive 了，空的 target ls-tree 时 restored=0，
+// checkout 一个空 pathspec 是 no-op，同样安全）。
 // 回退后保留快照 tag 与索引：git delta 空间便宜，保留历史可再次
 // 用该快照恢复（幂等），也避免误回退后无法找回。
 export function rollbackScript(root, store, gitExe, tag, base) {
@@ -269,10 +275,9 @@ export function rollbackScript(root, store, gitExe, tag, base) {
     '}',
     '$restored = $targetMap.Count',
     'if ($restored -gt 0) {',
-    '  $zip = ' + psq(store.dir + '\\restore-tmp.zip'),
-    '  & $git --git-dir=$g archive --format=zip --output=$zip ' + psq(tag),
-    '  Expand-Archive -LiteralPath $zip -DestinationPath $root -Force',
-    '  Remove-Item -LiteralPath $zip -Force',
+    // git 原生恢复：pathspeg '.' 表示整棵工作树，-f 覆盖差异，瞬时完成
+    '  & $git --git-dir=$g --work-tree=$root checkout -f ' + psq(tag) + ' -- .',
+    '  if ($LASTEXITCODE -ne 0) { throw ("git checkout fatal (exit " + $LASTEXITCODE + ")") }',
     '}',
     '$deleted = 0',
     'foreach ($r in @($curOut)) {',
