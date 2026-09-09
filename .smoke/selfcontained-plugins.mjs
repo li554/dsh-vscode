@@ -32,7 +32,7 @@ function readNameRows(text) {
 }
 
 // manual mini-parse of the roots' patch files to seed children (avoids a yaml dep here)
-const roots = ["@linxin666/dsh-web-ui-all", "dsh-client-auto-continue", "dsh-memory-evolve", "dsh-recall-plugin", "dsh-miraculous-standard", "@dsh-external/dsh-super-injector"];
+const roots = ["@linxin666/dsh-web-ui-all", "@anionex/dsh-turn-rewind", "dsh-client-auto-continue", "dsh-memory-evolve", "dsh-miraculous-standard", "@dsh-external/dsh-super-injector"];
 const seen = new Set();
 const queue = [...roots];
 while (queue.length) {

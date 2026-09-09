@@ -26,7 +26,7 @@ console.log("vendored closure package count:", closure.size);
 
 // 2. all host entry packages (3 roots + web-ui-all bundle children)
 function readNameRows(text) { const n=[]; for(const mm of text.matchAll(/name\s*:\s*["']([^"']+)["']/g)) n.push(mm[1]); return n; }
-const roots = ["@linxin666/dsh-web-ui-all", "dsh-recall-plugin", "dsh-client-auto-continue"];
+const roots = ["@linxin666/dsh-web-ui-all", "@anionex/dsh-turn-rewind", "dsh-client-auto-continue"];
 const entries = new Set();
 const q = [...roots];
 while (q.length) {

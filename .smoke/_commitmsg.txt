@@ -1,0 +1,11 @@
+feat: 0.2.52 - replace dsh-recall-plugin with @anionex/dsh-turn-rewind
+
+Reliable rewind/rollback with bounded checkpoints.
+
+- Replace dsh-recall-plugin (RooCode-style git snapshot; unbounded per-message full-tree snapshots, up to ~700MB/session) with @anionex/dsh-turn-rewind v0.2.2
+- turn-rewind uses a persistent Change Ledger with content-addressed, deduped blobs and hard caps (maxFiles/maxFileBytes/maxSnapshotBytes); bounded, no full-tree copies
+- Ships as self-contained profile bundle (deps 0, peer deps already vendored); remove the recall PowerShell/shell toolchain
+- Register @anionex/dsh-turn-rewind in BUNDLED_PLUGINS; mark dsh-recall-plugin retired (RETIRED_PLUGINS) so upgrades auto-prune the old transplant + manifest entry
+- Also delete stale DSH_HOME/dsh-recall-snapshots (~708MB) and profile transplant from the local install
+- Sync build/smoke roots (_selfcontained.mjs, boot-test.mjs, discover-entries.cjs, _closure.mjs, selfcontained-plugins.mjs, _fullcopy-boot.mjs), vsixmanifest, README
+- Bump version to 0.2.52

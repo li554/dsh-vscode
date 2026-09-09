@@ -45,7 +45,7 @@
 
 | 插件 | 来源 | 本地改动 |
 | --- | --- | --- |
-| `dsh-recall-plugin` | [limbo947/dsh-recall-plugin](https://github.com/limbo947/dsh-recall-plugin) | 撤回确认框新增**回退范围选择**：整段回退（对话+文件）或仅回退对话 |
+| `@anionex/dsh-turn-rewind` | [Anionex/dsh-turn-rewind](https://github.com/Anionex/dsh-turn-rewind) | 无（撤回/回退：Change Ledger + 内容寻址去重，空间可控） |
 | `dsh-memory-evolve` | [csyangwen/dsh-memory-evolve](https://github.com/csyangwen/dsh-memory-evolve) | 无（精简打包为 `lib` + `vendor` + `skills`） |
 | `dsh-better-sidebar` | [omdsh-dev/DSH-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar) | 无 |
 | `dsh-client-auto-continue` | [HsiangNianian/dsh-auto-continue](https://github.com/HsiangNianian/dsh-auto-continue) | 无 |
@@ -110,7 +110,7 @@ python .smoke/pack.py
 
 - [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)——上游网页宿主
 - [zhu1090093659/dsh-web-ui](https://github.com/zhu1090093659/dsh-web-ui)——@linxin666 插件生态
-- [limbo947/dsh-recall-plugin](https://github.com/limbo947/dsh-recall-plugin)、[csyangwen/dsh-memory-evolve](https://github.com/csyangwen/dsh-memory-evolve) 等其他内置插件作者
+- [Anionex/dsh-turn-rewind](https://github.com/Anionex/dsh-turn-rewind)、[csyangwen/dsh-memory-evolve](https://github.com/csyangwen/dsh-memory-evolve) 等其他内置插件作者
 
 ## 📄 许可证
 

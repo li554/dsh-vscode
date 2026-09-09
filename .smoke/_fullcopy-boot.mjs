@@ -10,7 +10,7 @@ const FLAT = path.join(PROJ, "plugins", "node_modules");
 const HOME = fs.mkdtempSync(path.join(os.tmpdir(), "dsh-full-"));
 const PROFILE = path.join(HOME, "profiles", "web");
 const MODULES = path.join(PROFILE, "node_modules");
-const extraBundles = ["@linxin666/dsh-web-ui-all", "dsh-recall-plugin", "dsh-client-auto-continue"];
+const extraBundles = ["@linxin666/dsh-web-ui-all", "@anionex/dsh-turn-rewind", "dsh-client-auto-continue"];
 
 fs.mkdirSync(MODULES, { recursive: true });
 console.log("copying full flat tree into profile...");
@@ -47,7 +47,7 @@ const tail = (t, n = 5000) => t.length > n ? "…" + t.slice(-n) : t;
   }
   if (!port) { console.log("TIMEOUT.\n--- stderr tail ---\n" + tail(err, 8000)); child.kill(); process.exit(3); }
   console.log("HOST READY on 127.0.0.1:" + port);
-  const checks = ["/", "/plugins/@linxin666/dsh-web-ui-all/client.js", "/plugins/dsh-recall-plugin/client.js"];
+  const checks = ["/", "/plugins/@linxin666/dsh-web-ui-all/client.js", "/plugins/@anionex/dsh-turn-rewind/client.js"];
   let pass = 0;
   for (const p of checks) {
     try {

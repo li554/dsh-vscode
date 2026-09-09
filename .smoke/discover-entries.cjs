@@ -32,7 +32,7 @@ function patchNames(pkgDir) {
   return names;
 }
 
-const roots = ["@linxin666/dsh-web-ui-all", "dsh-recall-plugin", "dsh-client-auto-continue"];
+const roots = ["@linxin666/dsh-web-ui-all", "@anionex/dsh-turn-rewind", "dsh-client-auto-continue"];
 const seen = new Set();
 const queue = [...roots];
 const noClient = [];

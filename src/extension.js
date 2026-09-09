@@ -151,7 +151,7 @@ const BUNDLED_PLUGINS = [
   "dsh-free-search",
   "dsh-miraculous-standard",
   "dsh-memory-evolve",
-  "dsh-recall-plugin",
+  "@anionex/dsh-turn-rewind",
   "@dsh-external/dsh-super-injector"
 ];
 /** Plugins that older vsix releases bundled but have since been retired
@@ -160,7 +160,7 @@ const BUNDLED_PLUGINS = [
  * manifest's `bundles` list AND a transplanted tree under
  * <profile>/node_modules — so they must be pruned on every boot, otherwise a
  * stale profile keeps surfacing the removed plugin's UI and settings. */
-const RETIRED_PLUGINS = ["@linxin666/dsh-remote-web-ui", "dsh-easyrewrite", "dsh-mnemon", "@dsh-external/dsh-diff-review"];
+const RETIRED_PLUGINS = ["@linxin666/dsh-remote-web-ui", "dsh-easyrewrite", "dsh-mnemon", "@dsh-external/dsh-diff-review", "dsh-recall-plugin"];
 /** Platform web profile bundles. They must ALWAYS precede the baked plugins:
  * they provide webServer (and the other services every UI bundle waits on).
  * On a fresh DSH_HOME (brand-new install) there is no manifest yet, so without

@@ -46,9 +46,9 @@ const entries = [
   "dsh-client-auto-continue",
   "dsh-file-review",
   "dsh-memory-evolve",
-  "dsh-recall-plugin",
   "dsh-miraculous-standard",
   "dsh-zh-kit",
+  "@anionex/dsh-turn-rewind",
   "@dsh-external/dsh-super-injector"
 ];
 
