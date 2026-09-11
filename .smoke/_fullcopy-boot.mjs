@@ -10,7 +10,7 @@ const FLAT = path.join(PROJ, "plugins", "node_modules");
 const HOME = fs.mkdtempSync(path.join(os.tmpdir(), "dsh-full-"));
 const PROFILE = path.join(HOME, "profiles", "web");
 const MODULES = path.join(PROFILE, "node_modules");
-const extraBundles = ["@linxin666/dsh-web-ui-all", "@anionex/dsh-turn-rewind", "dsh-client-auto-continue"];
+const extraBundles = ["@linxin666/dsh-web-ui-all", "dsh-undo-plugin", "dsh-client-auto-continue"];
 
 fs.mkdirSync(MODULES, { recursive: true });
 console.log("copying full flat tree into profile...");

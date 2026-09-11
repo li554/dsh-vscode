@@ -63,7 +63,7 @@ const HOSTDEP_EXCLUDE = new Set(["cloudflared"]);
 function readNameRows(text) { const n = []; for (const mm of text.matchAll(/name\s*:\s*["']([^"']+)["']/g)) n.push(mm[1]); return n; }
 
 // entry set = roots + web-ui-all bundle children (minus its @deepseek-ai rows)
-const roots = ["@linxin666/dsh-web-ui-all", "@anionex/dsh-turn-rewind", "dsh-client-auto-continue", "dsh-memory-evolve", "dsh-miraculous-standard", "@dsh-external/dsh-super-injector"];
+const roots = ["@linxin666/dsh-web-ui-all", "dsh-undo-plugin", "dsh-client-auto-continue", "dsh-memory-evolve", "dsh-miraculous-standard", "@dsh-external/dsh-super-injector"];
 const entries = new Set();
 const q = [...roots];
 while (q.length) {

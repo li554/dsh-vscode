@@ -45,7 +45,7 @@
 
 | 插件 | 来源 | 本地改动 |
 | --- | --- | --- |
-| `@anionex/dsh-turn-rewind` | [Anionex/dsh-turn-rewind](https://github.com/Anionex/dsh-turn-rewind) | 无（撤回/回退：Change Ledger + 内容寻址去重，空间可控） |
+| `dsh-undo-plugin` | [23swccp/dsh-undo](https://github.com/23swccp/dsh-undo) | 无（对话撤销/回退：Shadow Git 快照 + fork 会话 + 归档管理，仅用 dsh 公开 API，不碰项目 .git） |
 | `dsh-memory-evolve` | [csyangwen/dsh-memory-evolve](https://github.com/csyangwen/dsh-memory-evolve) | 无（精简打包为 `lib` + `vendor` + `skills`） |
 | `dsh-better-sidebar` | [omdsh-dev/DSH-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar) | 无 |
 | `dsh-client-auto-continue` | [HsiangNianian/dsh-auto-continue](https://github.com/HsiangNianian/dsh-auto-continue) | 无 |
@@ -110,7 +110,7 @@ python .smoke/pack.py
 
 - [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)——上游网页宿主
 - [zhu1090093659/dsh-web-ui](https://github.com/zhu1090093659/dsh-web-ui)——@linxin666 插件生态
-- [Anionex/dsh-turn-rewind](https://github.com/Anionex/dsh-turn-rewind)、[csyangwen/dsh-memory-evolve](https://github.com/csyangwen/dsh-memory-evolve) 等其他内置插件作者
+- [23swccp/dsh-undo](https://github.com/23swccp/dsh-undo)、[csyangwen/dsh-memory-evolve](https://github.com/csyangwen/dsh-memory-evolve) 等其他内置插件作者
 
 ## 📄 许可证
 

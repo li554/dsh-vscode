@@ -1,11 +1,12 @@
-feat: 0.2.52 - replace dsh-recall-plugin with @anionex/dsh-turn-rewind
+feat: 0.2.53 - replace @anionex/dsh-turn-rewind with dsh-undo-plugin
 
-Reliable rewind/rollback with bounded checkpoints.
+Fast, bounded conversation rollback via @dsh-undo (23swccp/dsh-undo).
 
-- Replace dsh-recall-plugin (RooCode-style git snapshot; unbounded per-message full-tree snapshots, up to ~700MB/session) with @anionex/dsh-turn-rewind v0.2.2
-- turn-rewind uses a persistent Change Ledger with content-addressed, deduped blobs and hard caps (maxFiles/maxFileBytes/maxSnapshotBytes); bounded, no full-tree copies
-- Ships as self-contained profile bundle (deps 0, peer deps already vendored); remove the recall PowerShell/shell toolchain
-- Register @anionex/dsh-turn-rewind in BUNDLED_PLUGINS; mark dsh-recall-plugin retired (RETIRED_PLUGINS) so upgrades auto-prune the old transplant + manifest entry
-- Also delete stale DSH_HOME/dsh-recall-snapshots (~708MB) and profile transplant from the local install
-- Sync build/smoke roots (_selfcontained.mjs, boot-test.mjs, discover-entries.cjs, _closure.mjs, selfcontained-plugins.mjs, _fullcopy-boot.mjs), vsixmanifest, README
-- Bump version to 0.2.52
+- Replace @anionex/dsh-turn-rewind with dsh-undo-plugin (npm prebuilt rc.8, 8 packages: bundle + 7 @dsh-undo/*)
+- dsh-undo: /undo command + row/header rollback buttons, fork-to-new-session on rollback (model never sees reverted prompts), archive-tasks manager in settings, shadow-Git file restore that never touches the project's .git; ~500ms rollback on 7400+ file workspaces
+- Ship prebuilt npm tarballs into plugins/bundled (no source build: it needs pnpm + typert-generator, blocked by offline/no-pnpm constraint); peer deps resolve from vendored @deepseek-ai/dsh-*@0.1.1-rc.2 (satisfies ^0.1.0-rc.6)
+- Register dsh-undo-plugin in BUNDLED_PLUGINS; retire @anionex/dsh-turn-rewind (RETIRED_PLUGINS) so 0.2.52 profiles auto-prune the old transplant + manifest entry; remove plugins/bundled/@anionex
+- Sync smoke/discover roots (_selfcontained.mjs, boot-test.mjs, discover-entries.cjs, _closure.mjs, selfcontained-plugins.mjs, _fullcopy-boot.mjs), vsixmanifest, README
+- Bump version to 0.2.53
+
+Verified: boot-test mounts all 4 @dsh-undo client bundles (rollback-button/settings/toolcards/trailfold) into the web-client inject roster with no resolve errors; packed 98.18MB vsix and installed.

@@ -48,7 +48,7 @@ const entries = [
   "dsh-memory-evolve",
   "dsh-miraculous-standard",
   "dsh-zh-kit",
-  "@anionex/dsh-turn-rewind",
+  "dsh-undo-plugin",
   "@dsh-external/dsh-super-injector"
 ];
 
@@ -133,6 +133,13 @@ function tail(text, n = 4000) { return text.length > n ? "…" + text.slice(-n) 
     }
   }
   console.log("RESULT: " + pass + "/" + checks.length + " routes served 200");
+  // dump injected @dsh-undo client modules to confirm bundle patch mounted its children
+  try {
+    const html = await (await fetch(`http://127.0.0.1:${port}/`, { headers: { accept: "*/*" } })).text();
+    const undo = html.match(/"id":"@dsh-undo\/[^"]+"/g) || [];
+    console.log("injected @dsh-undo client modules: " + undo.length);
+    undo.forEach((s) => console.log("  " + s));
+  } catch (e) { console.log("  inject-scan ERR " + String(e.message)); }
   const errLines = err.split("\n").filter((l) => l.includes("Error") || l.includes("Cannot find") || l.includes("MODULE_NOT_FOUND") || l.includes("resolve"));
   if (errLines.length) {
     console.log("--- resolve/crash stderr lines ---");
