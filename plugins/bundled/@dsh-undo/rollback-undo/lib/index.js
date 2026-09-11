@@ -14,6 +14,31 @@ import { fileURLToPath } from "node:url";
 /** Paths above this many keep the command line inside the Windows limit; larger change sets fall back to a full checkout. */
 const MAX_RESTORE_PATHS = 400;
 const MAX_DIFF_PREVIEW_CHARS = 12e3;
+/** Directory SEGMENT names that are never enumerated into a snapshot. These are
+* the universally "not project source" trees (installed dependencies, build
+* output, caches, virtualenvs); everything else is left to each repository's
+* own `.gitignore` via `ls-files -co --exclude-standard`, so this list is a
+* general safety net rather than something tuned to this extension's tree. */ const CAPTURE_EXCLUDED_SEGMENTS = /* @__PURE__ */ new Set(["node_modules", "dist", "build", "out", "target", "coverage", ".git", ".hg", ".svn", "__pycache__", ".venv", "venv", ".cache", ".gradle"]);
+/** File EXTENSION names (lowercase, no dot) that are never enumerated into a
+* snapshot. These are large binary / derived artifacts --- model weights,
+* compiled binaries, archives, databases --- that would otherwise bloat the
+* shadow-Git index and add no meaningful undo value. */ const CAPTURE_EXCLUDED_EXTENSIONS = /* @__PURE__ */ new Set([
+	"gguf", "safetensors", "bin", "pt", "pth", "ckpt", "onnx", "tflite", "pb", "h5", "hdf5", "keras", "npy", "npz", "model", // model weights / ML artifacts
+	"dll", "exe", "so", "dylib", "obj", "o", "a", "lib", "pyd", "pyc", "class", "jar", "war", "pdb", "idb", // compiled binaries
+	"zip", "tar", "tgz", "gz", "bz2", "xz", "7z", "rar", "deb", "rpm", "msi", "dmg", "iso", "zstd", "br", // archives
+	"db", "sqlite", "sqlite3", "mdb", "mdf", "ldf" // databases
+]);
+/** Whether a path's final file name carries an excluded extension. */ function hasExcludedExtension(path) {
+	const name = path.slice(path.lastIndexOf("/") + 1);
+	const dot = name.lastIndexOf(".");
+	if (dot <= 0 || dot === name.length - 1) return false;
+	return CAPTURE_EXCLUDED_EXTENSIONS.has(name.slice(dot + 1).toLowerCase());
+}
+/** Decide whether a repo-relative path (always `/`-separated) should be skipped from a snapshot because it lives under a heavy derived tree or is a large binary artifact. */ function isCapturedPath(path) {
+	if (path === "") return false;
+	if (path.split("/").some((segment) => CAPTURE_EXCLUDED_SEGMENTS.has(segment))) return false;
+	return !hasExcludedExtension(path);
+}
 /** Execute Git with the journal-owned directory and index, never the user's index. */ async function git(workspace, shadowGit, args, options = {}) {
 	return await new Promise((resolveResult, reject) => {
 		const child = spawn("git", [...args], {
@@ -94,12 +119,26 @@ var ShadowGit = class {
 	}
 	async capture() {
 		await this.ensure();
-		await git(this.workspace, this.shadowGit, [
-			"add",
-			"--all",
-			"--",
-			"."
-		]);
+		// Enumerate the working tree (cached + untracked, honouring the workspace
+		// .gitignore), keep only paths that are not heavy derived trees, and stage
+		// them by an explicit literal path list. This avoids both the fragile
+		// negative-pathspec semantics of `git add -A -- . ':!...'` and the Windows
+		// command-line length limit, so snapshots stay fast on large repositories.
+		let listed;
+		try {
+			listed = (await git(this.workspace, this.shadowGit, ["-c", "core.quotePath=false", "ls-files", "-co", "--exclude-standard"])).split("\n").filter(isCapturedPath);
+		} catch (error) {
+			throw new Error(`conversation-undo: could not enumerate workspace paths: ${String(error)}`);
+		}
+		if (listed.length > 0) {
+			const specFile = `${this.shadowGit}/capture-paths.txt`;
+			await writeFile(specFile, listed.join("\n"), "utf8");
+			try {
+				await git(this.workspace, this.shadowGit, ["--literal-pathspecs", "add", "--all", `--pathspec-from-file=${specFile}`]);
+			} finally {
+				await rm(specFile, { force: true });
+			}
+		}
 		const tree = (await git(this.workspace, this.shadowGit, ["write-tree"])).trim();
 		if (!/^[0-9a-f]{40,64}$/.test(tree)) throw new Error("conversation-undo: Git returned an invalid tree id");
 		return tree;
@@ -209,7 +248,7 @@ var ShadowGit = class {
 			"ls-files",
 			"-o",
 			"--exclude-standard"
-		])).length === 0;
+		])).split("\n").filter(Boolean).every((entry) => !isCapturedPath(entry));
 	}
 	/** Refresh the index stat cache so a later {@link verifyMatches} skips the full-worktree stat pass. */
 	async refreshStats() {
@@ -1398,9 +1437,12 @@ let ConversationUndoService = (() => {
 					this.expireRevokePairsForBranch(draft.logicalConversationId);
 					return true;
 				} catch (error) {
-					this.ctx.logger.warn(`rollback undo: refusing prompt because its before-tree snapshot failed: ${String(error)}`);
-					this.recordAdmissionFailure(agent.id, prompt, "本地快照失败（snapshot-failed）。");
-					return false;
+					// Snapshot must never block the conversation. If we cannot build a
+					// before-tree (slow/oversized workspace, unsupported worktree, git
+					// failure), admit the prompt without undo coverage for this turn and
+					// just log it.
+					this.ctx.logger.warn(`rollback undo: before-tree snapshot unavailable, admitting prompt without undo: ${String(error)}`);
+					return true;
 				}
 			});
 		}
