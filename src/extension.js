@@ -29,6 +29,7 @@
 const vscode = require("vscode");
 const { fork } = require("node:child_process");
 const fs = require("node:fs");
+const http = require("node:http");
 const path = require("node:path");
 const os = require("node:os");
 
@@ -52,10 +53,21 @@ let host = null;
 /** @type {vscode.WebviewView | null} */
 let currentView = null;
 let hostPort = 0;
-/** Per-process launch token printed on the host's ready line (0.1.5+). The
- * webview iframe must present it once to exchange for the auth cookie; it
- * changes on every host (re)start, so it is re-read with every ready line. */
+/** Per-process launch token printed on the host's ready line (0.1.5+). */
 let hostToken = "";
+/**
+ * The `Cookie` header the mediating proxy sends upstream. The extension host
+ * mints it itself (see exchangeToken) so the webview never has to hold it.
+ */
+let hostCookie = "";
+/**
+ * The loopback authority the cookie is bound to. DSH signs the cookie's audience
+ * with the request's `Host`, so the exchange and every proxied request must
+ * present exactly this value.
+ */
+let appAuthority = "";
+/** The local mediating proxy the webview talks to (see startAppProxy). */
+let appServer = null;
 /** @type {Promise<number> | null} */
 let readyPromise = null;
 let shutdownRequested = false;
@@ -119,19 +131,257 @@ function hostPortFor() {
 }
 
 /**
- * The URL the webview iframe must navigate to. From 0.1.5 the host gates its
- * whole surface behind a per-process launch token: a GET of `/?token=<t>`
- * (pathname `/`, exactly one token) mints the signed HttpOnly auth cookie and
- * 303-redirects to clean `/`, while a bare `/` answers 401. The token is only
- * known once the host prints its ready line, which is why the shell receives
- * this URL over postMessage rather than baking it into its HTML. A pre-0.1.5
- * host prints no token and is addressed directly.
- * @param {number} port - the bound host port.
- * @param {string} token - the launch token, or "" for a pre-0.1.5 host.
+ * The URL the webview iframe navigates to: the local mediating proxy, which
+ * always speaks to the DSH host as an authenticated client.
+ *
+ * Why a proxy exists at all. From 0.1.5 dsh-client-connection gates the web
+ * surface behind a per-process launch token AND a signed HttpOnly cookie:
+ * `GET /?token=<t>` is the only request that mints the cookie (303 +
+ * Set-Cookie), and every later request — the index and each `/api` call — is
+ * judged solely by that cookie (BrowserAuth.isAuthenticated). In this
+ * deployment the iframe is a THIRD-PARTY context (`http://127.0.0.1:<port>`
+ * nested inside `vscode-webview://`) whose requests VS Code's port-mapping
+ * layer relays instead of letting the renderer's own network stack issue them,
+ * so a `Set-Cookie` on a relayed response never reaches the browser's cookie
+ * jar. The post-redirect `GET /` then arrives with no cookie and the panel
+ * renders DSH's "dsh web authentication required" page.
+ *
+ * Rather than depend on cookie behaviour we cannot control, the extension host
+ * performs the token exchange ITSELF (a plain Node request, which does keep the
+ * cookie) and runs a loopback reverse proxy for the webview. The proxy is what
+ * the portMapping points at; it injects the cookie and strips the browser
+ * markers DSH's fence rejects (`Sec-Fetch-Site: cross-site`, cross-origin
+ * `Origin`/`Referer`). The launch token never reaches the webview at all.
+ *
+ * @param {number} port - the proxy port, i.e. hostPortFor().
+ * @returns {string} the iframe URL.
  */
-function appUrl(port, token) {
-  const base = `http://127.0.0.1:${port}/`;
-  return token ? `${base}?token=${encodeURIComponent(token)}` : base;
+function appUrl(port) {
+  return `http://127.0.0.1:${port}/`;
+}
+
+/**
+ * The host's own authenticated URL (token in the query string). Only ever handed
+ * to a REAL browser — `DSH: Open in External Browser` — which performs the token
+ * exchange and cookie handling natively. Never point the webview here: that is
+ * exactly the path that fails behind VS Code's relay.
+ * @returns {string} the direct host URL, token included when there is one.
+ */
+function hostAuthUrl() {
+  const base = `http://127.0.0.1:${hostPort}/`;
+  return hostToken ? `${base}?token=${encodeURIComponent(hostToken)}` : base;
+}
+
+/** Hop-by-hop headers plus the browser markers DSH's Host/Origin fence rejects
+ * (`sec-fetch-site: cross-site` is a hard 403, and a cross-origin `Origin`/
+ * `Referer` fails the same-origin check). Dropping them restores the clean
+ * loopback request the fence is built to accept. */
+const STRIPPED_REQUEST_HEADERS = new Set([
+  "connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
+  "te", "trailer", "transfer-encoding", "upgrade",
+  "origin", "referer",
+  "sec-fetch-site", "sec-fetch-mode", "sec-fetch-dest", "sec-fetch-user"
+]);
+
+/** The same cleanup for a WebSocket handshake, where `Connection: Upgrade` and
+ * `Upgrade: websocket` are the request's whole point and must survive. */
+const STRIPPED_UPGRADE_HEADERS = new Set([
+  "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailer",
+  "transfer-encoding",
+  "origin", "referer",
+  "sec-fetch-site", "sec-fetch-mode", "sec-fetch-dest", "sec-fetch-user"
+]);
+
+/** Serialize a response head for a raw socket (the upgrade path bypasses
+ * ServerResponse, because 101 has no body to manage). */
+function rawResponseHead(statusCode, statusMessage, headers) {
+  const lines = [`HTTP/1.1 ${statusCode} ${statusMessage}`];
+  for (const [key, value] of Object.entries(headers)) {
+    if (Array.isArray(value)) for (const one of value) lines.push(`${key}: ${one}`);
+    else if (value !== undefined) lines.push(`${key}: ${value}`);
+  }
+  return lines.join("\r\n") + "\r\n\r\n";
+}
+
+/**
+ * Exchange the host's launch token for its browser-session cookie, from the
+ * extension host, where the `Set-Cookie` header is plainly readable.
+ *
+ * The request deliberately presents `authority` as its Host: DSH binds the
+ * cookie to that exact authority (both the cookie NAME and the signed audience
+ * are derived from it), so it must equal the Host that proxied webview requests
+ * carry later.
+ *
+ * @param {number} port - the DSH host's real (ephemeral) port.
+ * @param {string} authority - the authority to bind the cookie to.
+ * @param {string} token - the process launch token.
+ * @returns {Promise<string>} the `Cookie` header value, or "" when unauthenticated.
+ */
+function exchangeToken(port, authority, token) {
+  return new Promise((resolve) => {
+    const request = http.request({
+      host: "127.0.0.1",
+      port,
+      method: "GET",
+      // The token only counts as pathname "/" with exactly one `token` param.
+      path: `/?token=${encodeURIComponent(token)}`,
+      headers: { host: authority, accept: "*/*" }
+    }, (response) => {
+      // The host answers 303 + Set-Cookie; a redirect is never followed here.
+      const raw = response.headers["set-cookie"] ?? [];
+      response.resume();
+      const cookie = raw.map((line) => String(line).split(";")[0]).filter(Boolean).join("; ");
+      log("token exchange -> " + response.statusCode + (cookie ? " (cookie minted)" : " (NO cookie)"));
+      resolve(cookie);
+    });
+    request.on("error", (error) => { log("token exchange failed: " + String(error)); resolve(""); });
+    request.end();
+  });
+}
+
+/**
+ * Forward one webview request to the DSH host as an authenticated client.
+ * @param {import("node:http").IncomingMessage} req - webview request.
+ * @param {import("node:http").ServerResponse} res - webview response.
+ * @param {boolean} retrying - true on the single post-401 retry.
+ */
+function forwardToHost(req, res, retrying) {
+  const headers = {};
+  for (const [key, value] of Object.entries(req.headers)) {
+    if (STRIPPED_REQUEST_HEADERS.has(key)) continue;
+    headers[key] = value;
+  }
+  headers.host = appAuthority;
+  // Only assert a credential we actually hold: an empty `Cookie` header would
+  // read as a present-but-invalid cookie rather than an anonymous request.
+  if (hostCookie) headers.cookie = hostCookie;
+
+  const upstream = http.request({
+    host: "127.0.0.1",
+    port: hostPort,
+    method: req.method,
+    path: req.url,
+    headers
+  }, (response) => {
+    // A 401 means the credential was rejected (or never minted). Re-mint once
+    // for a body-less request and replay it; everything else passes through
+    // untouched, including the SSE stream.
+    if (response.statusCode === 401 && !retrying && (req.method === "GET" || req.method === "HEAD")) {
+      response.resume();
+      void exchangeToken(hostPort, appAuthority, hostToken).then((cookie) => {
+        log("proxy got 401 for " + req.url + " — re-minted cookie: " + (cookie ? "yes" : "no"));
+        if (cookie) hostCookie = cookie;
+        forwardToHost(req, res, true);
+      });
+      return;
+    }
+    res.writeHead(response.statusCode ?? 502, response.headers);
+    response.pipe(res);
+  });
+  upstream.on("error", (error) => {
+    log("proxy upstream error for " + req.url + ": " + String(error));
+    if (!res.headersSent) res.writeHead(502, { "content-type": "text/plain; charset=utf-8" });
+    res.end("dsh-vscode: host request failed\n");
+  });
+  req.pipe(upstream);
+}
+
+/**
+ * Proxy a WebSocket upgrade to the host.
+ *
+ * This is not optional: DSH 0.1.5's web client opens `ws://<origin>/api/remote.mux`
+ * as its RPC mux (the 0.1.1-era "fetch + SSE only" reading no longer holds), and
+ * it sits behind the same `/api` auth guard. An HTTP-only proxy leaves the panel
+ * rendered but permanently showing "自动重连中…".
+ *
+ * @param {import("node:http").IncomingMessage} req - the upgrade request.
+ * @param {import("node:net").Socket} socket - the webview's raw socket.
+ * @param {Buffer} head - bytes already read past the request head.
+ */
+function forwardUpgrade(req, socket, head) {
+  const headers = {};
+  for (const [key, value] of Object.entries(req.headers)) {
+    if (STRIPPED_UPGRADE_HEADERS.has(key)) continue;
+    headers[key] = value;
+  }
+  headers.host = appAuthority;
+  if (hostCookie) headers.cookie = hostCookie;
+  headers.connection = "Upgrade";
+  headers.upgrade = req.headers.upgrade ?? "websocket";
+
+  const upstream = http.request({
+    host: "127.0.0.1",
+    port: hostPort,
+    method: req.method,
+    path: req.url,
+    headers
+  });
+
+  upstream.on("upgrade", (upRes, upSocket, upHead) => {
+    log("proxy websocket upgrade accepted for " + req.url);
+    socket.write(rawResponseHead(upRes.statusCode ?? 101, upRes.statusMessage ?? "Switching Protocols", upRes.headers));
+    if (upHead && upHead.length) socket.write(upHead);
+    upSocket.pipe(socket);
+    socket.pipe(upSocket);
+    const teardown = () => {
+      try { upSocket.destroy(); } catch { /* already gone */ }
+      try { socket.destroy(); } catch { /* already gone */ }
+    };
+    socket.on("error", teardown);
+    upSocket.on("error", teardown);
+    socket.on("close", teardown);
+    upSocket.on("close", teardown);
+  });
+
+  // The host may refuse the handshake with a plain HTTP response (401 when the
+  // cookie is missing, 403 from the Host/Origin fence). Relay it verbatim.
+  upstream.on("response", (response) => {
+    log("proxy websocket upgrade refused: " + response.statusCode + " for " + req.url);
+    socket.write(rawResponseHead(response.statusCode ?? 502, response.statusMessage ?? "Bad Gateway", response.headers));
+    response.pipe(socket);
+  });
+
+  upstream.on("error", (error) => {
+    log("proxy websocket error for " + req.url + ": " + String(error));
+    try { socket.destroy(); } catch { /* already gone */ }
+  });
+
+  if (head && head.length) upstream.write(head);
+  upstream.end();
+}
+
+/**
+ * Start the loopback proxy the webview's portMapping points at, unless it is
+ * already listening. It reads `hostPort`/`hostCookie`/`appAuthority` live, so a
+ * host restart only requires re-minting the cookie.
+ * @param {number} port - the proxy port (hostPortFor()).
+ */
+function startAppProxy(port) {
+  if (appServer) return;
+  appServer = http.createServer((req, res) => forwardToHost(req, res, false));
+  appServer.on("upgrade", (req, socket, head) => forwardUpgrade(req, socket, head));
+  appServer.on("error", (error) => {
+    if (error && error.code === "EADDRINUSE") {
+      // The port is fixed on purpose (the view declares its portMapping once, at
+      // creation, and VS Code cannot re-fuse it), so a second VS Code window has
+      // to use a different one.
+      log(`proxy port ${port} is already in use — another VS Code window is already serving DeepSeek Harness there. `
+        + `Close that window, or point the "dsh.port" setting at a free port.`);
+    } else {
+      log("proxy server error: " + String(error));
+    }
+    appServer = null;
+  });
+  appServer.listen(port, "127.0.0.1", () => log("webview proxy listening on 127.0.0.1:" + port));
+}
+
+/** Stop the proxy and drop the credential it was injecting. */
+function stopAppProxy() {
+  const server = appServer;
+  appServer = null;
+  hostCookie = "";
+  appAuthority = "";
+  if (server) { try { server.close(); } catch { /* already closed */ } }
 }
 
 /** Working directory for the host = agent cwd. */
@@ -454,8 +704,20 @@ function startHost(requestedPort = 0) {
       if (m) {
         hostPort = Number(m[1]);
         hostToken = m[2] ?? "";
+        // The cookie is bound to the authority the WEBVIEW will use, which is
+        // the proxy's, not the host's ephemeral one.
+        appAuthority = `127.0.0.1:${hostPortFor()}`;
         log("host ready on 127.0.0.1:" + hostPort + (hostToken ? " (auth token captured)" : " (no auth token: pre-0.1.5 host)"));
-        settle(resolve, hostPort);
+        // Authenticate as the extension host before opening the door for the
+        // webview: the proxy must already hold the cookie when the iframe asks
+        // for "/" — a 401 there is what renders DSH's auth page.
+        const authenticated = hostToken
+          ? exchangeToken(hostPort, appAuthority, hostToken).then((cookie) => { hostCookie = cookie; })
+          : Promise.resolve();
+        authenticated.then(() => {
+          startAppProxy(hostPortFor());
+          settle(resolve, hostPort);
+        }, (error) => settle(reject, error));
       } else {
         const open = /\[dsh-vscode:open-settings\]\s+(.+)$/.exec(line);
         if (open) {
@@ -495,9 +757,12 @@ function startHost(requestedPort = 0) {
       log(`host exited code=${code} signal=${signal}`);
       if (host === child) host = null;
       readyPromise = null;
-      // The launch token is minted per host process; a stale one would be
-      // rejected by the replacement host and the panel would 401 forever.
+      // The launch token and its cookie are minted per host process; keeping
+      // either would make the proxy present a credential the replacement host
+      // rejects, and every request would 401.
       hostToken = "";
+      hostCookie = "";
+      appAuthority = "";
       settle(reject, new Error(`dsh host exited (code ${code})`));
       if (!shutdownRequested && currentView) {
         currentView.webview.html = errorHtml(`The DeepSeek Harness host stopped (exit code ${code}).`, recentLog);
@@ -509,7 +774,10 @@ function startHost(requestedPort = 0) {
 /** Idempotent: return the live host port, starting the host if needed. */
 function ensureHost() {
   if (host && hostPort > 0) return Promise.resolve(hostPort);
-  if (!readyPromise) readyPromise = startHost(hostPortFor());
+  // The host binds an OS-assigned port: the STABLE port belongs to the
+  // mediating proxy (see appUrl), which is what the webview's portMapping and
+  // dsh.port describe.
+  if (!readyPromise) readyPromise = startHost(0);
   return readyPromise;
 }
 
@@ -658,7 +926,7 @@ const provider = {
     // harmless — the shell just re-navigates the iframe.
     const bounceShellIframe = (why) => {
       log("reload shell iframe (" + why + ")");
-      try { view.webview.postMessage({ command: "reload", url: appUrl(hostPort, hostToken) }); } catch { /* best effort */ }
+      try { view.webview.postMessage({ command: "reload", url: appUrl(hostPortFor()) }); } catch { /* best effort */ }
     };
 
     const showRealUi = (port) => {
@@ -716,6 +984,11 @@ async function restartHost() {
   host = null;
   hostPort = 0;
   hostToken = "";
+  // Drop the old credential but keep the proxy listening: it reads hostPort and
+  // hostCookie live, and a still-bound port means the webview never sees a
+  // connection refused while the replacement host boots.
+  hostCookie = "";
+  appAuthority = "";
   readyPromise = null;
   if (old) { try { old.kill(); } catch { /* already gone */ } }
   shutdownRequested = false;
@@ -728,7 +1001,7 @@ async function restartHost() {
     if (currentView === view) {
       view.badge = undefined;
       log("restart: host ready -> reload shell iframe to " + port);
-      try { view.webview.postMessage({ command: "reload" }); } catch { /* best effort */ }
+      try { view.webview.postMessage({ command: "reload", url: appUrl(hostPortFor()) }); } catch { /* best effort */ }
     }
   } catch (err) {
     if (currentView === view) {
@@ -766,8 +1039,10 @@ async function activate(context) {
   const open = vscode.commands.registerCommand("dsh.open", () => void openView());
   const restart = vscode.commands.registerCommand("dsh.restart", () => void restartHost());
   const browser = vscode.commands.registerCommand("dsh.openInBrowser", async () => {
-    const port = await ensureHost();
-    await vscode.env.openExternal(vscode.Uri.parse(`http://127.0.0.1:${port}/`));
+    await ensureHost();
+    // The real browser can do the launch-token exchange itself, so hand it the
+    // authenticated host URL — NOT the proxy port, which serves no token route.
+    await vscode.env.openExternal(vscode.Uri.parse(hostAuthUrl()));
   });
   const logs = vscode.commands.registerCommand("dsh.showLogs", () => { if (output) output.show(); });
   context.subscriptions.push(providerHandle, open, restart, browser, logs);
@@ -784,12 +1059,25 @@ async function activate(context) {
   );
 }
 
-function deactivate() {
+async function deactivate() {
   shutdownRequested = true;
-  if (host) {
-    try { host.kill(); } catch { /* already gone */ }
-    host = null;
-  }
+  stopAppProxy();
+  const child = host;
+  host = null;
+  if (!child) return;
+  await new Promise((resolve) => {
+    // Wait for the child to actually exit before returning. Tearing down while
+    // the fork handle is still closing trips a libuv assertion on Windows
+    // ("!(handle->flags & UV_HANDLE_CLOSING)" in src\win\async.c), which aborts
+    // the whole process instead of shutting down cleanly — the same abort the
+    // smoke harness hits when it calls process.exit() straight after kill().
+    let settled = false;
+    const finish = () => { if (settled) return; settled = true; clearTimeout(timer); resolve(); };
+    const timer = setTimeout(finish, 2000);
+    if (typeof timer.unref === "function") timer.unref();
+    child.once("exit", finish);
+    try { child.kill(); } catch { finish(); }
+  });
 }
 
 module.exports = { activate, deactivate };

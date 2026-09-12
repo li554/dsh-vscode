@@ -91,11 +91,15 @@ python .smoke/pack.py
 
 ## 🧱 工作原理
 
-1. 扩展在扩展宿主内以 `ELECTRON_RUN_AS_NODE=1` 方式 fork 内置 DSH 宿主：`dsh --profile web --port <固定端口> --no-open`，用 VS Code 二进制充当 Node 运行时。
-2. 宿主监听 `127.0.0.1` 的固定端口（默认 `37750`），提供预构建网页前端（`@deepseek-ai/dsh-web-frontend/dist`）。
-3. Webview 面板通过声明稳定的 `WebviewPortMapping`（`{ webviewPort: port, extensionHostPort: port }`），让 Service Worker 将 iframe 及全部 `/api` 请求代理到扩展宿主。
-4. **启动令牌换 Cookie（0.1.5 起新增）**：宿主启动时打印 `dsh web: http://127.0.0.1:<port>/?token=<launchToken>`，对根路径的裸 `GET /` 一律返回 `401`。扩展从该行解析出端口与令牌，把 iframe 导航到 `/?token=<token>`；宿主校验令牌后签发 `HttpOnly` 会话 Cookie 并 `303` 重定向到干净的 `/`，此后所有请求凭 Cookie 通行。令牌是**每个宿主进程一份**的，所以扩展在宿主每次（重）启动时都重新解析并通过 `postMessage` 下发给 webview。除令牌/信任边界外**无需任何 DSH 源码改动**。
-5. DSH Web 客户端仅使用 fetch + SSE（无 WebSocket），端口映射代理完全可以承载。
+1. 扩展在扩展宿主内以 `ELECTRON_RUN_AS_NODE=1` 方式 fork 内置 DSH 宿主：`dsh --profile web --port 0 --no-open`（宿主用 OS 分配的临时端口），用 VS Code 二进制充当 Node 运行时。
+2. 宿主监听 `127.0.0.1` 的临时端口，提供预构建网页前端（`@deepseek-ai/dsh-web-frontend/dist`）。扩展在**固定端口**（`dsh.port`，默认 `37750`）上另起一个中转代理供 webview 使用，见第 4 条。
+3. Webview 面板通过声明稳定的 `WebviewPortMapping`（`{ webviewPort: port, extensionHostPort: port }`，两者都是上面的固定端口），让 iframe 及全部 `/api` 请求落到该端口——也就是落在这个中转代理上。
+4. **启动令牌 → Cookie → 本地中转代理（0.1.5 起新增）**：宿主启动时打印 `dsh web: http://127.0.0.1:<port>/?token=<launchToken>`，对根路径的裸 `GET /` 一律返回 `401`。0.1.5 的鉴权模型是：**只有** `GET /?token=<t>` 这一次请求会签发 `HttpOnly` 会话 Cookie 并 `303` 重定向到 `/`，此后首页与**每一个** `/api` 请求都**只认这个 Cookie**（`BrowserAuth.isAuthenticated`），且没有任何配置可以关闭。
+
+   在 VS Code 里 webview iframe 属于**第三方上下文**（`vscode-webview://` 内嵌 `127.0.0.1`），其请求由 VS Code 的端口映射层中继而非渲染进程直发，因此中继响应上的 `Set-Cookie` 永远不会进入浏览器 Cookie 罐——重定向后的 `GET /` 不带 Cookie，面板就会显示 DSH 的 `dsh web authentication required` 页面。
+
+   所以**不由浏览器承担认证**：扩展宿主自己完成 token 交换（普通 Node 请求，能拿到 `Set-Cookie`），并在端口映射指向的稳定端口上运行一个**本地回环反向代理**。代理负责注入 Cookie，并剥掉 DSH 的 Host/Origin 围栏会拒绝的浏览器标记（`Sec-Fetch-Site: cross-site` 是硬 403，跨源 `Origin`/`Referer` 也过不了同源检查）。**启动令牌完全不会进入 webview**。宿主本身改用 OS 分配的临时端口，`dsh.port`（默认 `37750`）现在描述的是代理端口。`DSH: Open in External Browser` 仍直接打开带 token 的宿主地址，由真实浏览器自行完成交换。
+5. DSH Web 客户端仅使用 fetch + SSE（无 WebSocket），端口映射代理完全可以承载（中转代理是流式转发的，不缓冲 SSE）。
 6. 插件前端资源不走裸 `/plugins/<id>/client.js`：0.1.5 的模块注册表只服务它自己广告的**带 revision 的合并 URL**（`/plugins/??<id>/client.js,…&rev=<hash>`），裸路径返回 404。
 
 ## ❓ 常见问题
