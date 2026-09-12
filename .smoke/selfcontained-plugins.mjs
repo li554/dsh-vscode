@@ -38,7 +38,8 @@ const PROVENANCE = {
   "dsh-memory-evolve": "vendored (csyangwen/dsh-memory-evolve) — not published on npm",
   "@dsh-vscode/p2h-bridge": "local (this repo) — hand-written client bundle, no build step",
   "dsh-client-auto-continue": "npm dsh-client-auto-continue@0.11.5",
-  "@canglongcl/dsh-web-review": "npm @canglongcl/dsh-web-review@0.6.0"
+  "@canglongcl/dsh-web-review": "npm @canglongcl/dsh-web-review@0.6.0",
+  "dsh-undo-plugin": "npm dsh-undo-plugin@0.1.0-rc.8 (bundle layer; mounts @dsh-undo/* members, restored from 0.2.53)"
 };
 
 /** Read BUNDLED_PLUGINS straight out of the extension so this check cannot
@@ -68,8 +69,31 @@ function onDiskEntries() {
   return out.sort();
 }
 
+/** Every package name a declared entry's cordis patch mounts as a member row
+ * (`- id: x` / `name: '@scope/pkg'`). A bundled package is legitimate when it is
+ * either a declared entry or claimed by one this way — that is exactly how the
+ * @dsh-undo/* members arrive: only dsh-undo-plugin is a bundle entry, and its
+ * patch inserts the seven packages it needs. */
+function claimedMembers(entries) {
+  const claimed = new Set();
+  for (const n of entries) {
+    const dir = path.join(BUNDLED, ...n.split("/"));
+    let pkg;
+    try { pkg = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8")); } catch { continue; }
+    const rel = pkg?.dsh?.bundle?.patch;
+    if (!rel) continue;
+    const patchPath = path.join(dir, rel);
+    if (!fs.existsSync(patchPath)) continue;
+    for (const m of fs.readFileSync(patchPath, "utf8").matchAll(/name\s*:\s*["']([^"']+)["']/g)) {
+      if (!m[1].startsWith("@deepseek-ai/")) claimed.add(m[1]);
+    }
+  }
+  return claimed;
+}
+
 const declared = readBundledPlugins().slice().sort();
 const present = onDiskEntries();
+const claimed = claimedMembers(declared);
 
 let failures = 0;
 const fail = (msg) => { failures++; console.log("  FAIL " + msg); };
@@ -88,12 +112,10 @@ for (const n of declared) {
   try { pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8")); } catch (e) { fail(`${n}: package.json is not valid JSON (${e.message})`); continue; }
   if (pkg.name !== n) fail(`${n}: package.json name is "${pkg.name}"`);
 
-  // The loader only mounts a bundle entry through a cordis patch, and the web
-  // client only serves a client.js for entries that declare platform "web".
+  // The loader only mounts a bundle entry through a cordis patch.
   const patch = pkg.dsh?.bundle?.patch;
   if (!patch) fail(`${n}: dsh.bundle.patch missing — the loader cannot mount it`);
   else if (!fs.existsSync(path.join(dir, patch))) fail(`${n}: dsh.bundle.patch "${patch}" does not exist`);
-  if (pkg.dsh?.client?.platform !== "web") fail(`${n}: dsh.client.platform is not "web"`);
   const inject = pkg.dsh?.client?.inject;
   if (inject !== undefined && !Array.isArray(inject)) fail(`${n}: dsh.client.inject is not an array`);
 
@@ -104,17 +126,25 @@ for (const n of declared) {
     fail(`${n}: injects @deepseek-ai/dsh-client-runtime, which no longer exists in 0.1.5`);
   }
 
-  // The web client half is advertised through exports["./client"], which is not
-  // always lib/client.js (web-review ships lib/client-official.js). Resolve the
-  // declared entry, then fall back to the conventional path.
-  const clientRel = typeof pkg.exports?.["./client"] === "string"
-    ? pkg.exports["./client"]
-    : pkg.exports?.["./client"]?.default;
-  const clientPath = path.join(dir, clientRel ?? "lib/client.js");
-  if (!fs.existsSync(clientPath)) fail(`${n}: web client entry missing (${clientRel ?? "lib/client.js"})`);
-  else {
-    const src = fs.readFileSync(clientPath, "utf8");
-    if (!src.includes("__ModuleLoader__.load")) fail(`${n}: ${clientRel ?? "lib/client.js"} is not a __ModuleLoader__ bundle`);
+  // Two legitimate shapes:
+  //  - a WEB CLIENT entry declares dsh.client.platform "web" and must ship a
+  //    __ModuleLoader__ bundle the client registry can serve;
+  //  - a BUNDLE-ONLY entry (e.g. dsh-undo-plugin, whose cordis patch mounts its
+  //    @dsh-undo/* members) declares no dsh.client and has no client half.
+  if (pkg.dsh?.client !== undefined) {
+    if (pkg.dsh.client.platform !== "web") fail(`${n}: declares dsh.client but platform is not "web"`);
+    // The client half is advertised through exports["./client"], which is not
+    // always lib/client.js (web-review ships lib/client-official.js). Resolve the
+    // declared entry, then fall back to the conventional path.
+    const clientRel = typeof pkg.exports?.["./client"] === "string"
+      ? pkg.exports["./client"]
+      : pkg.exports?.["./client"]?.default;
+    const clientPath = path.join(dir, clientRel ?? "lib/client.js");
+    if (!fs.existsSync(clientPath)) fail(`${n}: web client entry missing (${clientRel ?? "lib/client.js"})`);
+    else {
+      const src = fs.readFileSync(clientPath, "utf8");
+      if (!src.includes("__ModuleLoader__.load")) fail(`${n}: ${clientRel ?? "lib/client.js"} is not a __ModuleLoader__ bundle`);
+    }
   }
 
   const provenance = PROVENANCE[n];
@@ -123,7 +153,12 @@ for (const n of declared) {
 }
 
 for (const n of present) {
-  if (!declared.includes(n)) fail(`${n}: present in plugins/bundled but NOT declared in BUNDLED_PLUGINS`);
+  if (declared.includes(n)) continue;
+  if (claimed.has(n)) {
+    ok(`${n}: mounted as a member row by a declared bundle entry`);
+    continue;
+  }
+  fail(`${n}: present in plugins/bundled but neither declared in BUNDLED_PLUGINS nor claimed by any entry's cordis patch`);
 }
 
 // _hostdeps is flattened into <profile>/node_modules, so each child must be a

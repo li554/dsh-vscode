@@ -409,7 +409,8 @@ const BUNDLED_PLUGINS = [
   "@canglongcl/dsh-web-review",
   "@dsh-vscode/p2h-bridge",
   "dsh-client-auto-continue",
-  "dsh-memory-evolve"
+  "dsh-memory-evolve",
+  "dsh-undo-plugin"
 ];
 /** Plugins that older vsix releases bundled but this build does not. A DSH_HOME
  * that previously ran with them enabled still carries their names in the profile
@@ -451,7 +452,6 @@ const RETIRED_PLUGINS = [
   "dsh-file-review",
   "dsh-free-search",
   "dsh-miraculous-standard",
-  "dsh-undo-plugin",
   "dsh-zh-kit"
 ];
 /** Platform web profile bundles. They must ALWAYS precede the baked plugins:

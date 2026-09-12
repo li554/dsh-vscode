@@ -39,6 +39,21 @@ function readBundledPlugins() {
 const entries = readBundledPlugins();
 console.log("baked plugin entries (" + entries.length + "): " + entries.join(", "));
 
+/** True when the entry declares a web client half, i.e. is expected to be
+ * advertised as a /plugins/ combo URL and injected as a graph row. A pure bundle
+ * layer (e.g. dsh-undo-plugin, whose cordis patch mounts its @dsh-undo/* members)
+ * has no dsh.client and therefore no client bundle of its own. */
+function isWebClientEntry(name) {
+  const pkgPath = path.join(BUNDLED, ...name.split("/"), "package.json");
+  try {
+    return JSON.parse(fs.readFileSync(pkgPath, "utf8"))?.dsh?.client?.platform === "web";
+  } catch {
+    return false;
+  }
+}
+const webEntries = entries.filter(isWebClientEntry);
+console.log("  of which web client entries: " + webEntries.length + " (" + webEntries.join(", ") + ")");
+
 // 1. transplant bundled entry packages + flatten _hostdeps into profile/node_modules.
 fs.mkdirSync(MODULES, { recursive: true });
 for (const entry of fs.readdirSync(BUNDLED)) {
@@ -140,7 +155,7 @@ async function authCookie(base, token) {
   const pluginUrls = [...new Set([...html.matchAll(/\/plugins\/[^"'\s<>\\)]+/g)].map((m) => m[0].replace(/&amp;/g, "&")))];
 
   let pass = indexStatus === 200 ? 1 : 0;
-  const checks = 1 + entries.length;
+  const checks = 1 + webEntries.length;
   for (const url of pluginUrls) {
     try {
       const res = await fetch(base + url, { headers, redirect: "manual" });
@@ -150,9 +165,10 @@ async function authCookie(base, token) {
       console.log("  ERR  GET " + url + " -> " + String(e.message));
     }
   }
-  // Each baked entry must be advertised in at least one served combo URL and
-  // appear as a graph row in the shell carrier.
-  for (const n of entries) {
+  // Each baked WEB entry must be advertised in at least one served combo URL and
+  // appear as a graph row in the shell carrier. Bundle-only entries are mounted
+  // by their cordis patch instead and legitimately have neither.
+  for (const n of webEntries) {
     const advertised = pluginUrls.some((u) => u.includes(`${n}/client.js`));
     const graphRow = new RegExp(`"id":"${n.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")}"`).test(html);
     const ok = advertised && graphRow;

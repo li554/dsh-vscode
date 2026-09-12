@@ -41,7 +41,7 @@
 
 ## 🔌 内置插件
 
-> **探索分支说明**：本分支（`explore/dsh-0.1.5-rc2`）把内置平台升级到 `@deepseek-ai/dsh@0.1.5-rc.2`，并把内置插件从原先的整套生态**裁剪为下面 4 个**，其余全部移除（见 `src/extension.js` 的 `RETIRED_PLUGINS`，旧 `DSH_HOME` 里的残留插件会在下次启动时被清理）。
+> **探索分支说明**：本分支（`explore/dsh-0.1.5-rc2`）把内置平台升级到 `@deepseek-ai/dsh@0.1.5-rc.2`，并把内置插件从原先的整套生态**裁剪为下面 5 个**，其余全部移除（见 `src/extension.js` 的 `RETIRED_PLUGINS`，旧 `DSH_HOME` 里的残留插件会在下次启动时被清理）。
 
 扩展在 `plugins/bundled` 下随附以下插件（各自保留原 LICENSE）：
 
@@ -50,14 +50,18 @@
 | `dsh-memory-evolve` | [csyangwen/dsh-memory-evolve](https://github.com/csyangwen/dsh-memory-evolve) | 分层记忆（全局/用户/项目/GIT 分支/每日）+ 自我进化 + 技能/待办管理，带 WebUI。精简打包为 `lib` + `vendor`；`dsh.client.inject` 已由已消失的 `dsh-client-runtime` 改为 `dsh-client-ui-slots` + `dsh-client-ui-primitives` |
 | `dsh-client-auto-continue` | [HsiangNianian/dsh-auto-continue](https://github.com/HsiangNianian/dsh-auto-continue) | 请求被网络错误等非人为原因中断时自动续写（升到 0.11.5） |
 | `@canglongcl/dsh-web-review` | canglongcl | 页面预览 + 元素框选批注 + 视觉调整（升到 0.6.0；0.6.0 起它自己也已改用官方 slot，不再依赖 better-sidebar） |
+| `dsh-undo-plugin` + `@dsh-undo/*`（7 个成员包） | [23swccp/dsh-undo](https://github.com/23swccp/dsh-undo) | 对话回退/撤销：`/undo` 命令、消息行与头部回退按钮、回退时 fork 到新会话（模型不会看到被撤销的提示）、设置页「归档任务」管理器、影子 Git 文件恢复（绝不碰项目自身的 `.git`）。`rollback-fork` 有一处针对 0.1.5 的本地修补，见下 |
 | `@dsh-vscode/p2h-bridge` | 本仓库自研 | PPT↔HTML 桥：`slides_import`/`slides_export` 宿主工具、`/html-slides` 静态预览路由、以及对话区的「PPT」标签页（导入 / 内联预览 / 导出 / 上传管理）。设计文档见 `docs/superpowers/specs/2026-08-29-dsh-ppt-html-review-workflow-design.md` |
 | `_hostdeps/`（docgen-utils、fontkit、jszip、linkedom 及其闭包） | npm 包 | p2h-bridge 宿主侧所需的非平台依赖，内置以便离线解析 |
+
+> `dsh-undo-plugin` 只是 bundle 层，真正的插件是它 cordis patch 挂载的 7 个 `@dsh-undo/*` 成员包——所以它们不在 `BUNDLED_PLUGINS` 里，由 `.smoke/selfcontained-plugins.mjs` 按「被 patch 认领」校验。
 
 **本分支的本地改造（相对上游）**
 
 - `@dsh-vscode/p2h-bridge` 0.2.1 → 0.3.0：原本是挂在 `dsh-better-sidebar` 标签栏里的侧边栏标签页，现改为注册平台官方 slot `conversation.view`（`order: 15`），**紧邻「轨迹」标签页右侧**；同时移除对 `betterSidebar` 服务的全部探测与 web-review 预览标签页的外部驱动（web-review 0.6.0 已不再提供该公开 API），预览改为面板内联 iframe + 「新窗口」兜底。调研与 0.1.1→0.1.5 API 差异见 `docs/superpowers/specs/2026-09-01-p2h-bridge-conversation-view-tab-research.md`。
+- `@dsh-undo/rollback-fork`：上游 `@deepseek-ai/dsh-agent-presets` 在 0.1.1-rc.2 之后删掉了 `resolveSessionPreset` 导出，而 dsh-undo rc.8 正是 `import` 它——**这会让整个宿主启动失败**（cordis 报的是「加载插件失败」，看不出根因在平台）。已把 0.1.1 那个 8 行实现内联回来（0.1.5 仍在产生它依赖的 `agent-preset/selected` 事件与 `header.agentPreset` 字段）。用 `.smoke/platform-api-scan.mjs` 可一次性扫出这类断裂。
 - `dsh-memory-evolve` 的 `dsh.client.inject` 修正（见上表）。
-- **宿主接入改动**：0.1.5 给整个 Web 界面加了「每进程启动令牌」，裸 `GET /` 返回 401，扩展现在从启动行解析令牌并把 iframe 导航到 `/?token=<token>` 换取会话 Cookie（详见下方「工作原理」第 4 条）。
+- **宿主接入改动**：0.1.5 给整个 Web 界面加了「每进程启动令牌」，裸 `GET /` 返回 401，扩展改为在扩展宿主侧完成令牌交换并起本地中转代理（详见下方「工作原理」第 4 条）。
 
 ## 🛠️ 从源码构建
 
@@ -88,6 +92,15 @@ python .smoke/pack.py
 ```
 
 > 优先使用 `.smoke/pack.py` 而非 `npx @vscode/vsce package`：vsce 的依赖清单校验不兼容 pnpm 扁平布局，且文件遍历明显更慢。
+
+### 冒烟测试
+
+| 脚本 | 作用 |
+| --- | --- |
+| `.smoke/platform-api-scan.mjs` | 扫描内置插件对平台（`@deepseek-ai/*`）的每一个具名 import，核对当前 vendor 树是否仍导出它。**升级平台后应先跑这个**——插件是外部预构建产物，平台删掉一个导出会让宿主启动时直接崩，而报错只提插件不提根因 |
+| `.smoke/boot-test.mjs` | 起真实宿主 + 临时 `DSH_HOME`，移植 `plugins/bundled`，断言首页与每个 **web 客户端**条目的带 revision 插件 URL 都返回 200、且在前端模块图里有对应行 |
+| `.smoke/extension-proxy-test.cjs` | 用 stub 的 `vscode` 模块加载真实 `src/extension.js`，跑 `activate()` 起宿主与鉴权中转代理，然后**不带 Cookie** 去探测代理端口：首页须 200、未知 `/api` 通道不得是 401/403、`ws://…/api/remote.mux` 须返回 101 |
+| `.smoke/selfcontained-plugins.mjs` | 校验 `plugins/bundled` 与 `BUNDLED_PLUGINS` 一致：每个条目要么被声明、要么被某个条目的 cordis patch 认领；并拒绝任何仍注入已被删除的 `dsh-client-runtime` 的包 |
 
 ## 🧱 工作原理
 
