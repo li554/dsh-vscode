@@ -408,6 +408,7 @@ function hostCwd() {
 const BUNDLED_PLUGINS = [
   "@canglongcl/dsh-web-review",
   "@dsh-vscode/p2h-bridge",
+  "@liustack/modlens",
   "dsh-client-auto-continue",
   "dsh-memory-evolve",
   "dsh-undo-plugin"

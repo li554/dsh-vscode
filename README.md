@@ -52,9 +52,13 @@
 | `@canglongcl/dsh-web-review` | canglongcl | 页面预览 + 元素框选批注 + 视觉调整（升到 0.6.0；0.6.0 起它自己也已改用官方 slot，不再依赖 better-sidebar） |
 | `dsh-undo-plugin` + `@dsh-undo/*`（7 个成员包） | [23swccp/dsh-undo](https://github.com/23swccp/dsh-undo) | 对话回退/撤销：`/undo` 命令、消息行与头部回退按钮、回退时 fork 到新会话（模型不会看到被撤销的提示）、设置页「归档任务」管理器、影子 Git 文件恢复（绝不碰项目自身的 `.git`）。`rollback-fork` 有一处针对 0.1.5 的本地修补，见下 |
 | `@dsh-vscode/p2h-bridge` | 本仓库自研 | PPT↔HTML 桥：`slides_import`/`slides_export` 宿主工具、`/html-slides` 静态预览路由、以及对话区的「PPT」标签页（导入 / 内联预览 / 导出 / 上传管理）。设计文档见 `docs/superpowers/specs/2026-08-29-dsh-ppt-html-review-workflow-design.md` |
+| `@liustack/modlens` | [liustack/modlens](https://github.com/liustack/modlens) | **视觉插件**：给纯文本模型（DeepSeek/GLM 等）加「看图」能力，粘贴图片返回结构化 JSON 证据（OCR + 版面 + 语义）。提供 `modlens_read_image` 工具、图片粘贴处理、`(modlens vision)` 模型变体与设置卡片。自带 `node_modules/{commander,undici}` 供它 spawn 的 CLI 使用，见下 |
 | `_hostdeps/`（docgen-utils、fontkit、jszip、linkedom 及其闭包） | npm 包 | p2h-bridge 宿主侧所需的非平台依赖，内置以便离线解析 |
 
 > `dsh-undo-plugin` 只是 bundle 层，真正的插件是它 cordis patch 挂载的 7 个 `@dsh-undo/*` 成员包——所以它们不在 `BUNDLED_PLUGINS` 里，由 `.smoke/selfcontained-plugins.mjs` 按「被 patch 认领」校验。
+
+> **`@liustack/modlens` 需要自己配一个视觉引擎才能读图**。它与平台几乎没有耦合（宿主半只 import node 内建，客户端半只 require `react` + `dsh-client-ui-primitives`，都来自前端共享表），并且**已经内置了 Electron 部署的处理**：它 spawn `process.execPath <dist/main.js>` 时显式设 `ELECTRON_RUN_AS_NODE=1`，所以用 VS Code 二进制当 Node 跑得通（实测 `--version` 正常）。
+> 它的配置在 **`~/.modlens/config.json`**（不在 `DSH_HOME` 内，因此残留清理逻辑碰不到它）。装完先跑 `doctor` 看引擎状态，再按需配一条：`modlens config set gemini-api.apiKey`（免费、5-10 秒）、或把它指到任意 OpenAI 兼容的视觉端点：`modlens config set openai.baseUrl <url>` / `openai.apiKey` / `openai.model`。
 
 **本分支的本地改造（相对上游）**
 
