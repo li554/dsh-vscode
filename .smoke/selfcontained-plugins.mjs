@@ -1,76 +1,144 @@
-// Re-materialize the baked ecosystem plugins as SELF-CONTAINED units.
+// Baked-plugin set: provenance and verification.
 //
-// The DSH web client resolves plugin imports through an in-memory module
-// graph (dsh-client-modules): every package the profile loader includes as an
-// entry and that declares `dsh.client.platform:"web"` serves a PRE-BUILT
-// `./client.js` over /plugins/<id>/client.js. Import specifiers for react and
-// @deepseek-ai/* are satisfied by the shared base/web-app graph rows — NOT by
-// a physical node_modules. So the runtime payload is just the loader-entry
-// package set (sibling package dirs each with their built lib + patch), and
-// shared/vendor discipline is: NEVER duplicate react / @deepseek-ai /
-// schemastery. Any package that additionally needs a physical host-side
-// dependency (dsh-ssh -> ssh2, etc.) must carry that dep in its OWN nested
-// node_modules — discovered by running the real host boot; this script only
-// materializes the lean sibling root set (no nested node_modules).
+// History: this file used to RE-MATERIALIZE plugins/bundled from
+// plugins/node_modules (a flat npm install of the whole ecosystem roster),
+// walking each root package's cordis.patch.yml to collect its transitively
+// mounted sibling entries. That regeneration model no longer applies: the
+// 0.1.5 exploration build ships exactly FOUR plugins, and two of them are not
+// npm packages at all —
 //
-// Source:  plugins/node_modules   (flat npm-hoisted install of all packages)
-// Output:  plugins/bundled/       (sibling loader-entry package dirs)
+//   dsh-memory-evolve            vendored from the upstream repo (not on npm)
+//   @dsh-vscode/p2h-bridge       hand-written in this repo
+//   dsh-client-auto-continue     npm  (pinned in plugins-rc2 provenance below)
+//   @canglongcl/dsh-web-review   npm
+//
+// so a blanket regeneration would delete the two hand-maintained packages. This
+// script instead VERIFIES that the on-disk bundled set matches BUNDLED_PLUGINS
+// and that every entry is actually loadable, which is what the boot harness
+// depends on. Sources used to refresh the npm-sourced pair are recorded in the
+// table below.
+//
+// To update an npm-sourced plugin:
+//   npm pack <name>@<version>            # registry: https://registry.npmmirror.com
+//   tar -xzf <tarball> -C <stage>
+//   # copy lib/ + cordis.patch.yml + package.json (+ skills/ where present),
+//   # dropping docs/, src/, tsconfig*, scripts/ and every *.map, into
+//   # plugins/bundled/<name>/  — then re-run this script and .smoke/boot-test.mjs
 import fs from "node:fs";
 import path from "node:path";
 
 const fileUrl = new URL(import.meta.url).pathname;
 const ROOT = path.dirname(fileUrl.replace(/^\/([A-Za-z]:)/, "$1"));
 const PROJ = path.resolve(ROOT, "..");
-const FLAT = path.join(PROJ, "plugins", "node_modules");
-const OUT  = path.join(PROJ, "plugins", "bundled");
+const BUNDLED = path.join(PROJ, "plugins", "bundled");
 
-// yarn-parse the initial seed roots' patch to gather children, then recurse
-function readNameRows(text) {
-  const names = [];
-  for (const m of text.matchAll(/name\s*:\s*["']([^"']+)["']/g)) names.push(m[1]);
-  return names;
+/** Where each bundled entry came from. npm-sourced versions must equal the
+ * `version` inside the bundled package.json. */
+const PROVENANCE = {
+  "dsh-memory-evolve": "vendored (csyangwen/dsh-memory-evolve) — not published on npm",
+  "@dsh-vscode/p2h-bridge": "local (this repo) — hand-written client bundle, no build step",
+  "dsh-client-auto-continue": "npm dsh-client-auto-continue@0.11.5",
+  "@canglongcl/dsh-web-review": "npm @canglongcl/dsh-web-review@0.6.0"
+};
+
+/** Read BUNDLED_PLUGINS straight out of the extension so this check cannot
+ * drift from what actually ships. */
+function readBundledPlugins() {
+  const src = fs.readFileSync(path.join(PROJ, "src", "extension.js"), "utf8");
+  const m = /const BUNDLED_PLUGINS = \[([\s\S]*?)\];/.exec(src);
+  if (!m) throw new Error("BUNDLED_PLUGINS not found in src/extension.js");
+  return [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]);
 }
 
-// manual mini-parse of the roots' patch files to seed children (avoids a yaml dep here)
-const roots = ["@linxin666/dsh-web-ui-all", "dsh-undo-plugin", "dsh-client-auto-continue", "dsh-memory-evolve", "dsh-miraculous-standard", "@dsh-external/dsh-super-injector"];
-const seen = new Set();
-const queue = [...roots];
-while (queue.length) {
-  const name = queue.shift();
-  if (seen.has(name)) continue;
-  seen.add(name);
-  const dir = path.join(FLAT, name);
-  const pkg = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8"));
-  const rel = pkg.dsh?.bundle?.patch;
-  if (!rel) continue;
-  const file = path.join(dir, rel);
-  if (!fs.existsSync(file)) continue;
-  for (const child of readNameRows(fs.readFileSync(file, "utf8"))) {
-    if (child.startsWith("@deepseek-ai/")) continue;           // platform graph provides these
-    if (!seen.has(child)) queue.push(child);
+/** Every package dir physically present under plugins/bundled (scopes expanded). */
+function onDiskEntries() {
+  const out = [];
+  for (const entry of fs.readdirSync(BUNDLED)) {
+    if (entry === "_hostdeps") continue;
+    const full = path.join(BUNDLED, entry);
+    if (!fs.statSync(full).isDirectory()) continue;
+    if (entry.startsWith("@")) {
+      for (const sub of fs.readdirSync(full)) {
+        if (fs.statSync(path.join(full, sub)).isDirectory()) out.push(`${entry}/${sub}`);
+      }
+    } else {
+      out.push(entry);
+    }
   }
+  return out.sort();
 }
-const ENTRIES = [...seen].sort();
-console.log("self-contained entry packages:", ENTRIES.length);
-console.log(ENTRIES.join(", "));
 
-// materialize each entry as a lean sibling package dir (strip any nested node_modules)
-fs.rmSync(OUT, { recursive: true, force: true });
-let files = 0, bytes = 0;
-for (const name of ENTRIES) {
-  const src = path.join(FLAT, name);
-  const dest = path.join(OUT, ...name.split("/"));
-  fs.mkdirSync(path.dirname(dest), { recursive: true });
-  // recursive copy stripping node_modules; cpSync(follows real dirs, copies
-  // symlinks) is used because the flat tree symlinks a few packages.
-  const filter = (s) => {
-    const b = path.basename(s);
-    return b !== "node_modules" && b !== ".bin";
-  };
-  fs.cpSync(src, dest, { recursive: true, filter });
-  const count = (p) => { let c = 0; for (const e of fs.readdirSync(p, { withFileTypes: true })) { if (e.isDirectory()) c += count(path.join(p, e.name)); else c++; } return c; };
-  files += count(dest);
-  bytes += fs.statSync(dest).size;
+const declared = readBundledPlugins().slice().sort();
+const present = onDiskEntries();
+
+let failures = 0;
+const fail = (msg) => { failures++; console.log("  FAIL " + msg); };
+const ok = (msg) => console.log("  ok   " + msg);
+
+console.log("BUNDLED_PLUGINS declared (" + declared.length + "): " + declared.join(", "));
+console.log("plugins/bundled on disk (" + present.length + "): " + present.join(", "));
+console.log("");
+
+for (const n of declared) {
+  if (!present.includes(n)) { fail(`${n}: declared but MISSING from plugins/bundled`); continue; }
+  const dir = path.join(BUNDLED, ...n.split("/"));
+  const pkgPath = path.join(dir, "package.json");
+  if (!fs.existsSync(pkgPath)) { fail(`${n}: no package.json`); continue; }
+  let pkg;
+  try { pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8")); } catch (e) { fail(`${n}: package.json is not valid JSON (${e.message})`); continue; }
+  if (pkg.name !== n) fail(`${n}: package.json name is "${pkg.name}"`);
+
+  // The loader only mounts a bundle entry through a cordis patch, and the web
+  // client only serves a client.js for entries that declare platform "web".
+  const patch = pkg.dsh?.bundle?.patch;
+  if (!patch) fail(`${n}: dsh.bundle.patch missing — the loader cannot mount it`);
+  else if (!fs.existsSync(path.join(dir, patch))) fail(`${n}: dsh.bundle.patch "${patch}" does not exist`);
+  if (pkg.dsh?.client?.platform !== "web") fail(`${n}: dsh.client.platform is not "web"`);
+  const inject = pkg.dsh?.client?.inject;
+  if (inject !== undefined && !Array.isArray(inject)) fail(`${n}: dsh.client.inject is not an array`);
+
+  // The one inject entry that silently broke every 0.1.1-era plugin: the
+  // package was deleted upstream after 0.1.1-rc.2, so injecting it is dead
+  // weight and (for anything that actually required it) fatal.
+  if (Array.isArray(inject) && inject.includes("@deepseek-ai/dsh-client-runtime")) {
+    fail(`${n}: injects @deepseek-ai/dsh-client-runtime, which no longer exists in 0.1.5`);
+  }
+
+  // The web client half is advertised through exports["./client"], which is not
+  // always lib/client.js (web-review ships lib/client-official.js). Resolve the
+  // declared entry, then fall back to the conventional path.
+  const clientRel = typeof pkg.exports?.["./client"] === "string"
+    ? pkg.exports["./client"]
+    : pkg.exports?.["./client"]?.default;
+  const clientPath = path.join(dir, clientRel ?? "lib/client.js");
+  if (!fs.existsSync(clientPath)) fail(`${n}: web client entry missing (${clientRel ?? "lib/client.js"})`);
+  else {
+    const src = fs.readFileSync(clientPath, "utf8");
+    if (!src.includes("__ModuleLoader__.load")) fail(`${n}: ${clientRel ?? "lib/client.js"} is not a __ModuleLoader__ bundle`);
+  }
+
+  const provenance = PROVENANCE[n];
+  if (!provenance) fail(`${n}: no PROVENANCE entry — record where this package came from`);
+  else ok(`${n}@${pkg.version} — ${provenance}`);
 }
-console.log("OK entry files=" + files + " bytes=" + Math.round(bytes / (1024 * 1024)) + "MB");
-console.log("OUT:", OUT);
+
+for (const n of present) {
+  if (!declared.includes(n)) fail(`${n}: present in plugins/bundled but NOT declared in BUNDLED_PLUGINS`);
+}
+
+// _hostdeps is flattened into <profile>/node_modules, so each child must be a
+// real package dir or the requiring plugin gets ERR_MODULE_NOT_FOUND.
+const hd = path.join(BUNDLED, "_hostdeps");
+if (fs.existsSync(hd)) {
+  const deps = fs.readdirSync(hd).filter((e) => fs.statSync(path.join(hd, e)).isDirectory());
+  const bad = deps.filter((e) => !fs.existsSync(path.join(hd, e, "package.json")));
+  if (bad.length) fail(`_hostdeps entries without package.json: ${bad.join(", ")}`);
+  else ok(`_hostdeps: ${deps.length} packages, all with package.json`);
+}
+
+console.log("");
+if (failures) {
+  console.log(`RESULT: ${failures} problem(s) in the bundled plugin set.`);
+  process.exit(1);
+}
+console.log("RESULT: bundled plugin set OK.");

@@ -1890,7 +1890,7 @@
 			...typeof record.value === "string" ? { value: record.value } : {}
 		};
 	}
-	async function execute(command) {
+	function execute(command) {
 		const payload = command.payload;
 		if (command.name === "request-ready") {
 			postReady();
@@ -2019,7 +2019,7 @@
 		}
 		throw new Error("unsupported command");
 	}
-	window.addEventListener("message", async (event) => {
+	window.addEventListener("message", (event) => {
 		if (event.source !== parent || event.origin !== config.parentOrigin) return;
 		const value = event.data;
 		if (typeof value !== "object" || value === null || Array.isArray(value)) return;
@@ -2030,7 +2030,7 @@
 		try {
 			postResponse(record.requestId, {
 				ok: true,
-				value: await execute(command)
+				value: execute(command)
 			});
 		} catch (error) {
 			postResponse(record.requestId, {

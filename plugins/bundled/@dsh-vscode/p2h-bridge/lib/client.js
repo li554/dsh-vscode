@@ -1,19 +1,29 @@
 /**
- * p2h-bridge — client half: the「PPT」manager tab in the better-sidebar tab strip.
+ * p2h-bridge — client half: the「PPT」manager view, registered as a first-class
+ * tab in the conversation view strip, immediately to the RIGHT of「轨迹」(the
+ * platform's trajectory view).
+ *
+ * Hosting (0.1.5): that strip IS the public slot `conversation.view` (kind list,
+ * scope session) — the platform's own views use it too: chat order 0, trajectory
+ * order 10, web-review's webview order 20. This view registers at order 15, so it
+ * sits between 轨迹 and 预览. dsh-better-sidebar is NOT involved and is no longer
+ * bundled, so the old ctx.get("betterSidebar") + internal/status probe is gone and
+ * the component now reads the slot's standard `sessionId` prop instead of a
+ * sidebar `scope`.
  *
  * Management model (user request 2026-08-31): a full deck manager over .ppt/<deck>/
  * folders — one card per uploaded PPT (source + html-slides/ + exports), a deck list
  * with per-deck actions (preview / export / re-import / reference / delete), an
  * active-deck inline preview that COLLAPSES, and preview HISTORY with a back button.
  *
- * Interaction model (2026-08-30): the composer-dock capsule is GONE; everything lives
- * in this sidebar tab — the same surface mechanism web-review uses (ctx.get("betterSidebar")
- * + registerTab, internal/status watcher covering plugin-load ordering).
- *
  * ① UI on the platform DSW design tokens (--dsw-alias-*) — one-shot injected stylesheet
  *    with hover/active states, concentric radii, ellipsis truncation.
- * ② 「打开预览」 opens the web-review preview TAB (service.openTab) so the isolated-
- *    preview bridge (element picking, annotations) is active; window.open fallback.
+ * ② 「打开预览」 previews IN THIS VIEW (the existing PreviewFrame iframe, which scales the
+ *    fixed 1280px canvas) and keeps window.open as the escape hatch. It can no longer
+ *    push the URL into web-review's own preview tab: since web-review 0.6.0 that tab is
+ *    a plain `conversation.view` entry whose store and openPreview face are private to
+ *    its component (no ctx.provide, store created inside apply), so no public API is
+ *    left to drive it from outside.
  *
  * Shape follows the git-graph/web-review client bundles (window.__ModuleLoader__.load +
  * factory(require)), hand-written — no build step. Talks to /p2h-bridge/api/* (v2
@@ -31,39 +41,6 @@ window.__ModuleLoader__.load({
 		const useMemo = react.useMemo;
 		const useRef = react.useRef;
 		const useState = react.useState;
-
-		//#region better-sidebar engagement (web-review watchBetterSidebar pattern)
-		function watchBetterSidebar(ctx, onEngage, onDisengage) {
-			let current = null;
-			let disposed = false;
-			const probe = () => {
-				if (disposed) return;
-				const service = typeof ctx.get === "function" ? ctx.get("betterSidebar") : undefined;
-				if (service !== undefined && service !== null && typeof service.registerTab === "function") {
-					if (current === null) {
-						current = service;
-						onEngage(service);
-					}
-				} else if (current !== null) {
-					current = null;
-					onDisengage();
-				}
-			};
-			probe();
-			const listener = () => probe();
-			try {
-				ctx.on("internal/status", listener);
-			} catch {
-				/* ctx.on unavailable — the immediate probe is all we get */
-			}
-			return {
-				dispose() {
-					disposed = true;
-					current = null;
-				},
-			};
-		}
-		//#endregion
 
 		//#region api helpers
 		const API = "/p2h-bridge/api";
@@ -95,24 +72,42 @@ window.__ModuleLoader__.load({
 		}
 		//#endregion
 
-		//#region preview opening (web-review preview tab, browser fallback)
-		function openPreviewUrl(ctx, url) {
+		//#region preview opening (in-panel PreviewFrame is primary; new window is the escape hatch)
+		/**
+		 * Open a deck preview in a separate browser window. The in-view PreviewFrame
+		 * below is the primary surface; this is the escape hatch for a full-window
+		 * look at a deck.
+		 * @param {string} url - the deck's previewUrl from /p2h-bridge/api/state.
+		 * @returns {boolean} true when a window was opened.
+		 */
+		function openPreviewUrl(url) {
 			if (!url) return false;
 			try {
-				const service = ctx && typeof ctx.get === "function" ? ctx.get("betterSidebar") : null;
-				if (
-					service &&
-					typeof service.isTabEnabled === "function" &&
-					typeof service.openTab === "function" &&
-					service.isTabEnabled("dsh-web-review:preview")
-				) {
-					service.openTab({ type: "dsh-web-review:preview", url });
-					return true;
+				window.open(url, "_blank", "noopener");
+				return true;
+			} catch {
+				return false;
+			}
+		}
+		/**
+		 * Focus an existing conversation tab by its visible label. web-review 0.6.0
+		 * exposes no API to push a URL into its own preview tab (its store is
+		 * apply-local and it provides no service), so the most that can be done from
+		 * outside is bring that tab forward.
+		 * @param {string} label - exact tab label text, e.g. "预览".
+		 * @returns {boolean} true when a matching tab was found and clicked.
+		 */
+		function activateTabByLabel(label) {
+			try {
+				for (const tab of document.querySelectorAll('[role="tab"]')) {
+					if (tab.textContent && tab.textContent.trim() === label) {
+						tab.click();
+						return true;
+					}
 				}
 			} catch {
-				/* integration probe failed — fall through to window.open */
+				/* DOM probe failed — nothing to activate */
 			}
-			window.open(url, "_blank", "noopener");
 			return false;
 		}
 		//#endregion
@@ -213,7 +208,13 @@ window.__ModuleLoader__.load({
 			);
 		}
 
-		function PptManagerTab({ scope, ctx }) {
+		/**
+		 * The PPT manager view. Rendered inside the conversation view strip, so it
+		 * receives the slot's standard session kit: `sessionId` (SessionStandardProps)
+		 * plus owner props. `ctx` is NOT among them and is closed over by apply().
+		 * @param {{ sessionId?: string | null, ctx: any }} props
+		 */
+		function PptManagerTab({ sessionId = null, ctx }) {
 			const [data, setData] = useState(null);
 			const [busy, setBusy] = useState("");
 			const [error, setError] = useState("");
@@ -222,7 +223,6 @@ window.__ModuleLoader__.load({
 			const [history, setHistory] = useState([]);
 			const [confirming, setConfirming] = useState(null);
 			const fileRef = useRef(null);
-			const sessionId = scope?.sessionId ?? null;
 			const maxBytesRef = useRef(100 * 1024 * 1024);
 			const maxBytesLabel = () => `${Math.round(maxBytesRef.current / (1024 * 1024))}MB`;
 
@@ -282,8 +282,13 @@ window.__ModuleLoader__.load({
 				await refresh();
 			});
 
-			/** Preview a deck inline + in the web-review tab; push the current one onto history. */
-			const previewDeck = guard("active", async (deckName, openTab) => {
+			/**
+			 * Make a deck current and show it in this view's inline preview; push the
+			 * previously current deck onto the preview history.
+			 * @param {string} deckName - deck folder name.
+			 * @param {boolean} openWindow - also open the deck in a new browser window.
+			 */
+			const previewDeck = guard("active", async (deckName, openWindow) => {
 				const current = data?.active;
 				if (current && current !== deckName) setHistory((h) => [...h.slice(-9), current]);
 				await apiJson(`${API}/setActive`, {
@@ -293,7 +298,7 @@ window.__ModuleLoader__.load({
 				});
 				const next = await refresh();
 				const deck = (next.decks ?? []).find((d) => d.name === deckName);
-				if (openTab && deck?.previewUrl) openPreviewUrl(ctx, deck.previewUrl);
+				if (openWindow && deck?.previewUrl) openPreviewUrl(deck.previewUrl);
 			});
 
 			/** Back: pop the most recent previewed deck. */
@@ -397,9 +402,16 @@ window.__ModuleLoader__.load({
 						e("button", {
 							className: "p2h-btn",
 							"aria-disabled": disabled || !deck.project,
-							onClick: disabled || !deck.project ? undefined : () => previewDeck(deck.name, true),
-							title: "在 web-review 预览标签页中打开（支持框选元素批注），并设为当前预览",
+							onClick: disabled || !deck.project ? undefined : () => previewDeck(deck.name, false),
+							title: "设为当前 deck 并展开本面板下方的内联预览",
 						}, busy === "active" && !isActive ? "…" : "打开预览"),
+						deck.project?.previewUrl
+							? e("button", {
+									className: "p2h-mini",
+									title: "在系统浏览器新窗口中打开该 deck 的预览页",
+									onClick: () => openPreviewUrl(deck.project.previewUrl),
+								}, "新窗口")
+							: null,
 						e("button", {
 							className: "p2h-btn p2h-btn--ghost",
 							"aria-disabled": disabled || !deck.project,
@@ -538,66 +550,51 @@ window.__ModuleLoader__.load({
 		}
 		//#endregion
 
-		//#region tab registration
-		const TAB_ID = "p2h-bridge:manager"; // must be prefixed — never a built-in tab id
+		//#region conversation view tab (official slot — sits right of「轨迹」)
+		// The strip is the platform's public slot `conversation.view` (kind list,
+		// session scope). Views shipped by the platform and its bundles: chat 0,
+		// trajectory 10, web-review's webview 20 — so 15 lands immediately after
+		// 轨迹. Only the list `id` and `label` are needed: the strip renders the
+		// label as the tab text (there is no icon seat), and `sessionId` arrives
+		// through the session kit rather than through injected props.
+		const VIEW_ID = "p2h";
+		const VIEW_ORDER = 15;
 
-		function ManagerTabIcon() {
-			return e("svg", {
-				width: 16, height: 16, viewBox: "0 0 16 16", fill: "none", "aria-hidden": "true",
-			},
-			e("rect", { x: 2, y: 2.5, width: 12, height: 8.5, rx: 1.2, stroke: "currentColor", strokeWidth: 1.4 }),
-			e("path", { d: "M5 13.5h6M8 11v2.5", stroke: "currentColor", strokeWidth: 1.4, strokeLinecap: "round" }),
-			e("path", { d: "M5.2 5.2h5.6M5.2 7.4h3.6", stroke: "currentColor", strokeWidth: 1.2, strokeLinecap: "round" }));
-		}
-
-		function registerManagerTab(ctx, service) {
-			const descriptor = {
-				id: TAB_ID,
-				title: () => "PPT",
-				icon: e(ManagerTabIcon),
-				order: 70,
-				single: true,
-				component: (props) => e(PptManagerTab, { ...(props || {}), ctx }),
-			};
-			return service.registerTab(descriptor);
+		/**
+		 * Register the PPT view into the conversation view strip.
+		 * @param {any} ctx - the plugin context; slots is provided by
+		 *   @deepseek-ai/dsh-client-ui-renderer in 0.1.5.
+		 * @returns {() => void} disposer that withdraws the registration.
+		 */
+		function registerPptView(ctx) {
+			return ctx.slots.inject("conversation.view", () => ctx.slots.register({
+				name: "conversation.view",
+				id: VIEW_ID,
+				order: VIEW_ORDER,
+				label: () => "PPT",
+			}, (props) => e(PptManagerTab, { ...(props || {}), ctx })));
 		}
 		//#endregion
 
 		//#region apply
 		function apply(ctx) {
-			// Inject the .p2h-* stylesheet before the tab can render — without this the
+			// Inject the .p2h-* stylesheet before the view can render — without this the
 			// manager renders as raw unstyled blocks (layout entirely collapsed).
 			injectStyles(document);
-			let tabDisposer = null;
-			const watcher = watchBetterSidebar(
-				ctx,
-				(service) => {
-					try {
-						tabDisposer = registerManagerTab(ctx, service);
-					} catch (error) {
-						// duplicate id (hot reload) or API drift — conversation tools keep working regardless
-						console.error("[p2h-bridge] registerTab failed:", error);
-					}
-				},
-				() => {
-					if (tabDisposer) {
-						try {
-							tabDisposer();
-						} catch {
-							/* already gone */
-						}
-						tabDisposer = null;
-					}
-				},
-			);
-			ctx.effect(() => watcher.dispose, "p2h-bridge: sidebar tab watcher");
+			// slots.inject defers until `conversation.view` is declared by
+			// dsh-client-ui-conversation, so the old ctx.on("internal/status") poll for
+			// plugin-load ordering is gone. The effect owns the disposer, which also
+			// keeps a hot reload from double-registering the view id.
+			ctx.effect(() => registerPptView(ctx), "p2h-bridge: conversation view tab");
 		}
 		//#endregion
 
 		exports.PptManagerTab = PptManagerTab;
 		exports.openPreviewUrl = openPreviewUrl;
+		exports.activateTabByLabel = activateTabByLabel;
 		exports.apply = apply;
-		exports.inject = [];
+		exports.inject = ["slots"];
+		return module.exports;
 		return module.exports;
 	},
 });

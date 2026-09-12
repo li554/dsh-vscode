@@ -59,10 +59,6 @@ dsh web
 - 对话中的页面批注沿用 DSH 原生折叠行：收起时显示页面与批注数，展开后只展示目标、修改意图、前后值和可用源码线索。
 - Agent 根据批注修改当前工作区源码，页面中的临时调整不会直接写入工程。
 
-### `dsh-better-sidebar`集成
-
-安装 [dsh-better-sidebar](https://www.npmjs.com/package/dsh-better-sidebar) 后，网页预览会自动在侧边栏中打开。你也可以在侧边栏新建 `tab` 菜单中打开`网页预览`以启用。
-
 ### UI 优化 Skills
 
 插件内置了 [Jakub Krehel 的设计 Skills](https://github.com/jakubkrehel/skills)：

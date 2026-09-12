@@ -4,7 +4,7 @@
  * extension host and show its browser surface in a sidebar webview view.
  *
  * Transport design (all mechanisms verified against VS Code 1.133 and
- * @deepseek-ai/dsh 0.1.1-rc.2):
+ * @deepseek-ai/dsh 0.1.5-rc.2):
  *
  *  1. The DSH host is forked as a child process from the extension host:
  *     child_process.fork runs the @deepseek-ai/dsh bin with
@@ -32,7 +32,19 @@ const fs = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
 
-const URL_LINE = /dsh web: http:\/\/127\.0\.0\.1:(\d+)/;
+/**
+ * The host's ready line. 0.1.5 gates the whole web surface behind a per-process
+ * launch token: the printed URL is
+ *   dsh web: http://127.0.0.1:<port>/?token=<launchToken>
+ * A GET of that exact URL (pathname `/`, exactly one token) mints a signed
+ * HttpOnly cookie and 303-redirects to clean `/`; every other request to the
+ * root — including a bare `/` — gets a minimal 401. There is no config to turn
+ * this off (dsh-web-app's Config has only openBrowser/printUrl/surfaceContext/
+ * trustedHosts), so the token MUST be threaded into the webview iframe. The
+ * token is intentionally optional in this pattern: an older platform prints a
+ * tokenless URL and still boots.
+ */
+const URL_LINE = /dsh web: http:\/\/127\.0\.0\.1:(\d+)\/(?:\?token=([A-Za-z0-9_-]+))?/;
 const VIEW_ID = "dsh.harness";
 
 /** @type {import("node:child_process").ChildProcess | null} */
@@ -40,6 +52,10 @@ let host = null;
 /** @type {vscode.WebviewView | null} */
 let currentView = null;
 let hostPort = 0;
+/** Per-process launch token printed on the host's ready line (0.1.5+). The
+ * webview iframe must present it once to exchange for the auth cookie; it
+ * changes on every host (re)start, so it is re-read with every ready line. */
+let hostToken = "";
 /** @type {Promise<number> | null} */
 let readyPromise = null;
 let shutdownRequested = false;
@@ -102,6 +118,22 @@ function hostPortFor() {
   return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_HOST_PORT;
 }
 
+/**
+ * The URL the webview iframe must navigate to. From 0.1.5 the host gates its
+ * whole surface behind a per-process launch token: a GET of `/?token=<t>`
+ * (pathname `/`, exactly one token) mints the signed HttpOnly auth cookie and
+ * 303-redirects to clean `/`, while a bare `/` answers 401. The token is only
+ * known once the host prints its ready line, which is why the shell receives
+ * this URL over postMessage rather than baking it into its HTML. A pre-0.1.5
+ * host prints no token and is addressed directly.
+ * @param {number} port - the bound host port.
+ * @param {string} token - the launch token, or "" for a pre-0.1.5 host.
+ */
+function appUrl(port, token) {
+  const base = `http://127.0.0.1:${port}/`;
+  return token ? `${base}?token=${encodeURIComponent(token)}` : base;
+}
+
 /** Working directory for the host = agent cwd. */
 function hostCwd() {
   const configured = String(vscode.workspace.getConfiguration("dsh").get("cwd") ?? "");
@@ -114,17 +146,39 @@ function hostCwd() {
  * The baked ecosystem plugins shipped under <extension>/plugins/bundled.
  * Embedded-lite scope: every entry is self-contained (own third-party deps in
  * plugins/bundled/_hostdeps) and resolves by name from <profile>/node_modules.
- * We register EACH member INDIVIDUALLY — never the @linxin666/dsh-web-ui-all
- * GROUP, whose manifest depends on native members (dsh-ssh,
- * dsh-client-ui-skin-center) and whose cordis.patch mounts the full roster; an
- * AggregateError on any missing roster member aborts the whole host boot.
- * web-ui-all's content is delivered instead by mounting its non-native member
- * plugins individually.
- * Native-ABI members (dsh-ssh, dsh-client-ui-skin-center) are intentionally
- * excluded: their native deps (ssh2/lightningcss) cannot load in the VS Code
- * embedded Node and would blank the panel.
+ *
+ * This is the 0.1.5 exploration set — exactly four plugins are kept. Each member
+ * is still registered INDIVIDUALLY: never an upstream GROUP bundle (e.g.
+ * @linxin666/dsh-web-ui-all), whose manifest pulls native members (dsh-ssh,
+ * dsh-client-ui-skin-center) and whose cordis.patch mounts a full roster. An
+ * AggregateError on any missing roster member aborts the whole host boot, and
+ * those native deps (ssh2/lightningcss) cannot load in the VS Code embedded Node
+ * anyway.
  */
 const BUNDLED_PLUGINS = [
+  "@canglongcl/dsh-web-review",
+  "@dsh-vscode/p2h-bridge",
+  "dsh-client-auto-continue",
+  "dsh-memory-evolve"
+];
+/** Plugins that older vsix releases bundled but this build does not. A DSH_HOME
+ * that previously ran with them enabled still carries their names in the profile
+ * manifest's `bundles` list AND a transplanted tree under
+ * <profile>/node_modules — so they must be pruned on every boot, otherwise a
+ * stale profile keeps surfacing the removed plugin's UI and settings.
+ *
+ * Group 1 was retired upstream in earlier 0.2.x releases. Group 2 is the whole
+ * ecosystem roster the pre-0.3 builds baked; the 0.1.5 exploration build keeps
+ * only BUNDLED_PLUGINS and retires the rest. */
+const RETIRED_PLUGINS = [
+  // retired upstream in earlier 0.2.x releases
+  "@linxin666/dsh-remote-web-ui",
+  "dsh-easyrewrite",
+  "dsh-mnemon",
+  "@dsh-external/dsh-diff-review",
+  "dsh-recall-plugin",
+  "@anionex/dsh-turn-rewind",
+  // dropped by the 0.1.5 exploration build (only four plugins are kept)
   "@linxin666/dsh-chat-recovery",
   "@linxin666/dsh-client-ui-aionui-panel",
   "@linxin666/dsh-client-ui-community-plugins",
@@ -140,27 +194,16 @@ const BUNDLED_PLUGINS = [
   "@linxin666/dsh-pet",
   "@linxin666/dsh-tool-describe-image",
   "@mlgbnb/dsh-archive-manager",
-  "@canglongcl/dsh-web-review",
-  "@dsh-vscode/p2h-bridge",
   "@huanlin/dsh-plugin-better-sidebar-plugin-office",
+  "@dsh-external/dsh-super-injector",
   "dsh-auto-compact",
   "dsh-better-sidebar",
-  "dsh-client-auto-continue",
-  "dsh-zh-kit",
   "dsh-file-review",
   "dsh-free-search",
   "dsh-miraculous-standard",
-  "dsh-memory-evolve",
   "dsh-undo-plugin",
-  "@dsh-external/dsh-super-injector"
+  "dsh-zh-kit"
 ];
-/** Plugins that older vsix releases bundled but have since been retired
- * (e.g. remote-web-ui, removed for security). A DSH_HOME that previously ran
- * with baked plugins enabled will still carry these entries in the profile
- * manifest's `bundles` list AND a transplanted tree under
- * <profile>/node_modules — so they must be pruned on every boot, otherwise a
- * stale profile keeps surfacing the removed plugin's UI and settings. */
-const RETIRED_PLUGINS = ["@linxin666/dsh-remote-web-ui", "dsh-easyrewrite", "dsh-mnemon", "@dsh-external/dsh-diff-review", "dsh-recall-plugin", "@anionex/dsh-turn-rewind"];
 /** Platform web profile bundles. They must ALWAYS precede the baked plugins:
  * they provide webServer (and the other services every UI bundle waits on).
  * On a fresh DSH_HOME (brand-new install) there is no manifest yet, so without
@@ -410,7 +453,8 @@ function startHost(requestedPort = 0) {
       const m = URL_LINE.exec(line);
       if (m) {
         hostPort = Number(m[1]);
-        log("host ready on 127.0.0.1:" + hostPort);
+        hostToken = m[2] ?? "";
+        log("host ready on 127.0.0.1:" + hostPort + (hostToken ? " (auth token captured)" : " (no auth token: pre-0.1.5 host)"));
         settle(resolve, hostPort);
       } else {
         const open = /\[dsh-vscode:open-settings\]\s+(.+)$/.exec(line);
@@ -451,6 +495,9 @@ function startHost(requestedPort = 0) {
       log(`host exited code=${code} signal=${signal}`);
       if (host === child) host = null;
       readyPromise = null;
+      // The launch token is minted per host process; a stale one would be
+      // rejected by the replacement host and the panel would 401 forever.
+      hostToken = "";
       settle(reject, new Error(`dsh host exited (code ${code})`));
       if (!shutdownRequested && currentView) {
         currentView.webview.html = errorHtml(`The DeepSeek Harness host stopped (exit code ${code}).`, recentLog);
@@ -477,6 +524,15 @@ function withTimeout(promise, ms, what) {
   });
 }
 
+/**
+ * The webview shell: a full-viewport iframe plus a "Starting…" overlay. The
+ * iframe stays on about:blank until the extension posts 'reload', which carries
+ * the AUTHORITATIVE app URL (`event.data.url`) — the extension cannot bake it
+ * into this HTML because the 0.1.5 launch token only exists once the host has
+ * booted, and it changes on every host restart. The baked `src` stays as a
+ * fallback for a reload message that arrives without a url.
+ * @param {number} port - the fixed host port this shell's iframe will reach.
+ */
 function shellHtml(port) {
   const src = `http://127.0.0.1:${port}/`;
   return `<!DOCTYPE html>
@@ -544,7 +600,12 @@ Starting DeepSeek Harness…
       report('dsh:reload-received');
       status.textContent = 'loading interface…';
       appRequested = true;
-      appFrame.src = '${src}?ts=' + Date.now();
+      // Prefer the extension-supplied URL: it carries the per-process launch
+      // token the 0.1.5 host demands (bare "/" answers 401). Keep the cache
+      // buster — it is a second query param, and the token exchange only cares
+      // that exactly ONE token param reaches pathname "/".
+      const base = (event.data.url ? String(event.data.url) : '${src}');
+      appFrame.src = base + (base.indexOf('?') >= 0 ? '&' : '?') + 'ts=' + Date.now();
       // Fallback in case the load event never surfaces.
       fallbackTimer = setTimeout(hideBoot, 8000);
     }
@@ -597,7 +658,7 @@ const provider = {
     // harmless — the shell just re-navigates the iframe.
     const bounceShellIframe = (why) => {
       log("reload shell iframe (" + why + ")");
-      try { view.webview.postMessage({ command: "reload" }); } catch { /* best effort */ }
+      try { view.webview.postMessage({ command: "reload", url: appUrl(hostPort, hostToken) }); } catch { /* best effort */ }
     };
 
     const showRealUi = (port) => {
@@ -654,6 +715,7 @@ async function restartHost() {
   const old = host;
   host = null;
   hostPort = 0;
+  hostToken = "";
   readyPromise = null;
   if (old) { try { old.kill(); } catch { /* already gone */ } }
   shutdownRequested = false;

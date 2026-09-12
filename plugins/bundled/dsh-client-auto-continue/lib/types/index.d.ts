@@ -13,8 +13,10 @@ import type { Context } from '@deepseek-ai/cordis';
 import z from '@deepseek-ai/schemastery';
 /** Settings namespace of the auto-continue plugin (lowercase kebab-case). */
 export declare const AUTO_CONTINUE_NS = "auto-continue";
-/** Wire schema of the auto-continue section; defaults are the plugin's built-in values. */
+/** Wire schema; blank localized text fields tell resolveConfig() to select the active locale's defaults. */
 export declare const AutoContinueSchema: z<Schemastery.ObjectS<{
+    /** Active browser/UI locale mirrored by the client. */
+    locale: z<string, string>;
     /** Text automatically sent after an interruption. */
     continueText: z<string, string>;
     /** Text sent when the output token ceiling is reached (same placeholders as `continueText`). */
@@ -41,6 +43,8 @@ export declare const AutoContinueSchema: z<Schemastery.ObjectS<{
     verbose: z<boolean, boolean>;
     /** Classify failures: auto-continue transient errors only; permanent ones are skipped and notified. */
     classify: z<boolean, boolean>;
+    /** Provider-specific message/code/status fragments that explicitly count as retryable, one literal per line. */
+    retryableErrorPatterns: z<string, string>;
     /** Cooldown multiplier per consecutive failure (adaptive backoff). */
     backoffFactor: z<number, number>;
     /** Cap on the effective backoff interval (ms). */
@@ -57,13 +61,15 @@ export declare const AutoContinueSchema: z<Schemastery.ObjectS<{
     loopWindowMs: z<number, number>;
     /** Consecutive short sentences trip the loop guard. */
     loopShortCount: z<number, number>;
-    /** Consecutive identical short sentences trip the loop guard (strongest spinning signal). */
+    /** Consecutive identical assistant messages trip the loop guard (strongest signal; also used for streamed intra-message repetition). */
     loopRepeatText: z<number, number>;
     /** Consecutive identical tool calls with identical arguments AND results trip the loop guard. */
     loopToolRepeat: z<number, number>;
     /** Text sent after the loop guard cancels and restarts a turn (supports {tool}). */
     loopText: z<string, string>;
 }>, Schemastery.ObjectT<{
+    /** Active browser/UI locale mirrored by the client. */
+    locale: z<string, string>;
     /** Text automatically sent after an interruption. */
     continueText: z<string, string>;
     /** Text sent when the output token ceiling is reached (same placeholders as `continueText`). */
@@ -90,6 +96,8 @@ export declare const AutoContinueSchema: z<Schemastery.ObjectS<{
     verbose: z<boolean, boolean>;
     /** Classify failures: auto-continue transient errors only; permanent ones are skipped and notified. */
     classify: z<boolean, boolean>;
+    /** Provider-specific message/code/status fragments that explicitly count as retryable, one literal per line. */
+    retryableErrorPatterns: z<string, string>;
     /** Cooldown multiplier per consecutive failure (adaptive backoff). */
     backoffFactor: z<number, number>;
     /** Cap on the effective backoff interval (ms). */
@@ -106,7 +114,7 @@ export declare const AutoContinueSchema: z<Schemastery.ObjectS<{
     loopWindowMs: z<number, number>;
     /** Consecutive short sentences trip the loop guard. */
     loopShortCount: z<number, number>;
-    /** Consecutive identical short sentences trip the loop guard (strongest spinning signal). */
+    /** Consecutive identical assistant messages trip the loop guard (strongest signal; also used for streamed intra-message repetition). */
     loopRepeatText: z<number, number>;
     /** Consecutive identical tool calls with identical arguments AND results trip the loop guard. */
     loopToolRepeat: z<number, number>;
