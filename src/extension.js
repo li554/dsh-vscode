@@ -550,6 +550,222 @@ function syncBakedPresets(home) {
   }
 }
 /**
+ * Home-relative artifacts owned by plugins this build no longer ships. Their
+ * state is MOVED to a dated quarantine directory under the home rather than
+ * deleted, because some of it is data the user may still want (task ledgers,
+ * archives). Nothing here is required for a boot.
+ */
+const RETIRED_HOME_ARTIFACTS = [
+  ["super-injector", "@dsh-external/dsh-super-injector"],
+  ["diff-review", "@dsh-external/dsh-diff-review"],
+  ["change-ledger", "@anionex/dsh-turn-rewind"],
+  ["doctor", "@linxin666/dsh-doctor"],
+  ["pet.json", "@linxin666/dsh-pet"],
+  ["dsh-easyrewrite.log", "dsh-easyrewrite"]
+];
+/**
+ * Leftover names inside a profile's node_modules that no plugin owns any more.
+ * `*.pnpm-old` is a relink backup and `.ignored_*` is a directory some older
+ * tooling renamed instead of removing; both are dead weight that keeps showing up
+ * in resolution walks.
+ */
+const RETIRED_PROFILE_ENTRY = /\.pnpm-old$|^\.ignored_/;
+/**
+ * Remove the artifacts retired plugins and older extension versions left behind,
+ * in the places DSH actually resolves through.
+ *
+ * WHY. A repeatedly-upgraded DSH_HOME accumulates three classes of leftover that
+ * nothing else cleans:
+ *
+ *  1. Stale module-fallback links. `<home>/profiles/node_modules` is a forest of
+ *     junctions into the RUNNING extension's vendor tree, but DSH's own heal only
+ *     revisits packages in the CURRENT install's dependency closure. Packages a
+ *     newer platform dropped from that closure (react, react-dom, zustand, immer,
+ *     clsx …) keep whatever link an older version left, and once VS Code
+ *     uninstalls that older extension the link DANGLES. Verified on a real home:
+ *     10 such links, all pointing at an uninstalled 0.2.53, plus links into a
+ *     global npm `@deepseek-ai/dsh@0.1.0-rc.6`. Removing them lets DSH re-link
+ *     from the install that is actually running.
+ *  2. Stale profile manifest entries. `dependencies` keeps a `link:` spec pointing
+ *     back into this extension's own plugins/bundled (a development leftover that
+ *     makes pnpm re-create the link the transplant deliberately replaces), and
+ *     names of plugins this build retired.
+ *  3. Structural residue: empty `@scope` directories, `*.pnpm-old` relink
+ *     backups, `.ignored_*` renamed directories, and `cordis.patch.yml.bak-*`.
+ *
+ * WHAT THIS MUST NEVER TOUCH. Sessions, memories, attachments, storages,
+ * settings, credentials and agent presets are what make a DSH_HOME worth keeping,
+ * and none of them live under a `profiles/**\/node_modules` path — so this
+ * function's reach is structurally limited to module trees, the profile manifest's
+ * `dependencies` map, and the explicit RETIRED_HOME_ARTIFACTS allowlist above.
+ * Every removal is logged.
+ * @param {string} home - the resolved DSH_HOME.
+ */
+function pruneRetiredArtifacts(home) {
+  // 1. Stale module-fallback links.
+  const currentExtension = path.resolve(extensionContext?.extensionPath ?? path.join(__dirname, "..")).toLowerCase();
+  const profilesRoot = path.join(home, "profiles");
+  let removedLinks = 0, reLinkable = 0;
+  /** Distinct kinds of resolvable-but-foreign link seen, reported once per boot. */
+  const foreignLinks = new Set();
+  const sweepLinks = (modulesDir) => {
+    let entries;
+    try { entries = fs.readdirSync(modulesDir, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      const full = path.join(modulesDir, entry.name);
+      let stat;
+      try { stat = fs.lstatSync(full); } catch { continue; }
+      if (!stat.isSymbolicLink()) {
+        // One level into a scope directory; real package dirs are never touched.
+        if (entry.isDirectory() && entry.name.startsWith("@")) sweepLinks(full);
+        continue;
+      }
+      let target = "";
+      try { target = fs.readlinkSync(full); } catch { continue; }
+      const normalized = target.replace(/\\/g, "/").toLowerCase();
+      // The profile-owned fallback (profiles/<name>/.dsh-module-fallback) holds
+      // packages a bundle carries privately; those links are correct by design.
+      if (normalized.includes("/.dsh-module-fallback/")) continue;
+      // ONLY remove a link whose target is gone. A link that still resolves is
+      // left alone even when it points at another extension version or a global
+      // npm dsh: this install's vendor tree may not carry that package at all
+      // (katex, shiki and friends are not in the 0.1.5 closure), so the link can
+      // be the only copy, and deleting it would be a regression rather than a
+      // cleanup. Foreign-but-working links are reported once instead.
+      if (fs.existsSync(full)) {
+        const foreign = /\/extensions\/([^/]+)\//.exec(normalized);
+        if (foreign && !normalized.startsWith(currentExtension + "/")) foreignLinks.add("a different installed extension (" + foreign[1] + ")");
+        else if (/\/npm\/node_modules\/@deepseek-ai\//.test(normalized)) foreignLinks.add("a global npm dsh install");
+        continue;
+      }
+      let reason = "target is gone";
+      if (/\/extensions\/([^/]+)\//.test(normalized)) reason = "target extension was uninstalled";
+      else if (/\/npm\/node_modules\/@deepseek-ai\//.test(normalized)) reason = "target global npm dsh was removed";
+      try {
+        fs.unlinkSync(full);
+        removedLinks++;
+        if (removedLinks <= 12) log("dangling module link removed: " + path.relative(home, full) + " (" + reason + ")");
+      } catch { /* locked or already gone */ }
+    }
+  };
+  try {
+    // The SHARED fallback is `profiles/node_modules` itself — it is not a profile
+    // directory, so it must be swept explicitly; a per-profile loop that treats
+    // every entry under profiles/ as a profile would look for
+    // `profiles/node_modules/node_modules` and sweep nothing.
+    const sharedModules = path.join(profilesRoot, "node_modules");
+    if (fs.existsSync(sharedModules)) { sweepLinks(sharedModules); reLinkable++; }
+    for (const entry of fs.readdirSync(profilesRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory() || entry.name === "node_modules") continue;
+      const modules = path.join(profilesRoot, entry.name, "node_modules");
+      if (fs.existsSync(modules)) { sweepLinks(modules); reLinkable++; }
+    }
+  } catch { /* no profiles yet */ }
+  if (removedLinks > 12) log(`dangling module links removed: ${removedLinks} total`);
+  if (removedLinks > 0) log(`(dsh re-links ${removedLinks} package(s) from the running install on boot)`);
+  for (const kind of foreignLinks) {
+    log(`note: some module links resolve to ${kind}; left in place because this install may not carry the package, and they are only removed once their target is gone`);
+  }
+
+  // 2 + 3. Per-profile manifest and structural residue.
+  let removedScopes = 0, removedEntries = 0;
+  try {
+    for (const entry of fs.readdirSync(profilesRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const profileDir = path.join(profilesRoot, entry.name);
+      const manifestPath = path.join(profileDir, "package.json");
+      try {
+        if (fs.existsSync(manifestPath)) {
+          const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+          const deps = manifest?.dependencies;
+          if (deps && typeof deps === "object") {
+            let changed = false;
+            for (const [name, spec] of Object.entries(deps)) {
+              const selfLink = typeof spec === "string"
+                && spec.startsWith("link:")
+                && path.resolve(spec.slice("link:".length)).toLowerCase().startsWith(path.resolve(__dirname, "..").toLowerCase());
+              if (RETIRED_PLUGINS.includes(name) || selfLink) {
+                delete deps[name];
+                changed = true;
+                log(`stale profile dependency removed from ${entry.name}: ${name}${selfLink ? " (link into this extension's own bundled plugins)" : " (retired plugin)"}`);
+              }
+            }
+            if (changed) {
+              if (Object.keys(deps).length === 0) delete manifest.dependencies;
+              fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
+            }
+          }
+        }
+      } catch { /* unreadable manifest: leave it alone */ }
+
+      const modules = path.join(profileDir, "node_modules");
+      // Clean the module dir AND one level inside each @scope: `*.pnpm-old` and
+      // `.ignored_*` residue sits inside scopes (e.g. @dsh-vscode/x.pnpm-old), so
+      // a top-level-only pass misses it.
+      let children = [];
+      try { children = fs.readdirSync(modules, { withFileTypes: true }); } catch { children = []; }
+      const dropResidue = (full, label) => {
+        try {
+          fs.rmSync(full, { recursive: true, force: true });
+          removedEntries++;
+          log("retired profile entry removed: " + path.relative(home, full) + " (" + label + ")");
+          return true;
+        } catch { return false; }
+      };
+      for (const child of children) {
+        const full = path.join(modules, child.name);
+        let isLink = false;
+        try { isLink = fs.lstatSync(full).isSymbolicLink(); } catch { continue; }
+        if (isLink) continue;
+        if (RETIRED_PROFILE_ENTRY.test(child.name)) { dropResidue(full, "relink backup or ignored dir"); continue; }
+        if (!child.name.startsWith("@")) continue;
+        let scoped = [];
+        try { scoped = fs.readdirSync(full, { withFileTypes: true }); } catch { continue; }
+        for (const sub of scoped) {
+          if (!RETIRED_PROFILE_ENTRY.test(sub.name)) continue;
+          const subFull = path.join(full, sub.name);
+          let subIsLink = false;
+          try { subIsLink = fs.lstatSync(subFull).isSymbolicLink(); } catch { continue; }
+          if (subIsLink) continue;
+          dropResidue(subFull, "relink backup or ignored dir");
+        }
+        let remaining = [];
+        try { remaining = fs.readdirSync(full); } catch { continue; }
+        if (remaining.length === 0) {
+          try { fs.rmSync(full, { recursive: true, force: true }); removedScopes++; log("empty scope directory removed: " + path.relative(home, full)); } catch { /* best effort */ }
+        }
+      }
+      // Backups an older plugin manager left next to the profile's patch file.
+      try {
+        for (const file of fs.readdirSync(profileDir)) {
+          if (!/^cordis\.patch\.yml\.bak/.test(file)) continue;
+          fs.rmSync(path.join(profileDir, file), { force: true });
+          removedEntries++;
+          log("retired profile file removed: " + path.relative(home, path.join(profileDir, file)));
+        }
+      } catch { /* best effort */ }
+    }
+  } catch { /* no profiles yet */ }
+  if (removedScopes || removedEntries) log(`profile residue removed: ${removedScopes} empty scope dir(s), ${removedEntries} stale entry(ies)`);
+
+  // 4. Home-level state from retired plugins: quarantine, never delete.
+  const present = RETIRED_HOME_ARTIFACTS.filter(([name]) => fs.existsSync(path.join(home, name)));
+  if (present.length === 0) return;
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const quarantine = path.join(home, ".dsh-vscode-retired", stamp);
+  try { fs.mkdirSync(quarantine, { recursive: true }); } catch { return; }
+  for (const [name, owner] of present) {
+    const from = path.join(home, name);
+    try {
+      fs.renameSync(from, path.join(quarantine, name));
+      log(`retired plugin state quarantined: ${name} (was ${owner}) -> ${path.relative(home, path.join(quarantine, name))}`);
+    } catch {
+      try { fs.cpSync(from, path.join(quarantine, name), { recursive: true, force: true }); fs.rmSync(from, { recursive: true, force: true }); log(`retired plugin state quarantined: ${name} (copied then removed)`); } catch { /* best effort */ }
+    }
+  }
+  log("quarantine is recoverable: nothing was deleted, move it back to restore it");
+}
+/**
  * Transplant the self-contained bundle-root packages. plugins/bundled holds
  * the transitive family of loader-entry client plugins as sibling package
  * dirs, plus `_hostdeps/` (the non-platform third-party deps those entries
@@ -655,6 +871,10 @@ function startHost(requestedPort = 0) {
     const home = dshHomeForHost();
     syncBakedPlugins(path.join(home, "profiles", "web"));
     syncBakedPresets(home);
+    // Runs after syncBakedPlugins so scope directories it empties are removed in
+    // the same boot, and before the fork so DSH re-links the stale module
+    // fallback entries from the install that is actually running.
+    pruneRetiredArtifacts(home);
     const args = ["--profile", "web", "--port", String(requestedPort), "--no-open"];
     const env = {
       ...process.env,

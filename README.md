@@ -62,6 +62,13 @@
 - `@dsh-undo/rollback-fork`：上游 `@deepseek-ai/dsh-agent-presets` 在 0.1.1-rc.2 之后删掉了 `resolveSessionPreset` 导出，而 dsh-undo rc.8 正是 `import` 它——**这会让整个宿主启动失败**（cordis 报的是「加载插件失败」，看不出根因在平台）。已把 0.1.1 那个 8 行实现内联回来（0.1.5 仍在产生它依赖的 `agent-preset/selected` 事件与 `header.agentPreset` 字段）。用 `.smoke/platform-api-scan.mjs` 可一次性扫出这类断裂。
 - `dsh-memory-evolve` 的 `dsh.client.inject` 修正（见上表）。
 - **会话格式迁移的插件兼容层**（`@deepseek-ai/dsh-session-format-v0-to-v1`，见 `.smoke/platform-patches/`）：0.1.5 引入了会话格式版本化，v0→v1 迁移对「已发布 v0 规格」之外的内容**一律拒绝**，且一个事件不合格就让整个会话无法读取。而**第三方插件当年往 v0 会话里写了不少规格外内容**，于是升级后旧历史打不开。已加入四类容错（各自只记录一次日志，原始 v0 文件永不修改）：丢掉内容块上的插件注解（`dsh-file-review` 的 `dshFileReview`）、丢掉插件 source 上的多余成员（`dsh-web-review` 的 `snapshotId`）、丢掉非 `notice` 形式下多余的 `summary`（`dsh-mnemon`）、把 `subagent/descriptor` 的 version 2 提升为 3（`sidechat` 插件）。实测某份 30 会话的真实历史：修复前 **21 个会话、1251 个事件被拒**，修复后 **0**。
+- **升级残留自动清理**（`pruneRetiredArtifacts`，每次启动宿主前运行）：反复升级的 `DSH_HOME` 会积累三类没人清理的残留。
+  1. **失效的模块回退链接**：`<home>/profiles/node_modules` 是大量指向「当前扩展 vendor 树」的 junction，而 DSH 自己的修复**只遍历当前版本依赖闭包里的包**——被新平台移出闭包的包会一直保留旧版本留下的链接，等那个旧扩展被卸载后就变成**悬空链接**。实测某台机器上有 **17 条**悬空链接（全部指向已卸载的 `0.2.53`），包括 `dsh-client-runtime`、`dsh-host-apiproxy` 这些 0.1.5 已删除的平台包，以及 `react`/`react-dom`/`zustand`/`immer`/`clsx` 一族。删除后 DSH 会用**正在运行的**那份安装重新建立它们。
+     > 规则刻意收得很窄：**只删目标已不存在的链接**。仍能解析的链接即使指向另一个扩展版本或全局 npm 安装，也**保留**——因为这些包（`katex`、`shiki` 等）根本不在 0.1.5 的 vendor 闭包里，链接可能是唯一副本，删掉是倒退而不是清理。这类链接只在日志里提示一次。
+  2. **profile 清单残留**：`dependencies` 里指向本扩展 `plugins/bundled` 的 `link:` 条目（开发残留，会让 pnpm 重建移植逻辑刻意替换掉的链接）、以及已退役插件的名字。
+  3. **结构性残渣**：空 `@scope` 目录、`*.pnpm-old` 重链接备份、`.ignored_*` 改名目录、`cordis.patch.yml.bak-*`。
+  4. **已退役插件的状态目录**（`super-injector/`、`diff-review/`、`change-ledger/`、`doctor/`、`pet.json`、`dsh-easyrewrite.log`）**移动**到 `<home>/.dsh-vscode-retired/<时间戳>/` 隔离，**从不删除**，可随时搬回。
+  > **绝不触碰**：会话、记忆、附件、storages、`settings.yaml`、凭据、`.agent-presets/`、以及在用插件的状态（`rollback-undo/`、`rollback-archive/`）。这些都不在 `profiles/**/node_modules` 路径下，所以清理的触及范围是结构性受限的；`.smoke/legacy-cleanup-test.cjs` 会逐条断言它们一个字节都没变。`task-board/` 与 `router-standard/` 同样**不动**（前者是你的任务数据，后者可能被仍在随附的 preset 读取），只会在日志里提示。
 - **宿主接入改动**：0.1.5 给整个 Web 界面加了「每进程启动令牌」，裸 `GET /` 返回 401，扩展改为在扩展宿主侧完成令牌交换并起本地中转代理（详见下方「工作原理」第 4 条）。
 
 ## 🛠️ 从源码构建
@@ -103,6 +110,7 @@ python .smoke/pack.py
 | `.smoke/platform-patches.py` | `verify` / `apply` 保存在 `.smoke/platform-patches/` 的 vendor 平台补丁。**`vendor/` 整体重建后必须跑 `apply`**；`pack.py` 会在打包前自动 verify，补丁缺失直接拒绝打包 |
 | `.smoke/boot-test.mjs` | 起真实宿主 + 临时 `DSH_HOME`，移植 `plugins/bundled`，断言首页与每个 **web 客户端**条目的带 revision 插件 URL 都返回 200、且在前端模块图里有对应行 |
 | `.smoke/extension-proxy-test.cjs` | 用 stub 的 `vscode` 模块加载真实 `src/extension.js`，跑 `activate()` 起宿主与鉴权中转代理，然后**不带 Cookie** 去探测代理端口：首页须 200、未知 `/api` 通道不得是 401/403、`ws://…/api/remote.mux` 须返回 101 |
+| `.smoke/legacy-cleanup-test.cjs` | 用合成 `DSH_HOME` 复现每一类升级残留（悬空/跨版本/全局 npm 链接、失效 profile 依赖、空 scope 目录、`*.pnpm-old`、`.ignored_*`、`.bak-*`、退役插件状态），跑真实 `activate()` 后断言残留已清、**且会话/记忆/配置/在用插件状态逐字节未变**、退役状态可在隔离目录找回 |
 | `.smoke/selfcontained-plugins.mjs` | 校验 `plugins/bundled` 与 `BUNDLED_PLUGINS` 一致：每个条目要么被声明、要么被某个条目的 cordis patch 认领；并拒绝任何仍注入已被删除的 `dsh-client-runtime` 的包 |
 
 ## 🧱 工作原理
