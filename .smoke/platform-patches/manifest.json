@@ -38,6 +38,34 @@
         "members and unknown kinds still refuse, and the source v0 artifact is never",
         "modified."
       ]
+    },
+    {
+      "package": "@deepseek-ai/dsh-api-settings-controller",
+      "file": "lib/index.js",
+      "expectedPackageVersion": "0.1.5-rc.2",
+      "storedAs": "dsh-api-settings-controller/lib/index.js",
+      "why": [
+        "Restores the embedded 'open configuration file' bridge, which 0.1.5 deleted",
+        "along with dsh-host-apiproxy.",
+        "",
+        "In 0.1.1 that package's settings handler ran `if (DSH_EMBEDDED === \"1\")`",
+        "and wrote `[dsh-vscode:open-settings] <path>` on stdout so the containing VS",
+        "Code extension could reveal the document in its own editor, because the",
+        "native opener is invisible in an embedded deployment. 0.1.5 moved settings",
+        "to dsh-api-settings-controller, which calls openTextFile UNCONDITIONALLY —",
+        "the env check and the sentinel are gone, and openSettingsDocument (unlike",
+        "openAgentPresetDirectory) has no 'return the path instead' branch. Nothing",
+        "in 0.1.5 reads DSH_EMBEDDED at all (the only DSH_* env seams left are",
+        "DSH_AGENTS_HOME, DSH_BUNDLED_SKILL_DIR, DSH_TELEMETRY_DISABLED,",
+        "DSH_WEB_FETCH_PROVIDER and DSH_WEB_SEARCH_PROVIDER), so there is no official",
+        "seam to use instead: the panel's 'open configuration file' silently did",
+        "nothing after the upgrade.",
+        "",
+        "The patch re-adds the branch in the handler that took over the same job, and",
+        "leaves the internals.openTextFile seam intact (asserted by",
+        ".smoke/embedded-open-settings-test.mjs, which drives the real controller",
+        "with stubbed internals both with and without DSH_EMBEDDED=1)."
+      ]
     }
   ]
 }
