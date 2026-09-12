@@ -569,7 +569,6 @@ function errorHtml(message, logLines) {
 <pre style="white-space:pre-wrap;word-break:break-all;background:var(--vscode-textCodeBlock-background);
 padding:12px;border-radius:6px;max-height:50vh;overflow:auto">${tail}</pre>
 <button onclick="vscode.postMessage({command:'restart'})">Restart host</button>
-<button onclick="vscode.postMessage({command:'reset'})">Reset profile &amp; restart</button>
 <button onclick="vscode.postMessage({command:'logs'})">Show logs</button>
 <script>const vscode = acquireVsCodeApi();</script>
 </body></html>`;
@@ -634,7 +633,6 @@ const provider = {
       }
       if (msg.command === "restart") void restartHost();
       if (msg.command === "logs") { if (output) output.show(); }
-      if (msg.command === "reset") void resetProfileAndRestart();
     });
     view.onDidDispose(() => {
       if (currentView === view) currentView = null;
@@ -643,23 +641,12 @@ const provider = {
 };
 
 /**
- * Delete the extension-managed DSH_HOME (only when it is the default
- * globalStorage directory — never a user-configured home), then restart.
- * Heals profiles left half-written by a previous failed boot.
+ * No DSH_HOME reset entry point. Deletion is intentionally not exposed: a
+ * mis-click would wipe all sessions and configuration, so there is no profile
+ * reset command, button, or handler. Recover from a half-written profile by
+ * restarting the host (Restart host), which re-runs syncBakedPlugins/syncBakedPresets
+ * to re-materialize the profile.
  */
-async function resetProfileAndRestart() {
-  const home = dshHomeForHost();
-  const managed = extensionContext
-    ? path.join(extensionContext.globalStorageUri.fsPath, "dsh-home")
-    : null;
-  if (managed && path.resolve(home) === path.resolve(managed)) {
-    log("resetting managed DSH_HOME: " + home);
-    try { fs.rmSync(home, { recursive: true, force: true }); } catch (err) { log("reset rm failed: " + String(err)); }
-  } else {
-    log("refusing to delete non-managed DSH_HOME: " + home);
-  }
-  await restartHost();
-}
 
 /** Kill the host; the live view (if any) re-attaches to the fresh instance. */
 async function restartHost() {
