@@ -72,6 +72,15 @@ var FileSystem = class extends Service {
 	*   for a backend that never confines.
 	*/
 	get sandboxMode() {}
+	/**
+	* Map an absolute path from the harness host into this filesystem's
+	* execution world when both paths identify the same file. The base provider
+	* exposes no mapping; host-backed or explicitly shared backends override it.
+	* @param hostPath - absolute path in the harness host filesystem.
+	* @returns the process path for the same file, or undefined when this
+	*   execution world cannot read that host file.
+	*/
+	processPathFromHostPath(hostPath) {}
 };
 //#endregion
 export { FileSystem, FileSystem as default, FsError, FsTargetKey, FsVersion };

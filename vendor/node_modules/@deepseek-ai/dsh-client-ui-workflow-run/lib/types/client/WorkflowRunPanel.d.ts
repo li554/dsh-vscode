@@ -1,6 +1,6 @@
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots';
-import { type SessionId } from '@deepseek-ai/dsh-client-runtime/client';
-/** Navigation action injected from the plugin's own SessionRuntime access. */
+import type { SessionId } from '@deepseek-ai/dsh-session/types';
+/** Navigation action injected from the plugin's own Session Controller access. */
 export interface WorkflowRunInjected {
     readonly openSession: (id: SessionId) => void;
 }

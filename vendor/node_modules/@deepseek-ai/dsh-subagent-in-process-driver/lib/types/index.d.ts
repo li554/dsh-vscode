@@ -10,13 +10,13 @@
  *
  * @module @deepseek-ai/dsh-subagent-in-process-driver
  */
-import { type SessionEvent } from '@deepseek-ai/dsh-session';
+import type { SessionEvent } from '@deepseek-ai/dsh-session';
 import type { ResolvedSubagentStartRequest, SubagentRun } from '@deepseek-ai/dsh-subagent';
 export { STRUCTURED_OUTPUT_TOOL, STRUCTURED_OUTPUT_INSTRUCTION, } from './structured.ts';
 /** Extra inputs the spawn and fork providers supply to the shared driver. */
 export interface InProcessRunOptions {
     /** Completed-turn seed for fork, or undefined for a fresh spawn. */
-    readonly seed?: SessionEvent[];
+    readonly seed?: readonly SessionEvent[];
 }
 /**
  * Establish and drive one in-process one-shot child. Fulfillment means the agent

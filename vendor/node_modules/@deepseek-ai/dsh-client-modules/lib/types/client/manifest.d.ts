@@ -38,25 +38,37 @@ declare module '@deepseek-ai/cordis' {
 /**
  * One composed client entry pushed by the host (a graph row). Wire
  * single source: the host node half (package root) produces this same shape.
- * `immediately` marks stage-one prefetch; `inject` is informational graph
- * metadata (the authoritative edges live in each package's `dsh.client`
- * declaration and reach fibers through entry creation). `external` carries
- * module-graph edges: unlike `inject`, they constrain code arrival because
- * `require` is synchronous (see {@link WebBootGraph.entries}).
+ * `immediately` marks stage-one prefetch. `inject` names package rows whose
+ * factories must arrive before this row materializes, while Cordis separately
+ * uses the same package edges to compose entries. `external` carries exact
+ * non-inject module requests (see {@link WebBootGraph.entries}).
  */
 export interface WebBootEntry {
     /** Entry name == package name. */
     id: string;
-    /** Bundle endpoint, '/plugins/<id>/client.js?rev=<rev>'. */
+    /** Revisioned single-resource combo endpoint used by HMR. */
     url: string;
-    /** Bundle content hash (cache-busting consistency anchor). */
+    /** Opaque plugin-artifact revision used for HMR cache busting. */
     rev: string;
-    /** Package-name dependency edges, informational (preflight display / HMR diffing). */
+    /** Package-name dependency edges used for factory arrival and plugin composition. */
     inject?: string[];
     /** Stage-one prefetch mark: load the script for factory registration during module-face boot. */
     immediately?: boolean;
     /** Non-baseline module specifiers this row requests; omitted when it requests none. */
     external?: string[];
+}
+/** Initial scheduling phase for one content-addressed combo script. */
+export type WebBootBatchPhase = 'bootstrap' | 'application';
+/** One initial combo script; a scheduling phase may span several descriptors. */
+export interface WebBootBatch {
+    /** Parser-blocking bootstrap or preloaded application scheduling. */
+    phase: WebBootBatchPhase;
+    /** Content-addressed combo script endpoint. */
+    url: string;
+    /** Revision over the combined plugin script bytes and indexed source map. */
+    rev: string;
+    /** Graph entry ids whose factories the script registers, in execution order. */
+    entries: string[];
 }
 /** The composed client entry graph the host injects as `window.__DSH_BOOT__`. */
 export interface WebBootGraph {
@@ -68,15 +80,21 @@ export interface WebBootGraph {
      * unrelated and remains owned by fiber service waiting.
      */
     entries: WebBootEntry[];
+    /** Initial combo descriptors; every entry belongs to exactly one descriptor. */
+    batches: WebBootBatch[];
 }
 /** The npm-package view of one boot row: what the module table needs to fetch the bundle. */
 export interface BootModuleRow {
     /** Entry name == package name (module-table key). */
     id: string;
-    /** Bundle endpoint, '/plugins/<id>/client.js?rev=<rev>'. */
+    /** Revisioned single-resource combo endpoint used after HMR invalidation. */
     url: string;
-    /** Bundle content hash. */
+    /** Content-addressed combo endpoint used before the first HMR invalidation. */
+    initialUrl: string;
+    /** Opaque plugin-artifact revision used after HMR invalidation. */
     rev: string;
+    /** Injected package rows whose factories arrive before this row materializes. */
+    inject: string[];
     /** Module specifiers this row requests from the module table ([] when the wire omits them). */
     external: string[];
 }
@@ -171,7 +189,7 @@ export interface DshWindow {
     /** HTML-installed facade: a pending registration queue, then the live module-system target. */
     __ModuleLoader__?: ClientModuleLoaderTarget;
 }
-/** Per-module bookkeeping in {@link ClientModuleLoader.loadCache} (module-graph boundary, flat today). */
+/** Per-module bookkeeping in {@link ClientModuleLoader.loadCache} (flat module-graph boundary). */
 export interface ClientModuleRecord {
     /** Module id (entry name / package name). */
     id: string;
@@ -179,7 +197,7 @@ export interface ClientModuleRecord {
     exports: unknown;
     /** Owned `<style data-plugin>` tag ids (`data-plugin-css` values) injected during materialization. */
     styles: string[];
-    /** Observed `require()` edges (module-graph boundary; only table words can appear today). */
+    /** Observed `require()` edges (module-graph boundary; only table words can appear). */
     edges: Set<string>;
 }
 /**
@@ -217,11 +235,14 @@ export interface ClientModuleLoader {
     prefetch(id: string): Promise<void>;
     /**
      * Full reset of one non-bootstrap module: drop its registered factory and
-     * materialized record so the next prefetch/import reloads it (the HMR
-     * invalidation hook). The bootstrap module remains materialized.
+     * materialized record so the next prefetch/import loads its one-resource
+     * combo script rather than the initial multi-resource request. The bootstrap
+     * module remains materialized.
      * @param id - entry name to invalidate.
+     * @param rev - New content revision from the HMR frame; omitted to reuse
+     * the graph revision or for page-local modules that register directly.
      */
-    invalidate(id: string): void;
+    invalidate(id: string, rev?: string): void;
 }
 /** Internal construction inputs assembled by the modules bundle's bootstrap export. */
 export interface ClientModuleSystemOptions {

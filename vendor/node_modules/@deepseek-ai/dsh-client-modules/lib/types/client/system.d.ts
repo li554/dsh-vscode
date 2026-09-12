@@ -13,8 +13,10 @@ export declare class ClientModuleSystem implements ClientModuleLoader {
     private readonly seed;
     private readonly factories;
     private readonly bootstrapIds;
-    /** In-flight prefetch (script load) per id; concurrent callers share it. */
+    /** In-flight script transport per URL; every row in one batch shares it. */
     private readonly pendingArrival;
+    /** Single-resource combo URL selected by HMR after invalidating one row. */
+    private readonly reloadUrls;
     /** Materialization re-entrancy guard: factory-form CJS cannot deliver partial exports, so a cycle is fatal. */
     private readonly materializing;
     private readonly graphRows;
@@ -28,7 +30,7 @@ export declare class ClientModuleSystem implements ClientModuleLoader {
     private register;
     /** Load one graph row so its factory is registered (idempotent per in-flight arrival). */
     private arrive;
-    /** Register each unresolved dynamic request before registering its consumer. */
+    /** Register each injected package and unresolved dynamic request before its consumer. */
     private arriveGraphRow;
     /** Materialize a registered factory (synchronous; memoized in loadCache). */
     private materialize;
@@ -41,6 +43,6 @@ export declare class ClientModuleSystem implements ClientModuleLoader {
     private makeRequire;
     import(specifier: string): Promise<unknown>;
     prefetch(id: string): Promise<void>;
-    invalidate(id: string): void;
+    invalidate(id: string, rev?: string): void;
 }
 //# sourceMappingURL=system.d.ts.map

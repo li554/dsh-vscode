@@ -9,7 +9,7 @@
  * @module dsh-subprocess-local/windows-inspector
  */
 import type { SubprocessTerminalSignal } from '@deepseek-ai/dsh-subprocess';
-import type { ProcessIdentity, ProcessInspector } from './process-inspector.ts';
+import type { ProcessIdentity, ProcessInspector, ProcessSnapshot } from './process-inspector.ts';
 /** One Toolhelp32 process-table row. */
 export interface ProcessEntry {
     pid: number;
@@ -52,10 +52,9 @@ export declare class WindowsProcessInspector implements ProcessInspector {
     private readonly internals;
     constructor(internals?: WindowsProcessInspectorInternals);
     foregroundPgid(shellPid: number): number;
-    isStdinWaiting(_pgid: number): boolean;
-    processTree(rootPid: number): ProcessIdentity[];
-    processSession(_sessionId: number): ProcessIdentity[];
+    isStdinWaiting(_pgid: number, _shellPid: number): boolean;
     isAlive(identity: ProcessIdentity): boolean;
+    snapshot(): ProcessSnapshot;
     signalGroup(pgid: number, signal: SubprocessTerminalSignal): void;
     signalProcess(identity: ProcessIdentity, signal: 'SIGTERM' | 'SIGKILL'): void;
 }

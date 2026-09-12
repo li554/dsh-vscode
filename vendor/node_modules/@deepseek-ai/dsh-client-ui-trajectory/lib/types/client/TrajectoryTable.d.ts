@@ -1,9 +1,14 @@
 /** Turn-aware trajectory event ledger with a local record inspector. */
-import type { AssistantRequestConfig } from '@deepseek-ai/dsh-client-runtime/client';
+import type { AssistantRequestConfig, RenderMessageImages } from '@deepseek-ai/dsh-client-ui-conversation/client';
 import type { TrajectoryCellProps } from './trajectory-record.ts';
 import type { TrajectoryTurnModel } from './layout.ts';
+import type { TrajectoryTranslate } from './locales.ts';
 /** Props for the trajectory ledger. */
 export interface TrajectoryTableProps {
+    /** Trajectory locale seat. */
+    t: TrajectoryTranslate;
+    /** Slot-backed durable image renderer shared with the Chat gallery. */
+    renderImages: RenderMessageImages;
     /** Session-global request numbers for the request groups visible in this context. */
     requestNumbers?: readonly TrajectoryRequestNumber[];
     /** Grouped records in display order. */
@@ -53,14 +58,13 @@ export interface TrajectoryTableProps {
 }
 /** Request-inspector fields shared by ordinary generation and compaction. */
 interface TrajectoryRequestNumberBase {
-    /** Request anchor event sequence; absent for the currently streaming ordinary request. */
-    seq?: number;
     group: string;
     number: number;
     status?: 'complete' | 'running' | 'error';
     startedAt?: number;
     completedAt?: number | null;
     error?: string;
+    errorCode?: string;
     retry?: number;
     maxRetries?: number;
     retryDelayMs?: number;
@@ -74,10 +78,14 @@ interface TrajectoryRequestNumberBase {
 /** One purpose-discriminated request identity paired with its session-global number. */
 export type TrajectoryRequestNumber = TrajectoryRequestNumberBase & ({
     purpose?: 'assistant';
+    /** Request anchor event sequence; absent for the currently streaming request. */
+    seq?: number;
     turn: number;
     step: number;
 } | {
     purpose: 'compaction';
+    /** Request anchor event sequence and stable compaction identity. */
+    seq: number;
     turn: number | null;
     step: 0;
 });
@@ -95,6 +103,6 @@ export interface TrajectoryUsage {
  * @param props - Grouped trajectory data and whole-ledger fold state.
  * @returns The ledger and an optional local record inspector.
  */
-export declare function TrajectoryTable({ requestNumbers: sessionRequestNumbers, turns, streamingCells, timelineFocusIndexes, searchMatchIndexes, onSelectedIndexChange, onRecordSelect, recordSelection, recordFocus, historyLoading, olderHistoryLoading, historyStartSeq, hasOlderRecords, onLoadOlder, onClearSelection, collapsedTurns, onToggleTurn, collapsedAssistants, onToggleAssistant, inspectCallId, onInspectApplied, }: TrajectoryTableProps): import("react").JSX.Element;
+export declare function TrajectoryTable({ t, renderImages, requestNumbers: sessionRequestNumbers, turns, streamingCells, timelineFocusIndexes, searchMatchIndexes, onSelectedIndexChange, onRecordSelect, recordSelection, recordFocus, historyLoading, olderHistoryLoading, historyStartSeq, hasOlderRecords, onLoadOlder, onClearSelection, collapsedTurns, onToggleTurn, collapsedAssistants, onToggleAssistant, inspectCallId, onInspectApplied, }: TrajectoryTableProps): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=TrajectoryTable.d.ts.map

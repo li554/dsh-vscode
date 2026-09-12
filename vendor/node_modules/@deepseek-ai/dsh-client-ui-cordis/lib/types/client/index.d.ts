@@ -1,5 +1,5 @@
 /** Cordis dynamic-plugin cards, inventory panel, business-view host, and `@pluginId` source. */
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client';
+import type { Context as ClientContext } from '@deepseek-ai/cordis';
 export type { CordisCardFace, CordisPanelFace, CordisRunCardFace, CordisToolViewOwnerProps } from './slots.ts';
 export type { CordisActionResult, CordisDynamicPort, CordisInventoryRow } from './dynamic-port.ts';
 export type { CordisDefineRowProps } from './CordisDefineRow.tsx';

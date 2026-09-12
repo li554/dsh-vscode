@@ -9,10 +9,21 @@ const name = "client-ui-renderer-invariant";
 /** Service required before the companion can reserve package ownership. */
 const inject = ["invariants"];
 /**
-* No runtime invariant: the package installs the render adapter and provides a
-* mount callback but owns no event stream or mutable cross-plugin data relation.
+* Verify that each `slots/changed` dispatch observes its mutation already
+* applied to the renderer-owned slot registry.
 */
-const install = () => {};
+const install = (ctx, fail) => {
+	ctx.on("internal/dispatch", (_mode, eventName, args) => {
+		if (eventName !== "slots/changed") return;
+		const key = args[0];
+		if (typeof key !== "string" || key === "") {
+			fail("'slots/changed' dispatched without a slot key argument");
+			return;
+		}
+		const slots = ctx.get("slots");
+		if (slots !== void 0 && slots.getVersion(key) === 0) fail(`'slots/changed' fired for "${key}" before any mutation bumped its version — emission must follow the applied mutation`);
+	}, { global: true });
+};
 /**
 * Register this package's invariant companion.
 * @param ctx - Cordis context carrying the invariant service.

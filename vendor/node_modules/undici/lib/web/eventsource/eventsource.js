@@ -2,14 +2,18 @@
 
 const { pipeline } = require('node:stream')
 const { fetching } = require('../fetch')
-const { makeRequest } = require('../fetch/request')
 const { webidl } = require('../webidl')
 const { EventSourceStream } = require('./eventsource-stream')
 const { parseMIMEType } = require('../fetch/data-url')
 const { createFastMessageEvent } = require('../websocket/events')
 const { isNetworkError } = require('../fetch/response')
-const { kEnumerableProperty } = require('../../core/util')
+const { isValidHeaderValue, kEnumerableProperty } = require('../../core/util')
 const { environmentSettingsObject } = require('../fetch/util')
+const { createPotentialCORSRequest } = require('./util')
+const { getGlobalDispatcher } = require('../../global')
+const { isomorphicDecode } = require('../infra')
+
+const textEncoder = new TextEncoder()
 
 let experimentalWarned = false
 
@@ -160,33 +164,22 @@ class EventSource extends EventTarget {
 
     // 8. Let request be the result of creating a potential-CORS request given
     // urlRecord, the empty string, and corsAttributeState.
-    const initRequest = {
-      redirect: 'follow',
-      keepalive: true,
-      // @see https://html.spec.whatwg.org/multipage/urls-and-fetching.html#cors-settings-attributes
-      mode: 'cors',
-      credentials: corsAttributeState === 'anonymous'
-        ? 'same-origin'
-        : 'omit',
-      referrer: 'no-referrer'
-    }
+    const request = createPotentialCORSRequest(urlRecord, '', corsAttributeState)
 
     // 9. Set request's client to settings.
-    initRequest.client = environmentSettingsObject.settingsObject
+    request.client = environmentSettingsObject.settingsObject
 
     // 10. User agents may set (`Accept`, `text/event-stream`) in request's header list.
-    initRequest.headersList = [['accept', { name: 'accept', value: 'text/event-stream' }]]
+    request.headersList.set('Accept', 'text/event-stream')
 
     // 11. Set request's cache mode to "no-store".
-    initRequest.cache = 'no-store'
+    request.cache = 'no-store'
 
     // 12. Set request's initiator type to "other".
-    initRequest.initiator = 'other'
-
-    initRequest.urlList = [new URL(this.#url)]
+    request.initiator = 'other'
 
     // 13. Set ev's request to request.
-    this.#request = makeRequest(initRequest)
+    this.#request = request
 
     this.#connect()
   }
@@ -292,6 +285,7 @@ class EventSource extends EventTarget {
 
       const eventSourceStream = new EventSourceStream({
         eventSourceSettings: this.#state,
+        maxEventSize: this.#dispatcher.eventSourceOptions?.maxEventSize,
         push: (event) => {
           this.dispatchEvent(createFastMessageEvent(
             event.type,
@@ -351,8 +345,12 @@ class EventSource extends EventTarget {
       //         string, encoded as UTF-8.
       //      2. Set (`Last-Event-ID`, lastEventIDValue) in request's header
       //         list.
+      this.#request.headersList.delete('last-event-id', true)
       if (this.#state.lastEventId.length) {
-        this.#request.headersList.set('last-event-id', this.#state.lastEventId, true)
+        const lastEventId = isomorphicDecode(textEncoder.encode(this.#state.lastEventId))
+        if (isValidHeaderValue(lastEventId)) {
+          this.#request.headersList.set('last-event-id', lastEventId, true)
+        }
       }
 
       //   4. Fetch request and process the response obtained in this fashion, if any, as described earlier in this section.
@@ -476,7 +474,8 @@ webidl.converters.EventSourceInitDict = webidl.dictionaryConverter([
   },
   {
     key: 'dispatcher', // undici only
-    converter: webidl.converters.any
+    converter: webidl.converters.any,
+    defaultValue: () => getGlobalDispatcher()
   },
   {
     key: 'node', // undici only

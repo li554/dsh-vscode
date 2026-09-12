@@ -21,10 +21,10 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 }) : target, mod));
 //#endregion
 let node_worker_threads = require("node:worker_threads");
-let _deepseek_ai_dsh_llm = require("@deepseek-ai/dsh-llm");
+let _deepseek_ai_dsh_util_values = require("@deepseek-ai/dsh-util-values");
 let node_vm = require("node:vm");
 node_vm = __toESM(node_vm, 1);
-let _deepseek_ai_dsh_session = require("@deepseek-ai/dsh-session");
+let _deepseek_ai_dsh_brand = require("@deepseek-ai/dsh-brand");
 let _deepseek_ai_dsh_tools = require("@deepseek-ai/dsh-tools");
 let _deepseek_ai_dsh_workflow = require("@deepseek-ai/dsh-workflow");
 //#region lib/types/protocol.js
@@ -433,7 +433,7 @@ var WorkflowExecution = class {
 				seq,
 				label,
 				...phase !== void 0 ? { phase } : {},
-				childId: (0, _deepseek_ai_dsh_session.SessionId)(run.id)
+				childId: (0, _deepseek_ai_dsh_brand.brandString)(run.id)
 			};
 			this.observer.agentStart(info);
 			try {
@@ -763,7 +763,7 @@ async function runWorkerSession(port, init) {
 				children.onChildDisposed(message.callId);
 				break;
 			/* v8 ignore next 2 -- closed engine-owned union; the arm only makes adding a message type a compile error */
-			default: (0, _deepseek_ai_dsh_llm.assertNever)(message, "host-to-worker message");
+			default: (0, _deepseek_ai_dsh_util_values.assertNever)(message, "host-to-worker message");
 		}
 	});
 	post(WorkerToHostType.Ready, {});

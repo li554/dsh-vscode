@@ -1,5 +1,5 @@
 /**
- * Code Mode codegen: the pure projection from registered tool schemas to the TypeScript SDK
+ * PTC mode codegen: the pure projection from registered tool schemas to the TypeScript SDK
  * text the model programs against (the `tools:sdk` prompt section). Sibling of
  * `json-schema.ts` — `schemas()` (native function calling) and this module (the generated
  * `declare const tools` API) are two projections of the same store.
@@ -7,7 +7,7 @@
  */
 import type { ToolSchema } from '@deepseek-ai/dsh-llm';
 import type { JsonSchemaNode } from './json-schema.ts';
-/** Internal Code Mode projection: the model-facing schema plus the canonical output schema. */
+/** Internal PTC mode projection: the model-facing schema plus the canonical output schema. */
 export interface ToolSdkSchema extends ToolSchema {
     /** Validated canonical value returned by the tool binding. */
     output: JsonSchemaNode;

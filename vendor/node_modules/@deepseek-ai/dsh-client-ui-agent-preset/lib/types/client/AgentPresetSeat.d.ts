@@ -11,7 +11,7 @@
  * The menu opens on the staged choice, which starts as the deployment default.
  * Picking stages; the choice reaches a session when one becomes current.
  */
-import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client';
+import type { SnapshotStore } from '@deepseek-ai/dsh-client-store';
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots';
 import type { AgentPresetSeatState } from './seat-store.ts';
 /** Registration-side business face for the hero chip. */
@@ -22,8 +22,8 @@ export interface AgentPresetSeatInjected {
     };
     /** Read the roster when the chip first renders. */
     load: () => Promise<void>;
-    /** Stage one preset for the next session. */
-    select: (id: string) => Promise<void>;
+    /** Stage one preset for the next session; resolves to a refusal, or undefined. */
+    select: (id: string) => Promise<string | undefined>;
     /** Clear the one-shot introduce cue once the chip has played it. */
     introduced: () => void;
 }

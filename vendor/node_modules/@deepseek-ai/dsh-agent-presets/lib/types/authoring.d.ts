@@ -11,38 +11,23 @@
  * capability the copied preset did not already carry.
  * @module @deepseek-ai/dsh-agent-presets/authoring
  */
+import { RemoteError } from '@deepseek-ai/dsh-typert-protocol';
 import { type AgentPreset, type PresetRoot } from './preset.ts';
-/** A preset id that cannot be used as a directory name under a root. */
-export declare class InvalidPresetIdError extends Error {
-    /** The rejected id. */
-    readonly presetId: string;
-    constructor(
-    /** The rejected id. */
-    presetId: string);
-}
-/** A copy target that is already occupied — a copy never overwrites. */
-export declare class PresetExistsError extends Error {
-    /** The id that is already taken. */
-    readonly presetId: string;
-    constructor(
-    /** The id that is already taken. */
-    presetId: string);
-}
-/** Authoring was attempted where the deployment allows none. */
-export declare class PresetNotWritableError extends Error {
-    /** What the caller tried to change, for the diagnostic. */
-    readonly presetId: string;
-    constructor(
-    /** What the caller tried to change, for the diagnostic. */
-    presetId: string, reason: string);
-}
+/**
+ * Refuse a copy onto an id something already occupies. Both the roster check
+ * and the on-disk check answer with it, so a taken id reads the same either way.
+ * @param presetId - the id that is already taken.
+ * @returns the failure to throw.
+ */
+export declare function presetExists(presetId: string): RemoteError<'agent-preset/invalid'>;
 /**
  * The root locally authored presets are written to.
  * @param roots - the configured roots in precedence order.
+ * @param presetId - the preset the caller is authoring, named by the refusal.
  * @returns the absolute path of the first `user` root.
  * @throws when the deployment configured no writable root.
  */
-export declare function writableRoot(roots: readonly PresetRoot[]): string;
+export declare function writableRoot(roots: readonly PresetRoot[], presetId: string): string;
 /**
  * Read one preset's composition text.
  * @param preset - the resolved preset.

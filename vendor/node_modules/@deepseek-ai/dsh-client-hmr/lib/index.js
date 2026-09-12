@@ -1,20 +1,14 @@
 import { statSync } from "node:fs";
 import z from "@deepseek-ai/schemastery";
 //#region lib/types/events.js
-/**
-* Wire protocol of the `/plugins/events` dev SSE channel — single source for
-* both halves of this package. Frames still cross a wire boundary: the
-* browser half validates them at its JSON parse point; sharing the type keeps
-* the two ends from drifting, not from parsing.
-*/
 /** System SSE endpoint pushing graph/rebuilt frames (wire protocol constant). */
 const EVENTS_ENDPOINT = "/plugins/events";
 //#endregion
 //#region lib/types/index.js
 /**
 * HMR plugin, node half: the host end of the dev reload chain. One interval
-* stat-polls every graph row's client bundle (polling by design: network
-* mounts deliver no inotify events), reports content changes through
+* stat-polls every graph row's client bundle (polling by design: network mounts
+* deliver no inotify events), reports changes through
 * `clientModuleHost.rebuilt(id)`, and serves the `/plugins/events` SSE channel
 * broadcasting graph/rebuilt frames to the browser half (src/client/).
 * The web bundle mounts this row unconditionally: without a rebuild
@@ -29,6 +23,18 @@ const Config = z.object({ pollIntervalMs: z.number().step(1).min(1).default(500)
 /** Serialize one frame as an SSE data line. */
 function sseData(frame) {
 	return `data: ${JSON.stringify(frame)}\n\n`;
+}
+/** Snapshot the executable bundle metadata that drives reloads. */
+function bundleStat(path) {
+	const bundle = statSync(path);
+	return {
+		mtimeMs: bundle.mtimeMs,
+		size: bundle.size
+	};
+}
+/** Whether the executable bundle is unchanged since the last successful re-hash. */
+function sameBundleStat(left, right) {
+	return left.mtimeMs === right.mtimeMs && left.size === right.size;
 }
 /**
 * Mount the dev chain: bundle watches, rebuilt reporting, and the SSE channel.
@@ -52,54 +58,47 @@ function apply(ctx, config) {
 		watch.size = current.size;
 		watch.dirty = false;
 	};
-	const watchRow = (id, path) => {
-		let baseline;
-		try {
-			baseline = statSync(path);
-		} catch (error) {
-			watched.set(id, {
-				path,
-				mtimeMs: 0,
-				size: 0,
-				dirty: true
-			});
-			if (error.code !== "ENOENT") ctx.logger.warn(error);
-			return;
-		}
+	const watchRow = (id, baseline) => {
 		const watch = {
-			path,
-			mtimeMs: baseline.mtimeMs,
-			size: baseline.size,
+			...baseline,
 			dirty: false
 		};
 		watched.set(id, watch);
-		rehash(id, watch, baseline);
+		let current;
+		try {
+			current = bundleStat(baseline.path);
+		} catch (error) {
+			watch.dirty = true;
+			if (error.code !== "ENOENT") ctx.logger.warn(error);
+			return;
+		}
+		if (!sameBundleStat(current, watch)) rehash(id, watch, current);
 	};
 	const pollWatches = () => {
 		for (const [id, watch] of watched) {
 			let current;
 			try {
-				current = statSync(watch.path);
+				current = bundleStat(watch.path);
 			} catch (error) {
 				watch.dirty = true;
 				if (error.code !== "ENOENT") ctx.logger.warn(error);
 				continue;
 			}
-			if (!watch.dirty && current.mtimeMs === watch.mtimeMs && current.size === watch.size) continue;
+			if (!watch.dirty && sameBundleStat(current, watch)) continue;
 			rehash(id, watch, current);
 		}
 	};
 	const syncWatches = () => {
 		const rows = /* @__PURE__ */ new Map();
 		for (const row of ctx.clientModules.graph().entries) {
-			const path = ctx.clientModules.clientPath(row.id);
-			if (path !== void 0) rows.set(row.id, path);
+			const watch = ctx.clientModules.artifactBaseline(row.id);
+			if (watch !== void 0) rows.set(row.id, watch);
 		}
 		for (const [id, watch] of watched) {
-			if (rows.get(id) === watch.path) continue;
+			if (rows.get(id)?.path === watch.path) continue;
 			watched.delete(id);
 		}
-		for (const [id, path] of rows) if (!watched.has(id)) watchRow(id, path);
+		for (const [id, watch] of rows) if (!watched.has(id)) watchRow(id, watch);
 	};
 	ctx.effect(() => {
 		syncWatches();

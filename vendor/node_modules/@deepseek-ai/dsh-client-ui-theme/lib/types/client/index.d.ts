@@ -7,12 +7,13 @@
  * document. The plugin also registers the Appearance preference row into the
  * settings General section — the theme feature owns its own settings surface.
  */
-import type { Context } from '@deepseek-ai/cordis';
-import type { ClientContext, SettingsScope } from '@deepseek-ai/dsh-client-runtime/client';
+import type { Context as ClientContext } from '@deepseek-ai/cordis';
+import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client';
 import { type ThemeKey } from './locales.ts';
 import { type ThemePreference, type ThemeSettings } from '../theme-settings.ts';
 export type { AppearanceRowComponentProps, AppearanceRowInjected } from './AppearanceRow.tsx';
-export type { AppearanceRowState } from './settings-store.ts';
+export type { FontSizeRowComponentProps, FontSizeRowInjected } from './FontSizeRow.tsx';
+export type { AppearanceRowState, FontSizeRowState } from './settings-store.ts';
 export type { ThemeKey } from './locales.ts';
 export type { ThemePreference, ThemeSettings } from '../theme-settings.ts';
 /** Namespace owning this feature's settings-row copy. */
@@ -54,6 +55,8 @@ export interface ThemeDefinition {
 export interface ThemeSnapshot {
     /** The persisted preference (may be `system`). */
     preference: ThemePreference;
+    /** Conversation content font size in px (integer within FONT_SIZE_MIN..FONT_SIZE_MAX). */
+    fontSize: number;
     /**
      * The resolved active theme (`system` resolved via prefers-color-scheme)
      * with override layers folded into its tokens (seq order, later layers win
@@ -108,6 +111,7 @@ export declare class ThemeRuntime {
     private readonly host;
     private themes;
     private preference;
+    private fontSize;
     private revision;
     private snapshot;
     private readonly media;
@@ -119,7 +123,7 @@ export declare class ThemeRuntime {
      * media-query and scope listeners are released through ctx.effect on dispose).
      * @param host - durable preference scope owned by the same plugin.
      */
-    constructor(ctx: Context, host: SettingsScope<ThemeSettings>);
+    constructor(ctx: ClientContext, host: SettingsScope<ThemeSettings>);
     /**
      * Read the current immutable theme snapshot.
      * @returns the current snapshot (stable reference until the next change).
@@ -137,6 +141,13 @@ export declare class ThemeRuntime {
      * @param id - a registered theme id or `system`; unknown ids throw.
      */
     setTheme(id: string): void;
+    /**
+     * Change the conversation content font size — the only font-size write
+     * entry. Accepted values are written through the settings scope and emit
+     * `theme/change`.
+     * @param px - integer px within FONT_SIZE_MIN..FONT_SIZE_MAX; out-of-range or fractional values throw.
+     */
+    setFontSize(px: number): void;
     /** Adopt the scope's accepted durable preference without writing it back. */
     private adopt;
     /**

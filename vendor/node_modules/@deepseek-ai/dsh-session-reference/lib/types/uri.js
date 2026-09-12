@@ -1,5 +1,5 @@
 /** Canonical session URI and inline mention encoding. */
-import { SessionId } from '@deepseek-ai/dsh-session';
+import { brandString } from '@deepseek-ai/dsh-brand';
 import { SessionReferenceError } from "./config.js";
 /** URI scheme reserved for DeepSeek Harness session snapshots. */
 export const SESSION_REFERENCE_SCHEME = 'dsh-session:';
@@ -28,7 +28,7 @@ export function decodeSessionReferenceUri(uri) {
         const parsed = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
         if (typeof parsed !== 'string')
             throw new TypeError('decoded session id is not a string');
-        const sessionId = SessionId(parsed);
+        const sessionId = brandString(parsed);
         if (encodeSessionReferenceUri(sessionId) !== uri)
             throw new TypeError('URI is not canonical');
         return sessionId;

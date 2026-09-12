@@ -21,6 +21,7 @@
  * @module @deepseek-ai/dsh-subagent/descriptor
  */
 import type { SessionEvent } from '@deepseek-ai/dsh-session';
+import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm';
 import type { ToolRestriction } from '@deepseek-ai/dsh-tools';
 declare module '@deepseek-ai/dsh-session/types' {
     interface SessionEventMap {
@@ -40,7 +41,7 @@ declare module '@deepseek-ai/dsh-session/types' {
  * Supporting another composition input is a deliberate version change, never
  * an implicit extra field.
  */
-export declare const SUBAGENT_DESCRIPTOR_VERSION = 2;
+export declare const SUBAGENT_DESCRIPTOR_VERSION = 3;
 /** Fields shared by every supported `subagent/descriptor` payload. */
 interface SubagentDescriptorBase {
     /** Descriptor format version ({@link SUBAGENT_DESCRIPTOR_VERSION}). */
@@ -69,6 +70,8 @@ export interface ContinuableSubagentDescriptorData extends SubagentDescriptorBas
     readonly agentProvider?: string;
     /** Resolved child `agentOptions.model`, when one was declared. */
     readonly agentModel?: string;
+    /** Resolved child `agentOptions.reasoningEffort`, when one was declared. */
+    readonly agentReasoningEffort?: ReasoningEffortId;
     /** Per-child persona that shadows the deployment persona on resume. */
     readonly persona?: string;
     /** Child tool scoping reapplied on resume. */
@@ -98,6 +101,8 @@ export interface ContinuableSubagentDescriptorInput extends SubagentDescriptorIn
     readonly agentProvider?: string;
     /** Requested child `agentOptions.model`. */
     readonly agentModel?: string;
+    /** Requested child `agentOptions.reasoningEffort`. */
+    readonly agentReasoningEffort?: ReasoningEffortId;
     /** Requested per-child persona. */
     readonly persona?: string;
     /** Requested child tool scoping. */

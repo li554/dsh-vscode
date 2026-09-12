@@ -4,7 +4,8 @@ import type {
   TypertRemoteContribution,
 } from '@deepseek-ai/dsh-typert-protocol'
 import type { ApprovalRequestId, CordisDynamicPackageId, CordisDynamicPluginId, CordisDynamicPluginRunId, CordisDynamicRunMode, CordisErrorDetails, CordisInspectProviderManifest, CordisInspectQueryResolution, CordisInspectRequestId, CordisInspectResolveAck, DynamicCordisClientSource, DynamicCordisHostHalfResult, DynamicCordisInventoryRow, DynamicCordisInvokeResult, DynamicCordisRenderFailure, DynamicCordisResolveAck, DynamicCordisRunResolution, DynamicCordisRunResponse, DynamicCordisStopResponse, DynamicCordisUndefineReceipt } from '@deepseek-ai/dsh-cordis-host-runner/types'
-import type { JsonValue, SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface TypertRemoteNamespace$64796e616d6963436f7264697352756e6e6572 {
