@@ -1,0 +1,43 @@
+{
+  "_comment": [
+    "Vendored-platform patches for dsh-vscode.",
+    "",
+    "vendor/ is COMMITTED, so these patches normally ride along with it. They are",
+    "stored here because vendor/ is also regenerated wholesale on every platform",
+    "upgrade (npm install into a staging dir, then robocopy over vendor/node_modules),",
+    "which would silently drop them and reintroduce the bugs they fix.",
+    "",
+    "Run `.smoke/platform-patches.py verify` after refreshing vendor/, and `apply`",
+    "to put them back. pack.py runs verify before packaging, so an unpatched tree",
+    "cannot be shipped. ExpectedPackageVersion guards against applying a patch to a",
+    "different upstream release: apply refuses unless the installed version matches."
+  ],
+  "patches": [
+    {
+      "package": "@deepseek-ai/dsh-session-format-v0-to-v1",
+      "file": "lib/index.js",
+      "expectedPackageVersion": "0.1.5-rc.2",
+      "storedAs": "dsh-session-format-v0-to-v1/lib/index.js",
+      "why": [
+        "The released-v0 validators are exact and the v0->v1 migration refuses a",
+        "Session carrying anything outside the released shape. Correct for the",
+        "released format, but this deployment bakes third-party plugins that wrote",
+        "into sessions freely, and one offending event makes a whole session",
+        "unobservable. On a real 30-session history the strict validators refused",
+        "1251 events across 21 sessions, in four shapes:",
+        "  1. a content block with a plugin annotation (dsh-file-review's",
+        "     `dshFileReview` on an empty text block appended to a tool result);",
+        "  2. a kind:'plugin' source with an extra member (dsh-web-review's",
+        "     `snapshotId`);",
+        "  3. a kind:'plugin' source pairing `summary` with a non-notice form",
+        "     (dsh-mnemon's `instructions` + summary);",
+        "  4. `subagent/descriptor` version 2 from the `sidechat` plugin, where the",
+        "     released spec froze on version 3.",
+        "The patch drops (1)(2)(3)'s unreleased members and the stray summary, and",
+        "coerces (4)'s version 2 to 3, each logged once. Required members, missing",
+        "members and unknown kinds still refuse, and the source v0 artifact is never",
+        "modified."
+      ]
+    }
+  ]
+}
