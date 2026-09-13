@@ -122,7 +122,7 @@ python .smoke/pack.py
 | `.smoke/boot-test.mjs` | 起真实宿主 + 临时 `DSH_HOME`，移植 `plugins/bundled`，断言首页与每个 **web 客户端**条目的带 revision 插件 URL 都返回 200、且在前端模块图里有对应行 |
 | `.smoke/extension-proxy-test.cjs` | 用 stub 的 `vscode` 模块加载真实 `src/extension.js`，跑 `activate()` 起宿主与鉴权中转代理，然后**不带 Cookie** 去探测代理端口：首页须 200、未知 `/api` 通道不得是 401/403、`ws://…/api/remote.mux` 须返回 101 |
 | `.smoke/annotations-clear-test.mjs` | 驱动真实宿主（经扩展代理，即 webview 实际路径）验证：`comments: []` 对无活跃 agent 的会话现在返回 `200 {kind:"empty"}` 而非 404，而**非空草稿仍然 404**（说明只放开了 no-op、没削弱 agent 校验），并证明直连与经代理结果一致 |
-| `.smoke/profile-overlay-test.mjs` | 验证 `dsh.modlensFamilies` → `--patch` 覆盖层这条链路：驱动真实 `activate()` 断言覆盖层已生成且 YAML 转义正确（含 `:` 和引号这类值）、**你自己的 `cordis.patch.yml` 未被改写**，并用 `dsh --dump-config` 证明 DSH 真的把它合成到了 modlens 行上 |
+| `.smoke/profile-overlay-test.mjs` | 验证 `dsh.modlensFamilies` → `--patch` 覆盖层这条链路：驱动真实 `activate()` 断言覆盖层已生成且 YAML 转义正确（含 `:` 和引号这类值）、**你自己的 `cordis.patch.yml` 未被改写**、诊断日志已带启动头落盘，并用 `dsh --dump-config` 证明 DSH 真的把它合成到了 modlens 行上——而且**一个不少地保留其余行**（对比开关覆盖层前后的行集合；若某个 `id` 行被当成顶层条目重新组装整棵树，其它插件会全部掉线而旧断言仍然通过） |
 | `.smoke/embedded-open-settings-test.mjs` | 用桩驱动真实的 `SettingsController`，验证「打开配置文件」在 `DSH_EMBEDDED=1` 时输出扩展哨兵且**不**调用原生打开器，未设置时走原生路径 |
 | `.smoke/legacy-cleanup-test.cjs` | 用合成 `DSH_HOME` 复现每一类升级残留（悬空/跨版本/全局 npm 链接、失效 profile 依赖、空 scope 目录、`*.pnpm-old`、`.ignored_*`、`.bak-*`、退役插件状态），跑真实 `activate()` 后断言残留已清、**且会话/记忆/配置/在用插件状态逐字节未变**、退役状态可在隔离目录找回 |
 | `.smoke/selfcontained-plugins.mjs` | 校验 `plugins/bundled` 与 `BUNDLED_PLUGINS` 一致：每个条目要么被声明、要么被某个条目的 cordis patch 认领；并拒绝任何仍注入已被删除的 `dsh-client-runtime` 的包 |
@@ -150,6 +150,12 @@ python .smoke/pack.py
 
 **问：升级扩展后会话/配置会丢吗？**
 答：不会。会话、设置等数据存放在 `dsh.dshHome`（默认 `DSH_HOME`）目录，与扩展安装目录相互隔离。
+
+**问：日志怎么给你？（`DSH: Show Host Logs` 关掉窗口就没了）**
+答：同一份日志现在**同时落盘**在 `<globalStorage>/your-publisher-id.dsh-vscode/dsh-vscode.log`（超过 4 MB 自动轮转为 `.log.1`）。每次启动会先写一段头信息——扩展版本、`DSH_HOME`、工作目录、`dsh.port`、是否启用内置插件——因为排障真正需要的上下文正是这些，而不是随后的散行。宿主 stdout/stderr、token 交换、代理的 401 与上游错误、以及**经代理返回的非 2xx 响应（含路径）**都会记进去；`/plugins/` 的包请求除外（页面陈旧时会合法 404），且每次会话最多记 200 行以免刷爆。
+
+**问：记忆/技能等标签页报 `fetch error`？**
+答：**先看是不是「功能没开」**。`dsh-memory-evolve` 的多数模块是**按开关注册路由**的，代码注释写得很明白——「模块开启才注册（关闭时 404，客户端探测失败即隐藏）」。开关状态在 `<DSH_HOME>/memories/plugin-state.json`（也可在插件自己的记忆 Tab 里切换）。实测一份真实配置：`uiSettingsEnabled`/`bookmarkEnabled`/`canvasEnabled`/`promptsEnabled`/`coiEnabled`/`broadcastEnabled`/`notifyEnabled`/`syncEnabled` 全为 `false` 时，客户端会探测 7 个端点（`/memory-evolve/api/{notifications/unread,coi/config,broadcast/messages,ui-settings/state,prompts/sources,bookmarks/state,canvas/state}`）**全部 404**，浏览器控制台就是 7 条 `Failed to load resource: 404`；把这些开关打开后**错误归零**。想要哪个功能就把对应开关打开再重启宿主。
 
 **问：为什么 .vsix 有 100+ MB？**
 答：完整运行时依赖树内置在扩展内以保证离线可用，体积换取了"零依赖、开箱即用"的体验。

@@ -115,21 +115,48 @@ const ext = require(path.join(ROOT, "src", "extension.js"));
   console.log("\n3. the user's own patch file is untouched");
   check("cordis.patch.yml unchanged", fs.readFileSync(path.join(PROFILE, "cordis.patch.yml"), "utf8") === USER_PATCH);
 
+  console.log("\n4. the diagnostic log is on disk with a session header");
+  const logPath = path.join(TMP, "dsh-vscode.log");
+  check("log file written", fs.existsSync(logPath), logPath);
+  const logText = fs.existsSync(logPath) ? fs.readFileSync(logPath, "utf8") : "";
+  check("header records the build", /=== dsh-vscode \S+ \| \d{4}-/.test(logText));
+  check("header records the resolved DSH_HOME", logText.includes(HOME), "DSH_HOME missing from the header");
+  check("header records the port and plugin switch", /dsh\.port: \d+ \| baked plugins: true/.test(logText));
+
   await ext.deactivate();
 
   console.log("\n2. dsh composes the overlay onto the profile");
-  const dump = spawnSync(process.execPath, ["--expose-internals", BIN, "--profile", "web", "--patch", overlay, "--dump-config"], {
-    cwd: ROOT,
-    env: { ...process.env, DSH_HOME: HOME, SSH_CONNECTION: "127.0.0.1 1 127.0.0.1 1" },
-    encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024
-  });
-  const out = (dump.stdout ?? "") + (dump.stderr ?? "");
+  const dumpWith = (extra) => {
+    const r = spawnSync(process.execPath, ["--expose-internals", BIN, "--profile", "web", ...extra, "--dump-config"], {
+      cwd: ROOT,
+      env: { ...process.env, DSH_HOME: HOME, SSH_CONNECTION: "127.0.0.1 1 127.0.0.1 1" },
+      encoding: "utf8",
+      maxBuffer: 64 * 1024 * 1024
+    });
+    return { status: r.status, out: (r.stdout ?? "") + (r.stderr ?? "") };
+  };
+  const dump = dumpWith(["--patch", overlay]);
+  const without = dumpWith([]);
+  const out = dump.out;
   check("--dump-config succeeded", dump.status === 0, `exit ${dump.status}: ${out.slice(-300)}`);
   for (const family of ["deepseek", "code_instuct", "code_think"]) {
     check(`composed config carries ${family}`, out.includes(family), "not found in --dump-config output");
   }
   check("modlens row still present", out.includes("modlens"));
+
+  // The invariant that matters most and that this test originally missed: an
+  // overlay that names one row must not disturb any other. A patch list row with
+  // a bare `id` could have been read as a top-level entry and re-composed the tree,
+  // which would unmount every other bundled plugin while this test still passed.
+  const rowNames = (text) => new Set([...text.matchAll(/name:\s*'?([@a-z0-9._/-]+)'?/gi)].map((m) => m[1]));
+  const withRows = rowNames(out);
+  const withoutRows = rowNames(without.out);
+  check("the overlay adds no rows", withRows.size === withoutRows.size, `${withoutRows.size} -> ${withRows.size}`);
+  const lost = [...withoutRows].filter((n) => !withRows.has(n));
+  check("the overlay drops no rows", lost.length === 0, "missing: " + lost.slice(0, 8).join(", "));
+  for (const plugin of ["@canglongcl/dsh-web-review", "@liustack/modlens", "dsh-memory-evolve", "dsh-undo-plugin", "dsh-client-auto-continue"]) {
+    check(`${plugin} still mounted`, out.includes(plugin));
+  }
 
   console.log(`\nRESULT: ${failures === 0 ? "PASS" : `FAIL (${failures} check(s))`}`);
   try { fs.rmSync(TMP, { recursive: true, force: true }); } catch { /* best effort */ }

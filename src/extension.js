@@ -76,12 +76,57 @@ let output = null;
 let extensionContext = null;
 /** Ring buffer of recent host log lines, shown on the error page. */
 const recentLog = [];
+/**
+ * Rolling diagnostic log under globalStorage.
+ *
+ * The Output channel is in-memory and dies with the window, so "send me the log"
+ * is impossible after the fact — which is exactly what blocked diagnosing a
+ * report of several plugin tabs fetching into nothing. Same stream, on disk.
+ */
+let logFilePath = "";
+let logFileBytes = 0;
+const LOG_MAX_BYTES = 4 * 1024 * 1024;
+/** Cap on non-2xx proxy lines per session, so one broken route cannot flood the file. */
+let proxyFailureLines = 0;
+
+/**
+ * Open, and rotate, the diagnostic log.
+ * @param {import("vscode").ExtensionContext} context - supplies the storage directory.
+ * @returns {void}
+ */
+function openLogFile(context) {
+  try {
+    const dir = context?.globalStorageUri?.fsPath;
+    if (!dir) return;
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, "dsh-vscode.log");
+    try {
+      if (fs.statSync(file).size > LOG_MAX_BYTES) {
+        try { fs.rmSync(file + ".1", { force: true }); } catch { /* ignore */ }
+        try { fs.renameSync(file, file + ".1"); } catch { /* ignore */ }
+      }
+    } catch { /* no existing file */ }
+    logFilePath = file;
+    try { logFileBytes = fs.statSync(file).size; } catch { logFileBytes = 0; }
+  } catch { logFilePath = ""; }
+}
 
 function log(line) {
   if (!output) output = vscode.window.createOutputChannel("DeepSeek Harness");
   output.appendLine(line);
   recentLog.push(line);
   if (recentLog.length > 60) recentLog.shift();
+  if (logFilePath === "") return;
+  try {
+    if (logFileBytes > LOG_MAX_BYTES) {
+      try { fs.rmSync(logFilePath + ".1", { force: true }); } catch { /* ignore */ }
+      try { fs.renameSync(logFilePath, logFilePath + ".1"); } catch { /* ignore */ }
+      logFileBytes = 0;
+    }
+    const text = line + "\n";
+    fs.appendFileSync(logFilePath, text);
+    logFileBytes += Buffer.byteLength(text);
+  } catch { /* best effort: never fail a boot over a log write */ }
 }
 
 /**
@@ -277,6 +322,17 @@ function forwardToHost(req, res, retrying) {
     }
     res.writeHead(response.statusCode ?? 502, response.headers);
     response.pipe(res);
+    // Record refusals, because "the tab says fetch error" is otherwise
+    // unattributable: the status and path say whether the route is missing, the
+    // credential was rejected, or the plugin refused the payload. Bundle fetches
+    // are excluded (a stale page legitimately 404s after a host restart) and the
+    // volume is capped.
+    const status = response.statusCode ?? 502;
+    if (status >= 400 && !String(req.url).startsWith("/plugins/") && proxyFailureLines < 200) {
+      proxyFailureLines++;
+      log(`proxy ${status} ${req.method} ${req.url}`);
+      if (proxyFailureLines === 200) log("proxy: further non-2xx responses this session are not logged");
+    }
   });
   upstream.on("error", (error) => {
     log("proxy upstream error for " + req.url + ": " + String(error));
@@ -366,7 +422,8 @@ function startAppProxy(port) {
       // creation, and VS Code cannot re-fuse it), so a second VS Code window has
       // to use a different one.
       log(`proxy port ${port} is already in use — another VS Code window is already serving DeepSeek Harness there. `
-        + `Close that window, or point the "dsh.port" setting at a free port.`);
+        + `Close that window, or point the "dsh.port" setting at a free port. `
+        + `Until then this window's panel talks to whichever process owns ${port}, which is why every request can fail.`);
     } else {
       log("proxy server error: " + String(error));
     }
@@ -1322,6 +1379,15 @@ async function openView() {
 
 async function activate(context) {
   extensionContext = context;
+  openLogFile(context);
+  // A session header, because the questions that matter in a bug report (which
+  // build, which DSH_HOME, which ports, whether the proxy actually bound) are
+  // not reconstructible from the lines that follow.
+  log(`=== dsh-vscode ${context.extension?.packageJSON?.version ?? "?"} | ${new Date().toISOString()} ===`);
+  log(`extension path: ${context.extensionPath}`);
+  log(`DSH_HOME: ${dshHomeForHost()}`);
+  log(`cwd: ${hostCwd()}`);
+  log(`dsh.port: ${hostPortFor()} | baked plugins: ${String(vscode.workspace.getConfiguration("dsh").get("enableBakedPlugins"))}`);
   // Register the provider with the portMapping baked into the view's own
   // webviewOptions at creation time. This is the level at which VS Code fuses
   // webview.options into a WebviewView; setting it later via view.webview.options
