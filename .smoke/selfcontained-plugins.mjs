@@ -38,7 +38,7 @@ const PROVENANCE = {
   "dsh-memory-evolve": "vendored (csyangwen/dsh-memory-evolve) — not published on npm",
   "@dsh-vscode/p2h-bridge": "local (this repo) — hand-written client bundle, no build step",
   "dsh-client-auto-continue": "npm dsh-client-auto-continue@0.11.5",
-  "@canglongcl/dsh-web-review": "npm @canglongcl/dsh-web-review@0.6.0",
+  "@canglongcl/dsh-web-review": "npm @canglongcl/dsh-web-review@0.6.0 (one local patch: clearing annotations no longer demands a live agent)",
   "@liustack/modlens": "npm @liustack/modlens@3.26.1 (carries its own node_modules/{commander,undici} for the CLI it spawns)",
   "dsh-undo-plugin": "npm dsh-undo-plugin@0.1.0-rc.8 (bundle layer; mounts @dsh-undo/* members, restored from 0.2.53)"
 };

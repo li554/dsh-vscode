@@ -4130,13 +4130,26 @@ function annotationSections(snapshot) {
 */
 function storeAnnotationSnapshot(agents, state, snapshot) {
 	const agent = agents.get(SessionId(snapshot.sessionId));
-	if (agent === void 0) return { kind: "agent-not-found" };
-	const previous = state.get(agent.id);
+	// LOCAL PATCH for dsh-vscode. Clearing is a no-op on the host: the browser has
+	// already dropped its own annotations, and there is nothing pending to
+	// retract. It nevertheless used to fail with 404 "session not found" whenever
+	// the session had no LIVE agent — which is the normal state of a session you
+	// merely reopened to read — and the dock rendered that as
+	// "Could not sync browser comments. Try again." over an operation that had
+	// nothing to do. Only the comments-empty branch is relaxed; every path that
+	// actually has to inject context still requires the agent.
+	//
+	// agent.id is the session id (the platform consistently resolves agents by
+	// session id), so keying the clear by sessionId is the same key the unpatched
+	// code used, and it still works when no agent exists to read it from.
 	if (snapshot.comments.length === 0) {
-		if (previous === void 0) return { kind: "initial-empty" };
-		state.delete(agent.id);
+		const key = agent === void 0 ? SessionId(snapshot.sessionId) : agent.id;
+		if (state.get(key) === void 0) return { kind: "initial-empty" };
+		state.delete(key);
 		return { kind: "cleared" };
 	}
+	if (agent === void 0) return { kind: "agent-not-found" };
+	const previous = state.get(agent.id);
 	const context = formatAnnotationContext(snapshot);
 	if (context.length > 61440) return { kind: "context-too-large" };
 	const sections = annotationSections(snapshot);
