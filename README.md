@@ -38,6 +38,11 @@
 | `dsh.cwd` | 宿主工作目录（即 agent 的工作目录），留空 = 首个工作区文件夹 |
 | `dsh.dshHome` | 覆盖 `DSH_HOME`（配置、会话、插件数据等存放位置），留空 = DSH 默认路径 |
 | `dsh.enableBakedPlugins` | 是否启用内置生态插件（默认 `true`） |
+| `dsh.modlensFamilies` | 让 `@liustack/modlens` 认定为「纯文本、可桥接」的**模型 id 前缀**列表。它自带默认 `deepseek`/`glm`/`mimo`；当你的 provider 用不透明别名（例如某网关把 DeepSeek/GLM 藏在 `code_instuct`、`code_think` 后面）时在这里补上。留空 = 用它内置默认。**改动会自动重启宿主**（插件 config 在装配时读取，必须重开宿主才生效） |
+
+> `dsh.modlensFamilies` 不是写进你的 `<profile>/cordis.patch.yml`，而是由扩展生成一个覆盖层文件 `<DSH_HOME>/.dsh-vscode-profile-patch.yml`，再用 `dsh --patch` 传进去。DSH 的合成顺序是「bundles → `cordis.patch.yml` → 各 `--patch`」，所以覆盖层叠在你自己的补丁之上，**永远不会改写你自己维护的那个文件**。留空则删除该文件、不传 `--patch`。
+>
+> 匹配规则（modlens 内部，大小写不敏感）：先去掉开头的 `~` 别名标记与 `vendor/` 命名空间，再按**前缀**匹配。所以 `deepseek-chat` 命中内置的 `deepseek`，而 `code_think` 什么都匹配不到——除非你把它加进来。**建议显式列出家族而不是写 `*`**：不在具名家族里时它还会额外要求模型目录声明 `text` 输入，而第三方目录通常不给这个元数据，结果 `*` 反而一个都不包。
 
 ## 🔌 内置插件
 
@@ -66,7 +71,7 @@
 - `@dsh-undo/rollback-fork`：上游 `@deepseek-ai/dsh-agent-presets` 在 0.1.1-rc.2 之后删掉了 `resolveSessionPreset` 导出，而 dsh-undo rc.8 正是 `import` 它——**这会让整个宿主启动失败**（cordis 报的是「加载插件失败」，看不出根因在平台）。已把 0.1.1 那个 8 行实现内联回来（0.1.5 仍在产生它依赖的 `agent-preset/selected` 事件与 `header.agentPreset` 字段）。用 `.smoke/platform-api-scan.mjs` 可一次性扫出这类断裂。
 - `dsh-memory-evolve` 的 `dsh.client.inject` 修正（见上表）。
 - **「打开配置文件」内嵌桥接恢复**（`@deepseek-ai/dsh-api-settings-controller`，见 `.smoke/platform-patches/`）：0.1.1 时这个职责在 `dsh-host-apiproxy` 里——`DSH_EMBEDDED=1` 时把设置文档路径打到 stdout（`[dsh-vscode:open-settings] <path>`），由扩展在 VS Code 编辑器里打开，因为**内嵌部署下原生打开器用户根本看不见**。0.1.5 删掉了 `dsh-host-apiproxy`，设置职责搬到 `dsh-api-settings-controller`，而那里的 `openSettingsDocument` **无条件**调用 `openTextFile`：环境变量判断和哨兵都没了，也没有 `openAgentPresetDirectory` 那样的「返回路径」分支。0.1.5 全平台**不再读取 `DSH_EMBEDDED`**（仅剩 `DSH_AGENTS_HOME`、`DSH_BUNDLED_SKILL_DIR`、`DSH_TELEMETRY_DISABLED`、`DSH_WEB_FETCH_PROVIDER`、`DSH_WEB_SEARCH_PROVIDER`），没有官方接缝可用——于是面板里点「打开配置文件」**毫无反应**。已在接手同一职责的 handler 里恢复该分支，并保留 `internals.openTextFile` 接缝（`.smoke/embedded-open-settings-test.mjs` 用桩驱动真实 controller，验证开/不开 `DSH_EMBEDDED` 两种路径）。
-- **会话格式迁移的插件兼容层**（`@deepseek-ai/dsh-session-format-v0-to-v1`，见 `.smoke/platform-patches/`）：0.1.5 引入了会话格式版本化，v0→v1 迁移对「已发布 v0 规格」之外的内容**一律拒绝**，且一个事件不合格就让整个会话无法读取。而**第三方插件当年往 v0 会话里写了不少规格外内容**，于是升级后旧历史打不开。已加入四类容错（各自只记录一次日志，原始 v0 文件永不修改）：丢掉内容块上的插件注解（`dsh-file-review` 的 `dshFileReview`）、丢掉插件 source 上的多余成员（`dsh-web-review` 的 `snapshotId`）、丢掉非 `notice` 形式下多余的 `summary`（`dsh-mnemon`）、把 `subagent/descriptor` 的 version 2 提升为 3（`sidechat` 插件）。实测某份 30 会话的真实历史：修复前 **21 个会话、1251 个事件被拒**，修复后 **0**。
+- **会话格式迁移的插件兼容层**（`@deepseek-ai/dsh-session-format-v0-to-v1`，见 `.smoke/platform-patches/`）：0.1.5 引入了会话格式版本化，v0→v1 迁移对「已发布 v0 规格」之外的内容**一律拒绝**，且一个事件不合格就让整个会话无法读取。而**第三方插件当年往 v0 会话里写了不少规格外内容**，于是升级后旧历史打不开。已加入四类容错（各自只记录一次日志，原始 v0 文件永不修改）：丢掉内容块上的插件注解（`dsh-file-review` 的 `dshFileReview`）、丢掉插件 source 上的多余成员（`dsh-web-review` 的 `snapshotId`）、丢掉非 `notice` 形式下多余的 `summary`（`dsh-mnemon`）、把 `subagent/descriptor` 的 version 2 提升为 3（`sidechat` 插件）。实测某份 30 会话的真实历史：修复前 **21 个会话、1251 个事件被拒**，修复后 **0**。容错时会打印形如 `[dsh-session-format-v0-to-v1] note: tolerated plugin-authored v0 data: dropped member "dshFileReview"` 的提示——**这是通报不是报错**（会话照常加载，只是丢弃了某个插件加进去的字段），每种形状只打一次，且走 stdout 所以不会显示成 `[host-err]`。
 - **升级残留自动清理**（`pruneRetiredArtifacts`，每次启动宿主前运行）：反复升级的 `DSH_HOME` 会积累三类没人清理的残留。
   1. **失效的模块回退链接**：`<home>/profiles/node_modules` 是大量指向「当前扩展 vendor 树」的 junction，而 DSH 自己的修复**只遍历当前版本依赖闭包里的包**——被新平台移出闭包的包会一直保留旧版本留下的链接，等那个旧扩展被卸载后就变成**悬空链接**。实测某台机器上有 **17 条**悬空链接（全部指向已卸载的 `0.2.53`），包括 `dsh-client-runtime`、`dsh-host-apiproxy` 这些 0.1.5 已删除的平台包，以及 `react`/`react-dom`/`zustand`/`immer`/`clsx` 一族。删除后 DSH 会用**正在运行的**那份安装重新建立它们。
      > 规则刻意收得很窄：**只删目标已不存在的链接**。仍能解析的链接即使指向另一个扩展版本或全局 npm 安装，也**保留**——因为这些包（`katex`、`shiki` 等）根本不在 0.1.5 的 vendor 闭包里，链接可能是唯一副本，删掉是倒退而不是清理。这类链接只在日志里提示一次。
@@ -115,6 +120,7 @@ python .smoke/pack.py
 | `.smoke/platform-patches.py` | `verify` / `apply` 保存在 `.smoke/platform-patches/` 的 vendor 平台补丁。**`vendor/` 整体重建后必须跑 `apply`**；`pack.py` 会在打包前自动 verify，补丁缺失直接拒绝打包 |
 | `.smoke/boot-test.mjs` | 起真实宿主 + 临时 `DSH_HOME`，移植 `plugins/bundled`，断言首页与每个 **web 客户端**条目的带 revision 插件 URL 都返回 200、且在前端模块图里有对应行 |
 | `.smoke/extension-proxy-test.cjs` | 用 stub 的 `vscode` 模块加载真实 `src/extension.js`，跑 `activate()` 起宿主与鉴权中转代理，然后**不带 Cookie** 去探测代理端口：首页须 200、未知 `/api` 通道不得是 401/403、`ws://…/api/remote.mux` 须返回 101 |
+| `.smoke/profile-overlay-test.mjs` | 验证 `dsh.modlensFamilies` → `--patch` 覆盖层这条链路：驱动真实 `activate()` 断言覆盖层已生成且 YAML 转义正确（含 `:` 和引号这类值）、**你自己的 `cordis.patch.yml` 未被改写**，并用 `dsh --dump-config` 证明 DSH 真的把它合成到了 modlens 行上 |
 | `.smoke/embedded-open-settings-test.mjs` | 用桩驱动真实的 `SettingsController`，验证「打开配置文件」在 `DSH_EMBEDDED=1` 时输出扩展哨兵且**不**调用原生打开器，未设置时走原生路径 |
 | `.smoke/legacy-cleanup-test.cjs` | 用合成 `DSH_HOME` 复现每一类升级残留（悬空/跨版本/全局 npm 链接、失效 profile 依赖、空 scope 目录、`*.pnpm-old`、`.ignored_*`、`.bak-*`、退役插件状态），跑真实 `activate()` 后断言残留已清、**且会话/记忆/配置/在用插件状态逐字节未变**、退役状态可在隔离目录找回 |
 | `.smoke/selfcontained-plugins.mjs` | 校验 `plugins/bundled` 与 `BUNDLED_PLUGINS` 一致：每个条目要么被声明、要么被某个条目的 cordis patch 认领；并拒绝任何仍注入已被删除的 `dsh-client-runtime` 的包 |

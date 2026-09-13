@@ -46,7 +46,8 @@ const vscodeStub = {
   workspace: {
     workspaceFolders: [{ uri: { fsPath: ROOT } }],
     getConfiguration: (section) => ({ get: (key) => (section === "dsh" ? settings[key] : undefined) }),
-    openTextDocument: () => Promise.resolve({})
+    openTextDocument: () => Promise.resolve({}),
+    onDidChangeConfiguration: () => disposable
   },
   commands: { registerCommand: () => disposable, executeCommand: () => Promise.resolve() },
   env: { openExternal: () => Promise.resolve(true) },

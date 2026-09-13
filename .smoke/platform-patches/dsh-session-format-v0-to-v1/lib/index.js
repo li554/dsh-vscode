@@ -313,7 +313,11 @@ const reportedPluginTolerances = /* @__PURE__ */ new Set();
 function reportPluginTolerance(what, label) {
 	if (reportedPluginTolerances.has(what)) return;
 	reportedPluginTolerances.add(what);
-	console.warn(`[dsh-session-format-v0-to-v1] tolerated plugin-authored v0 data: ${what} (first seen on ${label})`);
+	// console.log, deliberately not console.warn: stderr is surfaced by the
+	// embedding shell as an ERROR line, and these are informational — the
+	// session loaded fine, the migration simply dropped data a plugin had added.
+	// One line per distinct shape, never per event.
+	console.log(`[dsh-session-format-v0-to-v1] note: tolerated plugin-authored v0 data: ${what} (first seen on ${label})`);
 }
 /**
  * Drop members outside `allowed`, reporting each dropped name once.

@@ -2,7 +2,7 @@
   "name": "dsh-vscode",
   "displayName": "DeepSeek Harness (DSH) for VS Code",
   "description": "Runs the DeepSeek Harness web surface inside VS Code. All host dependencies are bundled into the extension — users need no Node.js, npm, pnpm, or Python.",
-  "version": "0.3.0-explore.7",
+  "version": "0.3.0-explore.8",
   "publisher": "your-publisher-id",
   "license": "MIT",
   "repository": {
@@ -72,7 +72,15 @@
         "dsh.enableBakedPlugins": {
           "type": "boolean",
           "default": true,
-          "description": "Mount the ecosystem plugins baked into this extension (UI/tool plugins, recall, task board, memory) into the web profile."
+          "description": "Mount the ecosystem plugins baked into this extension into the web profile."
+        },
+        "dsh.modlensFamilies": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Model-id prefixes that `@liustack/modlens` should trust as text-only and bridge with a `(modlens vision)` entry, so a text-only model gets sight.\n\nmodlens' own default is `deepseek`, `glm`, `mimo`, matched as a case-insensitive **prefix** of the model id (after stripping a leading `~` and any `vendor/` namespace). List extra prefixes here when your provider routes use opaque aliases — for example `code_instuct`, `code_think` on a gateway that hides DeepSeek/GLM behind them.\n\nLeave empty to keep modlens' built-in default. Prefer naming the families explicitly over `*`: a bare `*` additionally requires the model catalog to declare `text` input, which third-party catalogs usually do not.\n\nChanging this value restarts the DSH host."
         }
       }
     },
