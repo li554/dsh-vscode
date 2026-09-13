@@ -5378,6 +5378,13 @@ window.__ModuleLoader__.load({
 					} : { status: "idle" });
 				}, () => {
 					if (revision.current !== currentRevision) return;
+					// LOCAL PATCH: empty drafts must not stick the dock on an error —
+					// clearing has nothing to inject even if the host was unreachable.
+					if (clearing) {
+						hadAnnotations.current = false;
+						actions.setAnnotationSync({ status: "idle" });
+						return;
+					}
 					actions.setAnnotationSync({
 						status: "error",
 						message: tRef.current("dock.sync.error")
@@ -5623,13 +5630,30 @@ window.__ModuleLoader__.load({
 				if (body === lastScheduledBody && lastScheduledTask !== void 0) return lastScheduledTask;
 				const task = tail.catch(() => void 0).then(async () => {
 					if (body === lastAcknowledged?.body) return lastAcknowledged.receipt;
-					const response = await fetch("/webview-annotations", {
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body
-					});
+					// LOCAL PATCH for dsh-vscode. Clearing is a host no-op: the browser
+					// has already dropped its picks, and pending snapshots live in the
+					// host process (gone across restarts). Upstream only tolerated 404;
+					// a dead/restarting host surfaces as a network error or 502, which
+					// stuck the dock on "正在清除注释 / 同步失败". Treat any clear
+					// failure as success so an empty draft never renders as an error.
+					let response;
+					try {
+						response = await fetch("/webview-annotations", {
+							method: "POST",
+							headers: { "Content-Type": "application/json" },
+							body
+						});
+					} catch (error) {
+						if (!clearing) throw error instanceof Error ? error : new Error(String(error));
+						const receipt = { kind: "empty" };
+						lastAcknowledged = {
+							body,
+							receipt
+						};
+						return receipt;
+					}
 					if (!response.ok) {
-						if (!(clearing && response.status === 404)) throw new Error(`annotation context sync failed (${response.status})`);
+						if (!clearing) throw new Error(`annotation context sync failed (${response.status})`);
 						const receipt = { kind: "empty" };
 						lastAcknowledged = {
 							body,
@@ -5638,7 +5662,15 @@ window.__ModuleLoader__.load({
 						return receipt;
 					}
 					const receipt = annotationSyncReceiptOf(await response.json());
-					if (receipt === void 0) throw new Error("annotation context sync returned an invalid receipt");
+					if (receipt === void 0) {
+						if (!clearing) throw new Error("annotation context sync returned an invalid receipt");
+						const emptyReceipt = { kind: "empty" };
+						lastAcknowledged = {
+							body,
+							receipt: emptyReceipt
+						};
+						return emptyReceipt;
+					}
 					lastAcknowledged = {
 						body,
 						receipt

@@ -27,7 +27,7 @@
  * bundled into the .vsix at build time (vendor/node_modules).
  */
 const vscode = require("vscode");
-const { fork } = require("node:child_process");
+const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
@@ -71,6 +71,8 @@ let appServer = null;
 /** @type {Promise<number> | null} */
 let readyPromise = null;
 let shutdownRequested = false;
+/** Cooldown so a crashing host cannot tight-loop restarts. */
+let lastHostExitAt = 0;
 let output = null;
 /** @type {vscode.ExtensionContext | null} */
 let extensionContext = null;
@@ -291,6 +293,18 @@ function exchangeToken(port, authority, token) {
  * @param {boolean} retrying - true on the single post-401 retry.
  */
 function forwardToHost(req, res, retrying) {
+  // LOCAL PATCH: after an unexpected host exit hostPort is cleared. Dialing 0
+  // only produced opaque ECONNREFUSED noise; answer 502 so the UI can show a
+  // real "host request failed" while recoverHostAfterExit boots a replacement.
+  if (!(hostPort > 0)) {
+    if (proxyFailureLines < 200) {
+      proxyFailureLines++;
+      log(`proxy 502 ${req.method} ${req.url} (host down)`);
+    }
+    if (!res.headersSent) res.writeHead(502, { "content-type": "text/plain; charset=utf-8" });
+    res.end("dsh-vscode: host is not running\n");
+    return;
+  }
   const headers = {};
   for (const [key, value] of Object.entries(req.headers)) {
     if (STRIPPED_REQUEST_HEADERS.has(key)) continue;
@@ -355,6 +369,12 @@ function forwardToHost(req, res, retrying) {
  * @param {Buffer} head - bytes already read past the request head.
  */
 function forwardUpgrade(req, socket, head) {
+  if (!(hostPort > 0)) {
+    log("proxy websocket upgrade refused: host is not running for " + req.url);
+    socket.write(rawResponseHead(502, "Bad Gateway", { connection: "close" }));
+    try { socket.destroy(); } catch { /* already gone */ }
+    return;
+  }
   const headers = {};
   for (const [key, value] of Object.entries(req.headers)) {
     if (STRIPPED_UPGRADE_HEADERS.has(key)) continue;
@@ -467,8 +487,8 @@ const BUNDLED_PLUGINS = [
   "@dsh-vscode/p2h-bridge",
   "@liustack/modlens",
   "dsh-client-auto-continue",
-  "dsh-memory-evolve",
-  "dsh-undo-plugin"
+  "dsh-undo-plugin",
+  "dsh-mnemon"
 ];
 /** Plugins that older vsix releases bundled but this build does not. A DSH_HOME
  * that previously ran with them enabled still carries their names in the profile
@@ -483,10 +503,14 @@ const RETIRED_PLUGINS = [
   // retired upstream in earlier 0.2.x releases
   "@linxin666/dsh-remote-web-ui",
   "dsh-easyrewrite",
-  "dsh-mnemon",
+  // NOTE: dsh-mnemon was retired in 0.2.x and is shipped again in explore.21+;
+  // it must NOT stay in RETIRED_PLUGINS (that would prune the live bundle).
   "@dsh-external/dsh-diff-review",
   "dsh-recall-plugin",
   "@anionex/dsh-turn-rewind",
+  // 大肥鱼滑块 / reasoning-effort UI — older builds baked it; not in the 0.1.5+
+  // exploration set. Leftover profile bundles + node_modules kept the settings UI alive.
+  "dsh-reasoning-effort",
   // dropped by the 0.1.5 exploration build (only four plugins are kept)
   "@linxin666/dsh-chat-recovery",
   "@linxin666/dsh-client-ui-aionui-panel",
@@ -510,7 +534,11 @@ const RETIRED_PLUGINS = [
   "dsh-file-review",
   "dsh-free-search",
   "dsh-miraculous-standard",
-  "dsh-zh-kit"
+  "dsh-zh-kit",
+  // retired by dsh-vscode explore.17: advisor 400-storm on session switch + host deaths
+  "dsh-memory-evolve",
+  // retired by dsh-vscode explore.20: broke chat composer / command list in the panel
+  "graph-memory"
 ];
 /** Platform web profile bundles. They must ALWAYS precede the baked plugins:
  * they provide webServer (and the other services every UI bundle waits on).
@@ -1036,21 +1064,32 @@ function startHost(requestedPort = 0) {
       // chooser opens. The DSH web host only ever reads SSH_CONNECTION for (a)
       // this picker resolution and (b) disabling auto browser-open, which is
       // already a no-op here because we always pass --no-open.
-      SSH_CONNECTION: "127.0.0.1 1 127.0.0.1 1"
+      SSH_CONNECTION: "127.0.0.1 1 127.0.0.1 1",
+      // Offline bundle: point Mnemon Native at the platform binary shipped in
+      // the vsix so the host never needs PATH or a global npm install.
+      MNEMON_CLI_PATH: path.join(__dirname, "..", "plugins", "bundled", "@mnemon-dev", "mnemon-win32-x64", "bin", "mnemon.exe")
     };
 
     log(`spawning dsh host: ${hostModulePath()} ${args.join(" ")}`);
     // --expose-internals matches the upstream desktop launcher: the web
     // profile's HMR loader entry requires it (cordis-plugin-hmr checks
     // loader.internal, which only exists with this flag).
-    const child = fork(hostModulePath(), args, {
+    //
+    // LOCAL PATCH for dsh-vscode. Use spawn (not fork) so the host is not a
+    // Node IPC child of the extension host. fork() requires an IPC channel;
+    // on Windows that channel/job teardown when a webview view is disposed
+    // (tab switch without retainContextWhenHidden) can SIGTERM the host.
+    // detached:true puts the host in its own process group so it survives
+    // view dispose; deactivate still taskkill's the tree.
+    const child = spawn(process.execPath, ["--expose-internals", hostModulePath(), ...args], {
       cwd: hostCwd(),
       env,
-      execArgv: ["--expose-internals"],
-      stdio: ["ignore", "pipe", "pipe", "ipc"]
+      stdio: ["ignore", "pipe", "pipe"],
+      detached: process.platform === "win32",
+      windowsHide: true
     });
     host = child;
-    log("host child pid " + child.pid + ", cwd " + hostCwd() + ", DSH_HOME " + env.DSH_HOME);
+    log("host child pid " + child.pid + ", cwd " + hostCwd() + ", DSH_HOME " + env.DSH_HOME + (process.platform === "win32" ? " (spawn detached)" : " (spawn)"));
 
     let settled = false;
     const settle = (fn, value) => { if (!settled) { settled = true; fn(value); } };
@@ -1111,8 +1150,9 @@ function startHost(requestedPort = 0) {
       settle(reject, err);
     });
     child.on("exit", (code, signal) => {
-      log(`host exited code=${code} signal=${signal}`);
-      if (host === child) host = null;
+      log(`host exited code=${code} signal=${signal} wasCurrent=${String(host === child)} shutdownRequested=${String(shutdownRequested)} view=${String(currentView !== null)}`);
+      const wasCurrent = host === child;
+      if (wasCurrent) host = null;
       readyPromise = null;
       // The launch token and its cookie are minted per host process; keeping
       // either would make the proxy present a credential the replacement host
@@ -1120,12 +1160,69 @@ function startHost(requestedPort = 0) {
       hostToken = "";
       hostCookie = "";
       appAuthority = "";
+      // Drop the dead upstream so the proxy stops dialing a closed port and
+      // answers 502 immediately until a replacement host is ready.
+      if (wasCurrent) hostPort = 0;
       settle(reject, new Error(`dsh host exited (code ${code})`));
-      if (!shutdownRequested && currentView) {
-        currentView.webview.html = errorHtml(`The DeepSeek Harness host stopped (exit code ${code}).`, recentLog);
-      }
+      // LOCAL PATCH for dsh-vscode. Rewriting webview.html on an already-rendered
+      // view does not repaint (see resolveWebviewView), so the old iframe used to
+      // stay up and every panel fetch failed with "Failed to fetch" after the
+      // host was SIGTERM'd (window reload / extension-host recycle / restart).
+      // Auto-recover like restartHost: boot a replacement and bounce the shell.
+      if (wasCurrent && !shutdownRequested) void recoverHostAfterExit();
     });
   });
+}
+
+/**
+ * After an unexpected host exit, start a fresh host and point the live shell at
+ * it. Throttled so a crash loop cannot spam spawns. If the view is gone, still
+ * warm-start so the next open is instant.
+ */
+async function recoverHostAfterExit() {
+  if (host && hostPort > 0) return;
+  if (readyPromise) return;
+  const now = Date.now();
+  if (now - lastHostExitAt < 3000) {
+    log("host exit ignored for restart (cooldown)");
+    return;
+  }
+  lastHostExitAt = now;
+  log("host exited unexpectedly — restarting");
+  const view = currentView;
+  if (view) view.badge = { tooltip: "Host stopped — restarting…", value: 1 };
+  try {
+    const port = await withTimeout(ensureHost(), 90e3, "DSH host restart after exit");
+    log("recover: host ready on " + port);
+    if (currentView === view && view) {
+      view.badge = undefined;
+      try { view.webview.postMessage({ command: "reload", url: appUrl(hostPortFor()) }); } catch { /* best effort */ }
+    }
+  } catch (err) {
+    log("recover failed: " + String(err && err.message ? err.message : err));
+    if (currentView === view && view) {
+      view.badge = undefined;
+      // Last resort only: html swap may not paint, but the user still gets logs.
+      try { view.webview.html = errorHtml("The DeepSeek Harness host stopped and could not be restarted.", recentLog); } catch { /* best effort */ }
+    }
+  }
+}
+
+/**
+ * Kill one host child. On Windows a detached child is its own process group;
+ * child.kill() alone can leave grandchildren. Prefer taskkill /T.
+ * @param {import("node:child_process").ChildProcess} child
+ */
+function killHostChild(child) {
+  if (!child?.pid) return;
+  if (process.platform === "win32") {
+    try {
+      const { spawn } = require("node:child_process");
+      spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
+      return;
+    } catch { /* fall through to kill() */ }
+  }
+  try { child.kill(); } catch { /* already gone */ }
 }
 
 /** Idempotent: return the live host port, starting the host if needed. */
@@ -1321,6 +1418,7 @@ const provider = {
       if (msg.command === "logs") { if (output) output.show(); }
     });
     view.onDidDispose(() => {
+      log("webview view disposed (host pid " + String(host?.pid ?? "none") + " stays up unless deactivate)");
       if (currentView === view) currentView = null;
     });
   }
@@ -1347,7 +1445,18 @@ async function restartHost() {
   hostCookie = "";
   appAuthority = "";
   readyPromise = null;
-  if (old) { try { old.kill(); } catch { /* already gone */ } }
+  const exited = old
+    ? new Promise((resolve) => {
+      const timer = setTimeout(resolve, 2000);
+      if (typeof timer.unref === "function") timer.unref();
+      old.once("exit", () => { clearTimeout(timer); resolve(); });
+    })
+    : Promise.resolve();
+  if (old) killHostChild(old);
+  // LOCAL PATCH: wait for the child's exit event before clearing the flag.
+  // Clearing immediately raced recoverHostAfterExit() (exit is async), which
+  // could spawn a second host while restartHost was also calling ensureHost().
+  await exited;
   shutdownRequested = false;
 
   const view = currentView;
@@ -1437,6 +1546,7 @@ async function activate(context) {
 }
 
 async function deactivate() {
+  log("deactivate: shutting down host pid " + String(host?.pid ?? "none"));
   shutdownRequested = true;
   stopAppProxy();
   const child = host;
@@ -1453,7 +1563,7 @@ async function deactivate() {
     const timer = setTimeout(finish, 2000);
     if (typeof timer.unref === "function") timer.unref();
     child.once("exit", finish);
-    try { child.kill(); } catch { finish(); }
+    killHostChild(child);
   });
 }
 

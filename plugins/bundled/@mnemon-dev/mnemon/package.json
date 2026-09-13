@@ -1,0 +1,48 @@
+{
+  "name": "@mnemon-dev/mnemon",
+  "version": "0.2.8",
+  "description": "Persistent memory and durable agency for LLM agents",
+  "type": "module",
+  "bin": {
+    "mnemon": "bin/mnemon.js"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "targets.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "mnemon",
+    "agent-memory",
+    "llm",
+    "cli"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mnemon-dev/mnemon.git"
+  },
+  "homepage": "https://github.com/mnemon-dev/mnemon",
+  "bugs": {
+    "url": "https://github.com/mnemon-dev/mnemon/issues"
+  },
+  "license": "Apache-2.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "optionalDependencies": {
+    "@mnemon-dev/mnemon-darwin-x64": "npm:@mnemon-dev/mnemon@0.2.8-darwin-x64",
+    "@mnemon-dev/mnemon-darwin-arm64": "npm:@mnemon-dev/mnemon@0.2.8-darwin-arm64",
+    "@mnemon-dev/mnemon-linux-x64": "npm:@mnemon-dev/mnemon@0.2.8-linux-x64",
+    "@mnemon-dev/mnemon-linux-arm64": "npm:@mnemon-dev/mnemon@0.2.8-linux-arm64",
+    "@mnemon-dev/mnemon-win32-x64": "npm:@mnemon-dev/mnemon@0.2.8-win32-x64",
+    "@mnemon-dev/mnemon-win32-arm64": "npm:@mnemon-dev/mnemon@0.2.8-win32-arm64"
+  }
+}

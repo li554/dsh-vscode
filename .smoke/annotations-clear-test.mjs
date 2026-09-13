@@ -1,17 +1,17 @@
-// Regression test for the local dsh-web-review patch: clearing annotations must
-// not fail just because the session has no live agent.
+// Regression test for the local dsh-web-review patch: annotation drafts are
+// keyed by sessionId and do NOT require a live agent to accept.
 //
-// The dock syncs its annotation draft with POST /webview-annotations. Its clear
-// path sends `comments: []`, and the handler answered 404 "session not found"
-// whenever `agents.get(sessionId)` found nothing — the ordinary state of a
-// session you merely reopened — which the dock rendered as
-// "Could not sync browser comments. Try again." over an operation that had
-// nothing to do. The patch relaxes ONLY that branch.
+// The dock syncs its annotation draft with POST /webview-annotations. Upstream
+// answered 404 "session not found" whenever `agents.get(sessionId)` found
+// nothing — the ordinary state of a session you merely reopened — which the
+// dock rendered as "Could not sync browser comments. Try again." for both
+// clearing (a host no-op) and non-empty drafts (pending until the next
+// admitted human prompt). Pending now lives under sessionId and is injected
+// on agent/pre-step once an agent is back.
 //
 // This drives the real host through the extension's proxy (the path the webview
-// uses), and checks both halves: the empty case now succeeds, and a NON-empty
-// draft for an unknown session still refuses with 404 — so the agent requirement
-// was relaxed for a no-op, not removed.
+// uses): empty and non-empty drafts both succeed without a live agent; the
+// proxy is transparent (same status direct and proxied).
 //
 // Usage: node .smoke/annotations-clear-test.mjs
 import fs from "node:fs";
@@ -71,7 +71,7 @@ async function post(base, body, cookie) {
   return { status: res.status, text, parsed };
 }
 
-/** One comment that satisfies every parser, so the request reaches the agent lookup. */
+/** One comment that satisfies every parser, so the request reaches the store. */
 const validComment = {
   id: "probe-1",
   comment: "make this blue",
@@ -123,7 +123,7 @@ const draft = (comments) => ({
   check("host reachable and authenticated", cookie.length > 0);
   console.log(`host 127.0.0.1:${hostPort}, proxy 127.0.0.1:${PROXY_PORT}`);
 
-  console.log("\nclearing (comments: []) — the patched branch");
+  console.log("\nclearing (comments: []) — no live agent required");
   const clearDirect = await post(host, draft([]), cookie);
   const clearProxied = await post(`http://127.0.0.1:${PROXY_PORT}`, draft([]), null);
   check("direct: reported success, not an error", clearDirect.status === 200, `${clearDirect.status} ${clearDirect.text.slice(0, 80)}`);
@@ -131,12 +131,18 @@ const draft = (comments) => ({
   check("through the proxy: same result", clearProxied.status === 200, `${clearProxied.status} ${clearProxied.text.slice(0, 80)}`);
   check("through the proxy: same receipt", clearProxied.parsed?.kind === "empty", JSON.stringify(clearProxied.parsed));
 
-  console.log("\na NON-empty draft for an unknown session — the agent requirement must survive");
+  console.log("\nNON-empty draft without a live agent — stored under sessionId");
   const sendDirect = await post(host, draft([validComment]), cookie);
   const sendProxied = await post(`http://127.0.0.1:${PROXY_PORT}`, draft([validComment]), null);
-  check("direct: still refuses without a live agent", sendDirect.status === 404, `${sendDirect.status} ${sendDirect.text.slice(0, 80)}`);
-  check("direct: refusal names the session", sendDirect.text.includes("session not found"), sendDirect.text.slice(0, 60));
-  check("through the proxy: same refusal", sendProxied.status === 404, `${sendProxied.status} ${sendProxied.text.slice(0, 80)}`);
+  check("direct: accepted without a live agent", sendDirect.status === 200, `${sendDirect.status} ${sendDirect.text.slice(0, 80)}`);
+  check("direct: receipt is ready with a snapshotId", sendDirect.parsed?.kind === "ready" && typeof sendDirect.parsed?.snapshotId === "string", JSON.stringify(sendDirect.parsed));
+  check("through the proxy: same acceptance", sendProxied.status === 200, `${sendProxied.status} ${sendProxied.text.slice(0, 80)}`);
+  check("through the proxy: same ready receipt shape", sendProxied.parsed?.kind === "ready" && typeof sendProxied.parsed?.snapshotId === "string", JSON.stringify(sendProxied.parsed));
+
+  console.log("\nclear after a non-empty draft — drops the pending snapshot");
+  const clearAfter = await post(host, draft([]), cookie);
+  check("clear after draft reports success", clearAfter.status === 200, `${clearAfter.status} ${clearAfter.text.slice(0, 80)}`);
+  check("clear after draft is the empty kind", clearAfter.parsed?.kind === "empty", JSON.stringify(clearAfter.parsed));
 
   console.log("\nthe proxy is transparent (same status direct and proxied)");
   check("clear path parity", clearDirect.status === clearProxied.status);

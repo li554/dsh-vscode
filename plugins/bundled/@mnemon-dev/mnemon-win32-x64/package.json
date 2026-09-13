@@ -1,0 +1,25 @@
+{
+  "name": "@mnemon-dev/mnemon",
+  "version": "0.2.8-win32-x64",
+  "description": "Mnemon native binary for win32/x64",
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "files": [
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mnemon-dev/mnemon.git"
+  },
+  "homepage": "https://github.com/mnemon-dev/mnemon",
+  "license": "Apache-2.0",
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -4125,31 +4125,23 @@ function annotationSections(snapshot) {
 /**
 * Store a validated full snapshot for the next admitted human prompt.
 *
-* The agent lookup happens before empty/dedupe handling so the HTTP route is
-* never usable as an unverified session-state oracle.
+* LOCAL PATCH for dsh-vscode. Pending annotations are keyed by sessionId (the
+* platform resolves agents as agents.get(sessionId), and agent.id === sessionId).
+* A live agent is NOT required to accept a draft: reopened history sessions are
+* the normal state of "just reading", and the dock used to fail with 404
+* "session not found" / "Could not sync browser comments. Try again." whenever
+* the session had no live agent. Clearing is a no-op on the host; non-empty
+* drafts stay pending until the next admitted human prompt on that sessionId
+* (agent/pre-step) injects them. Injection still needs an agent at send time.
 */
-function storeAnnotationSnapshot(agents, state, snapshot) {
-	const agent = agents.get(SessionId(snapshot.sessionId));
-	// LOCAL PATCH for dsh-vscode. Clearing is a no-op on the host: the browser has
-	// already dropped its own annotations, and there is nothing pending to
-	// retract. It nevertheless used to fail with 404 "session not found" whenever
-	// the session had no LIVE agent — which is the normal state of a session you
-	// merely reopened to read — and the dock rendered that as
-	// "Could not sync browser comments. Try again." over an operation that had
-	// nothing to do. Only the comments-empty branch is relaxed; every path that
-	// actually has to inject context still requires the agent.
-	//
-	// agent.id is the session id (the platform consistently resolves agents by
-	// session id), so keying the clear by sessionId is the same key the unpatched
-	// code used, and it still works when no agent exists to read it from.
+function storeAnnotationSnapshot(state, snapshot) {
+	const key = SessionId(snapshot.sessionId);
 	if (snapshot.comments.length === 0) {
-		const key = agent === void 0 ? SessionId(snapshot.sessionId) : agent.id;
 		if (state.get(key) === void 0) return { kind: "initial-empty" };
 		state.delete(key);
 		return { kind: "cleared" };
 	}
-	if (agent === void 0) return { kind: "agent-not-found" };
-	const previous = state.get(agent.id);
+	const previous = state.get(key);
 	const context = formatAnnotationContext(snapshot);
 	if (context.length > 61440) return { kind: "context-too-large" };
 	const sections = annotationSections(snapshot);
@@ -4164,7 +4156,7 @@ function storeAnnotationSnapshot(agents, state, snapshot) {
 		presentation: browserCommentsPresentationOf(snapshot),
 		selectedSkills: [...snapshot.selectedSkills]
 	};
-	state.set(agent.id, pending);
+	state.set(key, pending);
 	return {
 		kind: "pending",
 		pending
@@ -4304,10 +4296,6 @@ function acknowledgeAnnotationEvent(state, sessionId, event) {
 	const text = event.data.content.length === 1 && event.data.content[0]?.type === "text" ? event.data.content[0].text : void 0;
 	const current = state.get(sessionId);
 	if (text !== void 0 && current?.snapshotId === snapshotId && current.context === text) state.delete(sessionId);
-}
-/** Release dedupe state when the exact live agent leaves the registry. */
-function forgetAgent(state, agent) {
-	state.delete(agent.id);
 }
 /** Read a request body up to `maxBytes`; reject beyond the cap. */
 async function readRequestBody(req, maxBytes) {
@@ -12646,12 +12634,12 @@ async function apply(ctx, config) {
 		path: ANNOTATIONS_PREFIX,
 		handler: annotationsHandler(ctx, annotations)
 	}), "dsh-web-review: /webview-annotations route");
+	// Pending is keyed by sessionId and survives agent dispose: a draft stored
+	// while the session had no live agent is injected on the next admitted
+	// human prompt once an agent is back (agent.id === sessionId).
 	ctx.on("agent/pre-step", ({ agent, messages, signal }, next) => attachPendingAnnotationContext(annotations, agent, ctx.skills, signal, messages, next));
 	ctx.on("session/event", (session, event) => {
 		acknowledgeAnnotationEvent(annotations, session.id, event);
-	});
-	ctx.on("agent/disposed", ({ agent }) => {
-		forgetAgent(annotations, agent);
 	});
 }
 async function readBridgeSource() {
@@ -12785,16 +12773,11 @@ function annotationsHandler(ctx, state) {
 		}
 		let result;
 		try {
-			result = storeAnnotationSnapshot(ctx.agents, state, parsed);
+			result = storeAnnotationSnapshot(state, parsed);
 		} catch (error) {
 			ctx.logger.warn(`annotation injection failed for session "${parsed.sessionId}": ${String(error)}`);
 			res.writeHead(409);
 			res.end("agent unavailable");
-			return;
-		}
-		if (result.kind === "agent-not-found") {
-			res.writeHead(404);
-			res.end("session not found");
 			return;
 		}
 		if (result.kind === "context-too-large") {

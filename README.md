@@ -52,12 +52,12 @@
 
 | 插件 | 来源 | 说明 / 本地改动 |
 | --- | --- | --- |
-| `dsh-memory-evolve` | [csyangwen/dsh-memory-evolve](https://github.com/csyangwen/dsh-memory-evolve) | 分层记忆（全局/用户/项目/GIT 分支/每日）+ 自我进化 + 技能/待办管理，带 WebUI。精简打包为 `lib` + `vendor`；`dsh.client.inject` 已由已消失的 `dsh-client-runtime` 改为 `dsh-client-ui-slots` + `dsh-client-ui-primitives` |
 | `dsh-client-auto-continue` | [HsiangNianian/dsh-auto-continue](https://github.com/HsiangNianian/dsh-auto-continue) | 请求被网络错误等非人为原因中断时自动续写（升到 0.11.5） |
-| `@canglongcl/dsh-web-review` | canglongcl | 页面预览 + 元素框选批注 + 视觉调整（升到 0.6.0；0.6.0 起它自己也已改用官方 slot，不再依赖 better-sidebar）。有一处本地修补：「清除注释」不再要求会话有活跃 agent，见下 |
+| `@canglongcl/dsh-web-review` | canglongcl | 页面预览 + 元素框选批注 + 视觉调整（升到 0.6.0；0.6.0 起它自己也已改用官方 slot，不再依赖 better-sidebar）。有一处本地修补：批注草稿按 sessionId 存，不要求会话有活跃 agent，见下 |
 | `dsh-undo-plugin` + `@dsh-undo/*`（7 个成员包） | [23swccp/dsh-undo](https://github.com/23swccp/dsh-undo) | 对话回退/撤销：`/undo` 命令、消息行与头部回退按钮、回退时 fork 到新会话（模型不会看到被撤销的提示）、设置页「归档任务」管理器、影子 Git 文件恢复（绝不碰项目自身的 `.git`）。`rollback-fork` 有一处针对 0.1.5 的本地修补，见下 |
 | `@dsh-vscode/p2h-bridge` | 本仓库自研 | PPT↔HTML 桥：`slides_import`/`slides_export` 宿主工具、`/html-slides` 静态预览路由、以及对话区的「PPT」标签页（导入 / 内联预览 / 导出 / 上传管理）。设计文档见 `docs/superpowers/specs/2026-08-29-dsh-ppt-html-review-workflow-design.md` |
 | `@liustack/modlens` | [liustack/modlens](https://github.com/liustack/modlens) | **视觉插件**：给纯文本模型（DeepSeek/GLM 等）加「看图」能力，粘贴图片返回结构化 JSON 证据（OCR + 版面 + 语义）。提供 `modlens_read_image` 工具、图片粘贴处理、`(modlens vision)` 模型变体与设置卡片。自带 `node_modules/{commander,undici}` 供它 spawn 的 CLI 使用，见下 |
+| `dsh-mnemon` | [omdsh-dev/dsh-mnemon](https://github.com/omdsh-dev/dsh-mnemon) `0.5.8` | **三层记忆**（Runtime / Documents / Memory Spaces）。Starter + 3 Source + Strategy + 9 Provider 作为 sibling 包 transplant；`zod`/`fflate`/`schemastery` 等在 `_hostdeps`。**Mnemon Native** 使用 vsix 内置的 `@mnemon-dev/mnemon@0.2.8` win32-x64 二进制，宿主启动时设 `MNEMON_CLI_PATH`，**无需联网、无需全局装 CLI**。 |
 | `_hostdeps/`（docgen-utils、fontkit、jszip、linkedom 及其闭包） | npm 包 | p2h-bridge 宿主侧所需的非平台依赖，内置以便离线解析 |
 
 > `dsh-undo-plugin` 只是 bundle 层，真正的插件是它 cordis patch 挂载的 7 个 `@dsh-undo/*` 成员包——所以它们不在 `BUNDLED_PLUGINS` 里，由 `.smoke/selfcontained-plugins.mjs` 按「被 patch 认领」校验。
@@ -67,10 +67,12 @@
 
 **本分支的本地改造（相对上游）**
 
+- `@deepseek-ai/dsh-client-ui-settings-models`（explore.24）：自定义模型「容量与能力」增加 **支持图像** / **推理模型** 开关。推理开关写入 `reasoningEfforts: {low,high,max}`；**对话框模型选择器**（`dsh-client-ui-model-selection`）对声明了 reasoning 的模型显示 **Default / Low / High / Max**，与官方模型同一套 UI，不在设置卡片里选档。
 - `@dsh-vscode/p2h-bridge` 0.2.1 → 0.3.0：原本是挂在 `dsh-better-sidebar` 标签栏里的侧边栏标签页，现改为注册平台官方 slot `conversation.view`（`order: 15`），**紧邻「轨迹」标签页右侧**；同时移除对 `betterSidebar` 服务的全部探测与 web-review 预览标签页的外部驱动（web-review 0.6.0 已不再提供该公开 API），预览改为面板内联 iframe + 「新窗口」兜底。调研与 0.1.1→0.1.5 API 差异见 `docs/superpowers/specs/2026-09-01-p2h-bridge-conversation-view-tab-research.md`。
 - `@dsh-undo/rollback-fork`：上游 `@deepseek-ai/dsh-agent-presets` 在 0.1.1-rc.2 之后删掉了 `resolveSessionPreset` 导出，而 dsh-undo rc.8 正是 `import` 它——**这会让整个宿主启动失败**（cordis 报的是「加载插件失败」，看不出根因在平台）。已把 0.1.1 那个 8 行实现内联回来（0.1.5 仍在产生它依赖的 `agent-preset/selected` 事件与 `header.agentPreset` 字段）。用 `.smoke/platform-api-scan.mjs` 可一次性扫出这类断裂。
-- `@canglongcl/dsh-web-review` 的 `storeAnnotationSnapshot`：**「清除注释」在没有活跃 agent 的会话上会误报失败**。批注 dock 通过 `POST /webview-annotations` 同步草稿，清空时发 `comments: []`；而 handler 无条件先做 `agents.get(sessionId)`，取不到就返回 **404 `session not found`**——可「只是重新打开来读」的会话本来就没有活跃 agent。前端把 404 渲染成 `dock.sync.error`（"注释上下文同步失败，请重试" / "Could not sync browser comments. Try again."），而那次操作**本来就无事可做**。已把 `comments` 为空这一支提前、并允许无 agent 时按 sessionId 清理状态（`agent.id` 就是 sessionId，平台处处以 sessionId 解析 agent）；**非空路径的 agent 要求原样保留**。已验证这处失败与扩展代理无关：同一请求直连宿主与经代理返回完全一致。
-- `dsh-memory-evolve` 的 `dsh.client.inject` 修正（见上表）。
+- `@canglongcl/dsh-web-review` 的 `storeAnnotationSnapshot` + 客户端清除路径：**批注同步/清除不应因「无 live agent」或「宿主短暂不可达」报「注释上下文同步失败」**。上游把 pending 绑在 `agents.get(sessionId)` 上，取不到 live agent 就 **404 `session not found`**；且客户端只容忍「清除 + 404」，宿主重启/被 SIGTERM 时的网络错误或 502 会让 dock 卡在「正在清除注释 / 同步失败」。批注本质上只是「下一轮 user message 的历史上下文」：已改为 **pending 按 sessionId 存**（`agent.id` 就是 sessionId），空/非空草稿在无 agent 时都可写入；注入仍走 `agent/pre-step`；**不再**在 `agent/disposed` 时丢掉未注入草稿。客户端：**空草稿（清除）在任何 fetch 失败/非 2xx/非法回执时都视为成功**（浏览器已丢掉 picks，宿主 pending 本就随进程消失），非空路径的错误上报原样保留。已验证与扩展代理无关：同一请求直连宿主与经代理返回完全一致。
+- **已移除 `dsh-memory-evolve`**（explore.17）：切会话时 Advisor 面板对无 live agent 的 sessionId 连打 `status/instructions/scopes/events`（全部 400），并疑似与宿主异常退出相关。已从 `BUNDLED_PLUGINS` 摘掉、列入 `RETIRED_PLUGINS`（启动时从 profile `bundles` 与 `node_modules` 清理），插件目录不再打包。
+- **宿主意外退出后自动恢复**（`src/extension.js`）：宿主被 SIGTERM（窗口重载、扩展宿主回收、`DSH: Restart` 等）后，旧代码只尝试改写 `webview.html`——而 VS Code 对**已渲染**的 view 改 html **不会重绘**（见 `resolveWebviewView` 注释），于是旧 iframe 留在原地，技能等面板的 `fetch` 全部变成 `Failed to fetch`。现改为：非 shutdown 退出时自动 `ensureHost()` 并 `postMessage` 让 shell 重载 iframe（与 `restartHost` 同路径）；3 秒冷却防止崩溃循环；连续失败才退回错误页。
 - **「打开配置文件」内嵌桥接恢复**（`@deepseek-ai/dsh-api-settings-controller`，见 `.smoke/platform-patches/`）：0.1.1 时这个职责在 `dsh-host-apiproxy` 里——`DSH_EMBEDDED=1` 时把设置文档路径打到 stdout（`[dsh-vscode:open-settings] <path>`），由扩展在 VS Code 编辑器里打开，因为**内嵌部署下原生打开器用户根本看不见**。0.1.5 删掉了 `dsh-host-apiproxy`，设置职责搬到 `dsh-api-settings-controller`，而那里的 `openSettingsDocument` **无条件**调用 `openTextFile`：环境变量判断和哨兵都没了，也没有 `openAgentPresetDirectory` 那样的「返回路径」分支。0.1.5 全平台**不再读取 `DSH_EMBEDDED`**（仅剩 `DSH_AGENTS_HOME`、`DSH_BUNDLED_SKILL_DIR`、`DSH_TELEMETRY_DISABLED`、`DSH_WEB_FETCH_PROVIDER`、`DSH_WEB_SEARCH_PROVIDER`），没有官方接缝可用——于是面板里点「打开配置文件」**毫无反应**。已在接手同一职责的 handler 里恢复该分支，并保留 `internals.openTextFile` 接缝（`.smoke/embedded-open-settings-test.mjs` 用桩驱动真实 controller，验证开/不开 `DSH_EMBEDDED` 两种路径）。
 - **会话格式迁移的插件兼容层**（`@deepseek-ai/dsh-session-format-v0-to-v1`，见 `.smoke/platform-patches/`）：0.1.5 引入了会话格式版本化，v0→v1 迁移对「已发布 v0 规格」之外的内容**一律拒绝**，且一个事件不合格就让整个会话无法读取。而**第三方插件当年往 v0 会话里写了不少规格外内容**，于是升级后旧历史打不开。已加入四类容错（各自只记录一次日志，原始 v0 文件永不修改）：丢掉内容块上的插件注解（`dsh-file-review` 的 `dshFileReview`）、丢掉插件 source 上的多余成员（`dsh-web-review` 的 `snapshotId`）、丢掉非 `notice` 形式下多余的 `summary`（`dsh-mnemon`）、把 `subagent/descriptor` 的 version 2 提升为 3（`sidechat` 插件）。实测某份 30 会话的真实历史：修复前 **21 个会话、1251 个事件被拒**，修复后 **0**。容错时会打印形如 `[dsh-session-format-v0-to-v1] note: tolerated plugin-authored v0 data: dropped member "dshFileReview"` 的提示——**这是通报不是报错**（会话照常加载，只是丢弃了某个插件加进去的字段），每种形状只打一次，且走 stdout 所以不会显示成 `[host-err]`。
 - **升级残留自动清理**（`pruneRetiredArtifacts`，每次启动宿主前运行）：反复升级的 `DSH_HOME` 会积累三类没人清理的残留。
@@ -121,7 +123,7 @@ python .smoke/pack.py
 | `.smoke/platform-patches.py` | `verify` / `apply` 保存在 `.smoke/platform-patches/` 的 vendor 平台补丁。**`vendor/` 整体重建后必须跑 `apply`**；`pack.py` 会在打包前自动 verify，补丁缺失直接拒绝打包 |
 | `.smoke/boot-test.mjs` | 起真实宿主 + 临时 `DSH_HOME`，移植 `plugins/bundled`，断言首页与每个 **web 客户端**条目的带 revision 插件 URL 都返回 200、且在前端模块图里有对应行 |
 | `.smoke/extension-proxy-test.cjs` | 用 stub 的 `vscode` 模块加载真实 `src/extension.js`，跑 `activate()` 起宿主与鉴权中转代理，然后**不带 Cookie** 去探测代理端口：首页须 200、未知 `/api` 通道不得是 401/403、`ws://…/api/remote.mux` 须返回 101 |
-| `.smoke/annotations-clear-test.mjs` | 驱动真实宿主（经扩展代理，即 webview 实际路径）验证：`comments: []` 对无活跃 agent 的会话现在返回 `200 {kind:"empty"}` 而非 404，而**非空草稿仍然 404**（说明只放开了 no-op、没削弱 agent 校验），并证明直连与经代理结果一致 |
+| `.smoke/annotations-clear-test.mjs` | 驱动真实宿主（经扩展代理，即 webview 实际路径）验证：无 live agent 时 `comments: []` 返回 `200 {kind:"empty"}`，非空草稿返回 `200 {kind:"ready", snapshotId}`（按 sessionId 暂存），清空后再写再清均成功，并证明直连与经代理结果一致 |
 | `.smoke/profile-overlay-test.mjs` | 验证 `dsh.modlensFamilies` → `--patch` 覆盖层这条链路：驱动真实 `activate()` 断言覆盖层已生成且 YAML 转义正确（含 `:` 和引号这类值）、**你自己的 `cordis.patch.yml` 未被改写**、诊断日志已带启动头落盘，并用 `dsh --dump-config` 证明 DSH 真的把它合成到了 modlens 行上——而且**一个不少地保留其余行**（对比开关覆盖层前后的行集合；若某个 `id` 行被当成顶层条目重新组装整棵树，其它插件会全部掉线而旧断言仍然通过） |
 | `.smoke/embedded-open-settings-test.mjs` | 用桩驱动真实的 `SettingsController`，验证「打开配置文件」在 `DSH_EMBEDDED=1` 时输出扩展哨兵且**不**调用原生打开器，未设置时走原生路径 |
 | `.smoke/legacy-cleanup-test.cjs` | 用合成 `DSH_HOME` 复现每一类升级残留（悬空/跨版本/全局 npm 链接、失效 profile 依赖、空 scope 目录、`*.pnpm-old`、`.ignored_*`、`.bak-*`、退役插件状态），跑真实 `activate()` 后断言残留已清、**且会话/记忆/配置/在用插件状态逐字节未变**、退役状态可在隔离目录找回 |
@@ -154,8 +156,8 @@ python .smoke/pack.py
 **问：日志怎么给你？（`DSH: Show Host Logs` 关掉窗口就没了）**
 答：同一份日志现在**同时落盘**在 `<globalStorage>/your-publisher-id.dsh-vscode/dsh-vscode.log`（超过 4 MB 自动轮转为 `.log.1`）。每次启动会先写一段头信息——扩展版本、`DSH_HOME`、工作目录、`dsh.port`、是否启用内置插件——因为排障真正需要的上下文正是这些，而不是随后的散行。宿主 stdout/stderr、token 交换、代理的 401 与上游错误、以及**经代理返回的非 2xx 响应（含路径）**都会记进去；`/plugins/` 的包请求除外（页面陈旧时会合法 404），且每次会话最多记 200 行以免刷爆。
 
-**问：记忆/技能等标签页报 `fetch error`？**
-答：**先看是不是「功能没开」**。`dsh-memory-evolve` 的多数模块是**按开关注册路由**的，代码注释写得很明白——「模块开启才注册（关闭时 404，客户端探测失败即隐藏）」。开关状态在 `<DSH_HOME>/memories/plugin-state.json`（也可在插件自己的记忆 Tab 里切换）。实测一份真实配置：`uiSettingsEnabled`/`bookmarkEnabled`/`canvasEnabled`/`promptsEnabled`/`coiEnabled`/`broadcastEnabled`/`notifyEnabled`/`syncEnabled` 全为 `false` 时，客户端会探测 7 个端点（`/memory-evolve/api/{notifications/unread,coi/config,broadcast/messages,ui-settings/state,prompts/sources,bookmarks/state,canvas/state}`）**全部 404**，浏览器控制台就是 7 条 `Failed to load resource: 404`；把这些开关打开后**错误归零**。想要哪个功能就把对应开关打开再重启宿主。
+**问：记忆标签页 / `Failed to fetch`？**
+答：explore.17 起已**移除** `dsh-memory-evolve`。升级后重启宿主，旧 profile 里的该插件会被自动 prune；若仍看到记忆 Tab，执行 `DSH: Restart Host` 或重载窗口。`Failed to fetch` 通常是宿主进程已退出（见 Host Logs 的 `host exited` / `deactivate`），面板会自动尝试拉起；拉不起来再点 Restart Host。
 
 **问：为什么 .vsix 有 100+ MB？**
 答：完整运行时依赖树内置在扩展内以保证离线可用，体积换取了"零依赖、开箱即用"的体验。
@@ -164,7 +166,7 @@ python .smoke/pack.py
 
 - [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)——上游网页宿主
 - [zhu1090093659/dsh-web-ui](https://github.com/zhu1090093659/dsh-web-ui)——@linxin666 插件生态
-- [23swccp/dsh-undo](https://github.com/23swccp/dsh-undo)、[csyangwen/dsh-memory-evolve](https://github.com/csyangwen/dsh-memory-evolve) 等其他内置插件作者
+- [23swccp/dsh-undo](https://github.com/23swccp/dsh-undo) 等其他内置插件作者
 
 ## 📄 许可证
 

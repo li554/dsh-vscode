@@ -4,19 +4,18 @@
 // plugins/node_modules (a flat npm install of the whole ecosystem roster),
 // walking each root package's cordis.patch.yml to collect its transitively
 // mounted sibling entries. That regeneration model no longer applies: the
-// 0.1.5 exploration build ships exactly FOUR plugins, and two of them are not
+// 0.1.5 exploration build ships a small hand-picked set, and several are not
 // npm packages at all —
 //
-//   dsh-memory-evolve            vendored from the upstream repo (not on npm)
 //   @dsh-vscode/p2h-bridge       hand-written in this repo
 //   dsh-client-auto-continue     npm  (pinned in plugins-rc2 provenance below)
 //   @canglongcl/dsh-web-review   npm
 //
-// so a blanket regeneration would delete the two hand-maintained packages. This
+// so a blanket regeneration would delete the hand-maintained packages. This
 // script instead VERIFIES that the on-disk bundled set matches BUNDLED_PLUGINS
 // and that every entry is actually loadable, which is what the boot harness
 // depends on. Sources used to refresh the npm-sourced pair are recorded in the
-// table below.
+// table below. dsh-memory-evolve was removed from the baked set (explore.17).
 //
 // To update an npm-sourced plugin:
 //   npm pack <name>@<version>            # registry: https://registry.npmmirror.com
@@ -35,12 +34,12 @@ const BUNDLED = path.join(PROJ, "plugins", "bundled");
 /** Where each bundled entry came from. npm-sourced versions must equal the
  * `version` inside the bundled package.json. */
 const PROVENANCE = {
-  "dsh-memory-evolve": "vendored (csyangwen/dsh-memory-evolve) — not published on npm",
   "@dsh-vscode/p2h-bridge": "local (this repo) — hand-written client bundle, no build step",
   "dsh-client-auto-continue": "npm dsh-client-auto-continue@0.11.5",
   "@canglongcl/dsh-web-review": "npm @canglongcl/dsh-web-review@0.6.0 (one local patch: clearing annotations no longer demands a live agent)",
   "@liustack/modlens": "npm @liustack/modlens@3.26.1 (carries its own node_modules/{commander,undici} for the CLI it spawns)",
-  "dsh-undo-plugin": "npm dsh-undo-plugin@0.1.0-rc.8 (bundle layer; mounts @dsh-undo/* members, restored from 0.2.53)"
+  "dsh-undo-plugin": "npm dsh-undo-plugin@0.1.0-rc.8 (bundle layer; mounts @dsh-undo/* members, restored from 0.2.53)",
+  "dsh-mnemon": "npm dsh-mnemon@0.5.8 (Starter + source/strategy/provider children transplanted as sibling packages; zod/fflate/schemastery in _hostdeps; @mnemon-dev/mnemon@0.2.8 + win32-x64 binary for offline Native)"
 };
 
 /** Read BUNDLED_PLUGINS straight out of the extension so this check cannot
@@ -85,8 +84,8 @@ function claimedMembers(entries) {
     if (!rel) continue;
     const patchPath = path.join(dir, rel);
     if (!fs.existsSync(patchPath)) continue;
-    for (const m of fs.readFileSync(patchPath, "utf8").matchAll(/name\s*:\s*["']([^"']+)["']/g)) {
-      if (!m[1].startsWith("@deepseek-ai/")) claimed.add(m[1]);
+    for (const m of fs.readFileSync(patchPath, "utf8").matchAll(/\b(?:name|use)\s*:\s*["']?([@a-zA-Z0-9._/-]+)["']?/g)) {
+      if (!m[1].startsWith("@deepseek-ai/") && m[1] !== "cordis:group") claimed.add(m[1]);
     }
   }
   return claimed;
@@ -157,6 +156,11 @@ for (const n of present) {
   if (declared.includes(n)) continue;
   if (claimed.has(n)) {
     ok(`${n}: mounted as a member row by a declared bundle entry`);
+    continue;
+  }
+  // Offline Native CLI for dsh-mnemon (not a Cordis entry; pointed at via MNEMON_CLI_PATH).
+  if (n === "@mnemon-dev/mnemon" || n === "@mnemon-dev/mnemon-win32-x64") {
+    ok(`${n}: offline Mnemon CLI binary (not a Cordis entry)`);
     continue;
   }
   fail(`${n}: present in plugins/bundled but neither declared in BUNDLED_PLUGINS nor claimed by any entry's cordis patch`);

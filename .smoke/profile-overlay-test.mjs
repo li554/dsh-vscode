@@ -154,7 +154,7 @@ const ext = require(path.join(ROOT, "src", "extension.js"));
   check("the overlay adds no rows", withRows.size === withoutRows.size, `${withoutRows.size} -> ${withRows.size}`);
   const lost = [...withoutRows].filter((n) => !withRows.has(n));
   check("the overlay drops no rows", lost.length === 0, "missing: " + lost.slice(0, 8).join(", "));
-  for (const plugin of ["@canglongcl/dsh-web-review", "@liustack/modlens", "dsh-memory-evolve", "dsh-undo-plugin", "dsh-client-auto-continue"]) {
+  for (const plugin of ["@canglongcl/dsh-web-review", "@liustack/modlens", "dsh-undo-plugin", "dsh-client-auto-continue"]) {
     check(`${plugin} still mounted`, out.includes(plugin));
   }
 
