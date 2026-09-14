@@ -4671,6 +4671,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 				return await operation;
 			}
 			publish(view) {
+				// LOCAL PATCH for dsh-vscode. The header button renders nothing unless
+				// `view.value?.messageId` is set, and it never displays `view.error` — so a
+				// controller that failed to read its rollback point looked exactly like a
+				// session that simply had none, with no trace anywhere. Log each transition
+				// INTO the error state once (not on every publish), so "the icon is
+				// missing" has a stated reason.
+				if (view?.status === "error" && this.view?.status !== "error") {
+					console.error("[dsh-vscode] rollback state unavailable:", view.error);
+				}
 				this.view = Object.freeze(view);
 				for (const listener of this.listeners) try {
 					listener();

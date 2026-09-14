@@ -23,6 +23,12 @@ const PATCHES = [
     file: "plugins/bundled/@dsh-undo/client-rollback-settings/lib/client.js",
     applied: "[dsh-vscode] reading archived tasks failed:",
     reverted: null
+  },
+  {
+    why: "the header button renders nothing unless it has a rollback point and never shows view.error, so a failed controller was indistinguishable from a session with none",
+    file: "plugins/bundled/@dsh-undo/client-rollback-button/lib/client.js",
+    applied: "[dsh-vscode] rollback state unavailable:",
+    reverted: null
   }
 ];
 
