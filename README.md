@@ -165,6 +165,14 @@ python .smoke/pack.py
 **问：日志怎么给你？（`DSH: Show Host Logs` 关掉窗口就没了）**
 答：同一份日志现在**同时落盘**在 `<globalStorage>/your-publisher-id.dsh-vscode/dsh-vscode.log`（超过 4 MB 自动轮转为 `.log.1`）。每次启动会先写一段头信息——扩展版本、`DSH_HOME`、工作目录、`dsh.port`、是否启用内置插件——因为排障真正需要的上下文正是这些，而不是随后的散行。宿主 stdout/stderr、token 交换、代理的 401 与上游错误、以及**经代理返回的非 2xx 响应（含路径）**都会记进去；`/plugins/` 的包请求除外（页面陈旧时会合法 404），且每次会话最多记 200 行以免刷爆。
 
+宿主起来后还会写一行**客户端表面**：
+
+```
+client surface: 65 mounted of 12 shipped (every shipped client plugin mounted)
+```
+
+「shipped」是移植进 `<profile>/node_modules` 的插件里声明了 `dsh.client` 的那些，「mounted」是宿主在 shell 里**真正公布**的客户端插件。**插件没挂载是无声的**——`inject` 得不到满足时宿主会直接跳过它，日志里一个字都不留（「撤回插件完全没输出」就是这么来的）。所以这一行专门把沉默变成名单：如果某个插件的 UI 什么都不做，看这里有没有 `shipped but NOT mounted: …`。**撤回功能**尤其适合用这行判断：`rollback-undo` 依赖 `sessionArchive`/`sessionFork`，只要链条上任一环没挂上，`@dsh-undo/client-rollback-button` 就不会被挂载——于是图标不出现、归档任务读不出来，同时日志一片安静。
+
 **问：记忆标签页 / `Failed to fetch`？**
 答：explore.17 起已**移除** `dsh-memory-evolve`。升级后重启宿主，旧 profile 里的该插件会被自动 prune；若仍看到记忆 Tab，执行 `DSH: Restart Host` 或重载窗口。`Failed to fetch` 通常是宿主进程已退出（见 Host Logs 的 `host exited` / `deactivate`），面板会自动尝试拉起；拉不起来再点 Restart Host。
 

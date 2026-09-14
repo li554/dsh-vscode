@@ -251,6 +251,85 @@ function rawResponseHead(statusCode, statusMessage, headers) {
 }
 
 /**
+ * Client plugins the profile actually ships.
+ *
+ * A bundled plugin is only useful if the host MOUNTS it, and a plugin whose
+ * `inject` cannot be satisfied is skipped silently — nothing appears in the host
+ * log, so "the plugin does nothing" leaves no trace anywhere. The host does
+ * advertise exactly what it mounted, in the shell's combined
+ * `/plugins/??<id>/client.js,…&rev=…` URL, so comparing the shipped set against the
+ * advertised set turns that silence into a named list.
+ *
+ * @param {string} profileDir - the web profile directory.
+ * @returns {Set<string>} package names declaring a web client half.
+ */
+function shippedClientPlugins(profileDir) {
+  const names = new Set();
+  const modules = path.join(profileDir, "node_modules");
+  const consider = (dir) => {
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      try {
+        const pkg = JSON.parse(fs.readFileSync(path.join(dir, entry.name, "package.json"), "utf8"));
+        if (pkg?.dsh?.client?.platform === "web" && typeof pkg.name === "string") names.add(pkg.name);
+      } catch { /* not a readable package */ }
+    }
+  };
+  consider(modules);
+  let scopes = [];
+  try {
+    scopes = fs.readdirSync(modules, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && entry.name.startsWith("@"))
+      .map((entry) => entry.name);
+  } catch { /* no node_modules yet */ }
+  for (const scope of scopes) consider(path.join(modules, scope));
+  return names;
+}
+
+/**
+ * Log which shipped web-client plugins the host actually advertised to the browser.
+ *
+ * Reads the served shell instead of guessing a URL: 0.1.5 serves client plugins
+ * only through the revisioned combo URL it prints into that document. A plugin
+ * that shipped but was never mounted is a plugin whose UI silently does nothing —
+ * which is what this line exists to make visible.
+ *
+ * @param {string} profileDir - the web profile directory.
+ * @param {string} authority - the proxy authority that holds the auth cookie.
+ */
+async function logClientSurface(profileDir, authority) {
+  const shipped = shippedClientPlugins(profileDir);
+  if (shipped.size === 0) return;
+  let html = "";
+  try {
+    const res = await fetch(`http://${authority}/`, {
+      headers: { accept: "text/html", ...(hostCookie ? { cookie: hostCookie } : {}) },
+      redirect: "manual"
+    });
+    html = await res.text();
+  } catch (error) {
+    log("client surface probe failed: " + String(error));
+    return;
+  }
+  const advertised = new Set();
+  for (const match of html.matchAll(/\/plugins\/\?\?([^"'\s<>\\)]+)/g)) {
+    for (const part of match[1].split(",")) {
+      const id = part.split("/client.js")[0].trim();
+      if (id) advertised.add(id);
+    }
+  }
+  if (advertised.size === 0) {
+    log("client surface: the shell advertised no client plugins — the web bundle did not compose");
+    return;
+  }
+  const missing = [...shipped].filter((name) => !advertised.has(name)).sort();
+  log(`client surface: ${advertised.size} mounted of ${shipped.size} shipped` +
+    (missing.length ? `; shipped but NOT mounted: ${missing.join(", ")}` : " (every shipped client plugin mounted)"));
+}
+
+/**
  * Exchange the host's launch token for its browser-session cookie, from the
  * extension host, where the `Set-Cookie` header is plainly readable.
  *
@@ -1135,6 +1214,10 @@ function startHost(requestedPort = 0) {
           : Promise.resolve();
         authenticated.then(() => {
           startAppProxy(hostPortFor());
+          // Off the boot path: reports which shipped client plugins the host did
+          // NOT mount, which is otherwise silent (a plugin whose inject is
+          // unsatisfied is skipped without logging anything).
+          void logClientSurface(path.join(home, "profiles", "web"), `127.0.0.1:${hostPortFor()}`);
           settle(resolve, hostPort);
         }, (error) => settle(reject, error));
       } else {
