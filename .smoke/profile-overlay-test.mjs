@@ -157,9 +157,12 @@ const ext = require(path.join(ROOT, "src", "extension.js"));
   // overlay that names one row must not disturb any other. A patch list row with
   // a bare `id` could have been read as a top-level entry and re-composed the tree,
   // which would unmount every other bundled plugin while this test still passed.
-  const rowNames = (text) => new Set([...text.matchAll(/name:\s*'?([@a-z0-9._/-]+)'?/gi)].map((m) => m[1]));
-  const withRows = rowNames(out);
-  const withoutRows = rowNames(without.out);
+  // Count ROW identities (`- id:`), not `name:` occurrences: a model catalog entry
+  // legitimately carries a nested `name:` field (deepseek-v4-flash-vision-exp does),
+  // and counting those drifts the count by one and looks like the overlay added a row.
+  const rowIds = (text) => new Set([...text.matchAll(/^-\s+id:\s*(\S+)\s*$/gm)].map((m) => m[1]));
+  const withRows = rowIds(out);
+  const withoutRows = rowIds(without.out);
   check("the overlay adds no rows", withRows.size === withoutRows.size, `${withoutRows.size} -> ${withRows.size}`);
   const lost = [...withoutRows].filter((n) => !withRows.has(n));
   check("the overlay drops no rows", lost.length === 0, "missing: " + lost.slice(0, 8).join(", "));
