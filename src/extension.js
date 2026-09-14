@@ -887,16 +887,40 @@ function pruneRetiredArtifacts(home) {
       // The profile-owned fallback (profiles/<name>/.dsh-module-fallback) holds
       // packages a bundle carries privately; those links are correct by design.
       if (normalized.includes("/.dsh-module-fallback/")) continue;
-      // ONLY remove a link whose target is gone. A link that still resolves is
-      // left alone even when it points at another extension version or a global
-      // npm dsh: this install's vendor tree may not carry that package at all
-      // (katex, shiki and friends are not in the 0.1.5 closure), so the link can
-      // be the only copy, and deleting it would be a regression rather than a
-      // cleanup. Foreign-but-working links are reported once instead.
+      // ONLY remove a link whose target is gone, OR one that points OUTSIDE this
+      // install at a package this install ships. A link that still resolves is
+      // otherwise left alone even when it points at another extension version or a
+      // global npm dsh: this install's vendor tree may not carry that package at all
+      // (katex, shiki and friends are not in the 0.1.5 closure), so the link can be
+      // the only copy, and deleting it would be a regression rather than a cleanup.
+      //
+      // The second case matters because DSH heals these links only when their target
+      // is GONE. Installing a new vsix next to an older one therefore leaves every
+      // module resolving into the OLD extension's vendor tree, and the host keeps
+      // running the previous build's platform code: patches bundled in the new vsix
+      // silently never load. Removing the link makes DSH re-link it from the install
+      // that is actually running.
       if (fs.existsSync(full)) {
-        const foreign = /\/extensions\/([^/]+)\//.exec(normalized);
-        if (foreign && !normalized.startsWith(currentExtension + "/")) foreignLinks.add("a different installed extension (" + foreign[1] + ")");
-        else if (/\/npm\/node_modules\/@deepseek-ai\//.test(normalized)) foreignLinks.add("a global npm dsh install");
+        const shippedHere = (relative) => {
+          if (!relative) return false;
+          try { return fs.existsSync(path.join(currentExtension, ...relative.split("/"))); } catch { return false; }
+        };
+        const foreignExt = /\/extensions\/([^/]+)\/(.+)$/.exec(normalized);
+        const foreignNpm = /\/npm\/node_modules\/(.+)$/.exec(normalized);
+        let stale = null;
+        if (foreignExt && !normalized.startsWith(currentExtension + "/")) {
+          if (shippedHere(foreignExt[2])) stale = "a different installed extension (" + foreignExt[1] + ")";
+          else foreignLinks.add("a different installed extension (" + foreignExt[1] + ")");
+        } else if (foreignNpm) {
+          if (shippedHere("vendor/node_modules/" + foreignNpm[1])) stale = "a global npm dsh install";
+          else foreignLinks.add("a global npm dsh install");
+        }
+        if (stale === null) continue;
+        try {
+          fs.unlinkSync(full);
+          removedLinks++;
+          if (removedLinks <= 12) log("stale module link re-pointed at this install: " + path.relative(home, full) + " (" + stale + ")");
+        } catch { /* locked or already gone */ }
         continue;
       }
       let reason = "target is gone";

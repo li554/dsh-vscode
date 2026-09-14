@@ -73,18 +73,21 @@ const QUARANTINED = [
 
 for (const [rel, text] of [...PRESERVED, ...SURVIVES.map(([r, t]) => [r, t]), ...QUARANTINED]) write(path.join(HOME, rel), text);
 
-// (c) module-fallback links. The rule is deliberately narrow: remove ONLY a link
-// whose target is gone. A link that still resolves is kept even when it points at
-// another extension version or a global npm dsh, because this install's vendor
-// tree may not carry the package at all (katex, shiki … are absent from the 0.1.5
-// closure), so the link can be the only copy.
+// (c) module-fallback links. Remove a link when its target is gone, and ALSO when
+// it points outside this install at a package this install ships: DSH heals these
+// links only when their target is GONE, so installing a new vsix beside an older one
+// leaves every module resolving into the OLD extension's vendor tree and the host
+// keeps running the previous build's platform code. A link this install cannot
+// satisfy is still kept, because it may be the only copy.
 write(path.join(OTHER_EXT, "left-pad", "package.json"), '{"name":"left-pad","version":"1.0.0"}\n');
+write(path.join(OTHER_EXT, "zod", "package.json"), '{"name":"zod","version":"9.9.9"}\n');
 write(path.join(GLOBAL_NPM, "katex", "package.json"), '{"name":"katex","version":"0.16.0"}\n');
 link(path.join(TMP, "vscode", "extensions", "your-publisher-id.dsh-vscode-0.1.7", "vendor", "node_modules", "react"),
   path.join(SHARED, "react"));                                                         // dangling (ext uninstalled)
 link(path.join(TMP, "deleted-extension", "left-pad"), path.join(SHARED, "left-pad"));   // dangling (plain target gone)
-link(path.join(OTHER_EXT, "left-pad"), path.join(SHARED, "kept-other-ext"));            // resolves: KEEP
-link(path.join(GLOBAL_NPM, "katex"), path.join(SHARED, "kept-global-npm"));             // resolves: KEEP
+link(path.join(OTHER_EXT, "left-pad"), path.join(SHARED, "kept-other-ext"));            // resolves, we do NOT ship it: KEEP
+link(path.join(GLOBAL_NPM, "katex"), path.join(SHARED, "kept-global-npm"));             // resolves, we do NOT ship it: KEEP
+link(path.join(OTHER_EXT, "zod"), path.join(SHARED, "repoint-zod"));                    // resolves, but we DO ship zod: REMOVE -> dsh re-links from here
 link(path.join(CURRENT_EXT, "zod"), path.join(SHARED, "zod"));                          // current: KEEP
 write(path.join(SHARED, "typescript", "package.json"), "{}\n");                        // real dir: KEEP
 // a profile-owned fallback link is legitimate by design
@@ -182,6 +185,9 @@ const isLink = (p) => { try { return fs.lstatSync(p).isSymbolicLink(); } catch {
   // Narrow-rule invariants: only DANGLING links may go.
   check("resolvable link to another extension KEPT", isLink(path.join(SHARED, "kept-other-ext")));
   check("resolvable link to a global npm dsh KEPT", isLink(path.join(SHARED, "kept-global-npm")));
+  // The fix for "patches in the new vsix never load": a link into another extension
+  // is removed when THIS install ships the same package, so dsh re-links it here.
+  check("link to another extension re-pointed when we ship the package", !isLink(path.join(SHARED, "repoint-zod")));
   check("current-install module link kept", isLink(path.join(SHARED, "zod")));
   check("real package dir kept", exists(path.join(SHARED, "typescript", "package.json")));
   check("profile-owned fallback link kept", isLink(path.join(WEB_MODULES, "@deepseek-ai", "dsh-client-ui-slots")));

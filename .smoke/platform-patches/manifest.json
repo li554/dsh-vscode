@@ -97,6 +97,37 @@
         "the file-level question 'does this file mention windowsHide' also misses it",
         "because the taskkill calls in the same package do set it."
       ]
+    },
+    {
+      "package": "@deepseek-ai/dsh-session-persistence-jsonl",
+      "file": "lib/index.js",
+      "expectedPackageVersion": "0.1.5-rc.2",
+      "storedAs": "dsh-session-persistence-jsonl/lib/index.js",
+      "why": [
+        "Makes Archived Tasks readable again on this platform.",
+        "",
+        "The bundled @dsh-undo/* plugins were built against a newer persistence",
+        "contract whose service exposes inspect(id). This backend does not, so every",
+        "archived — that is, non-live — session failed with",
+        "",
+        "    sessionArchive.list failed gateway/internal:",
+        "    this.ctx.sessionPersistence.inspect is not a function",
+        "",
+        "Live sessions never reach it: the callers prefer",
+        "`ctx.sessions.get(id)?.events` and only fall back to persistence for sessions",
+        "with no live handle, which is exactly the archived set.",
+        "",
+        "The service class itself is a bare `class extends Service { constructor }` in",
+        "the base package; the methods live in this jsonl backend, whose API is",
+        "locate/create/open/flush/stat/list/requireStoredLog. The patch adds",
+        "inspect(id, options) on top of `open(id, 'read')` + `handle.read()`, so it",
+        "introduces no new storage behavior, and callers only read `.events`.",
+        "",
+        "Asserted behaviorally, not textually, by .smoke/persistence-inspect-test.mjs:",
+        "it imports the real module and checks inspect is a 2-arity function on the",
+        "prototype, plus that open/list/locate still exist (otherwise inspect would be",
+        "dead code even while defined)."
+      ]
     }
   ]
 }
