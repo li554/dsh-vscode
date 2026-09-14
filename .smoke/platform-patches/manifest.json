@@ -66,6 +66,37 @@
         ".smoke/embedded-open-settings-test.mjs, which drives the real controller",
         "with stubbed internals both with and without DSH_EMBEDDED=1)."
       ]
+    },
+    {
+      "package": "@deepseek-ai/dsh-subprocess-local",
+      "file": "lib/index.js",
+      "expectedPackageVersion": "0.1.5-rc.2",
+      "storedAs": "dsh-subprocess-local/lib/index.js",
+      "why": [
+        "Stops a console window from appearing for the lifetime of every command.",
+        "",
+        "launchWindowsJob is the path Windows normally takes: it spawns the managed",
+        "job runner with",
+        "",
+        "    child = (internals.spawn ?? spawn)(command, [...prefix, '--', ...argv], {",
+        "      cwd, env, stdio: runnerStdio(...)",
+        "    });",
+        "",
+        "and no windowsHide. Windows therefore gives that runner a fresh console, so",
+        "a terminal window pops up when a command starts and closes when it finishes.",
+        "",
+        "The omission is upstream's, and visibly an oversight: the FALLBACK path in the",
+        "same package, spawnSubprocess, already passes",
+        "`windowsHide: platform === 'win32'` beside `detached: platform !== 'win32'`.",
+        "Only the primary Windows path forgot it. The option is ignored off Windows, so",
+        "the patch is inert on Linux and macOS.",
+        "",
+        "Found by auditing every child_process call site in the tree for windowsHide",
+        "rather than grepping for it: this call is written",
+        "`(internals.spawn ?? spawn)(`, so a pattern anchored on `spawn(` misses it, and",
+        "the file-level question 'does this file mention windowsHide' also misses it",
+        "because the taskkill calls in the same package do set it."
+      ]
     }
   ]
 }
