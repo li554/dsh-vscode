@@ -107,7 +107,8 @@ write(path.join(WEB, "package.json"), JSON.stringify({
 mkdir(path.join(WEB_MODULES, "@linxin666"));                                            // empty scope dir
 write(path.join(WEB_MODULES, "@dsh-vscode", "p2h-bridge.pnpm-old", "package.json"), "{}\n");
 write(path.join(WEB_MODULES, "@canglongcl", ".ignored_dsh-web-review", "package.json"), "{}\n");
-write(path.join(WEB_MODULES, "dsh-memory-evolve", "package.json"), '{"name":"dsh-memory-evolve"}\n'); // real dir: KEEP
+write(path.join(WEB_MODULES, "dsh-memory-evolve", "package.json"), '{"name":"dsh-memory-evolve"}\n'); // RETIRED plugin: REMOVE
+write(path.join(WEB_MODULES, "user-installed-plugin", "package.json"), '{"name":"user-installed-plugin"}\n'); // real dir, no list mentions it: KEEP
 write(path.join(WEB, "cordis.patch.yml"), "[]\n");
 write(path.join(WEB, "cordis.patch.yml.bak-plugin-manager"), "- id: x\n");
 
@@ -184,7 +185,11 @@ const isLink = (p) => { try { return fs.lstatSync(p).isSymbolicLink(); } catch {
   check("current-install module link kept", isLink(path.join(SHARED, "zod")));
   check("real package dir kept", exists(path.join(SHARED, "typescript", "package.json")));
   check("profile-owned fallback link kept", isLink(path.join(WEB_MODULES, "@deepseek-ai", "dsh-client-ui-slots")));
-  check("transplanted plugin dir kept", exists(path.join(WEB_MODULES, "dsh-memory-evolve", "package.json")));
+  check("transplanted plugin dir kept", exists(path.join(WEB_MODULES, "user-installed-plugin", "package.json")));
+  // dsh-memory-evolve moved to RETIRED_PLUGINS in explore.17 (advisor 400-storm on
+  // session switch + host deaths), so its transplanted directory is pruned now. The
+  // assertion above once used this name and went stale when the plugin was retired.
+  check("retired plugin dir removed", !exists(path.join(WEB_MODULES, "dsh-memory-evolve")));
   check("cordis.patch.yml kept", exists(path.join(WEB, "cordis.patch.yml")));
 
   console.log("\nnever touched: sessions / memories / config / active plugin state");

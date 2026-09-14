@@ -20,7 +20,10 @@ const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace
 const BUNDLED = path.join(ROOT, "plugins", "bundled");
 const BIN = path.join(ROOT, "vendor", "node_modules", "@deepseek-ai", "dsh", "lib", "bin.js");
 
-const FAMILIES = ["deepseek", "glm", "mimo", "code_instuct", "code_think", "weird:prefix", '"quoted"'];
+/** What the user configures: EXTRAS only, aliases their gateway hides models behind. */
+const FAMILIES = ["code_instuct", "code_think", "weird:prefix", '"quoted"'];
+/** What must end up in the overlay: the extras AND modlens' built-in three. */
+const EXPECTED_FAMILIES = ["deepseek", "glm", "mimo", ...FAMILIES];
 
 let failures = 0;
 const check = (label, ok, detail = "") => {
@@ -107,9 +110,15 @@ const ext = require(path.join(ROOT, "src", "extension.js"));
   const text = fs.existsSync(overlay) ? fs.readFileSync(overlay, "utf8") : "";
   check("targets the modlens row", /^- id: modlens$/m.test(text), JSON.stringify(text.slice(0, 120)));
   check("declares a families list", /^\s{4}families:$/m.test(text));
-  for (const family of FAMILIES) {
+  for (const family of EXPECTED_FAMILIES) {
     // The value must survive YAML round-tripping even when it contains `:` or quotes.
-    check(`family preserved: ${family}`, text.includes(`"${family.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`));
+    check(`family present: ${family}`, text.includes(`"${family.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`));
+  }
+  // The setting is additive: a list emitted without the built-ins would REPLACE
+  // them (modlens resolves `config.families || [defaults]`), silently dropping the
+  // DeepSeek/GLM routes a user already had working.
+  for (const builtin of ["deepseek", "glm", "mimo"]) {
+    check(`built-in family ${builtin} kept`, text.includes(`"${builtin}"`));
   }
 
   console.log("\n3. the user's own patch file is untouched");

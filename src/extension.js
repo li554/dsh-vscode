@@ -638,6 +638,13 @@ function syncBakedPresets(home) {
 /** Extension-generated profile overlay, handed to the host with `--patch`. */
 const PROFILE_OVERLAY_FILE = ".dsh-vscode-profile-patch.yml";
 /**
+ * modlens' own default family prefixes, from its registerVisionProvider.
+ *
+ * It resolves `config.families || ['deepseek', 'glm', 'mimo']`, so any list we
+ * pass REPLACES those rather than extending them.
+ */
+const MODLENS_DEFAULT_FAMILIES = ["deepseek", "glm", "mimo"];
+/**
  * Model-id prefixes the user wants `@liustack/modlens` to treat as text-only.
  *
  * modlens only bridges models whose id begins with a family it recognises
@@ -645,12 +652,28 @@ const PROFILE_OVERLAY_FILE = ".dsh-vscode-profile-patch.yml";
  * real model behind an opaque alias — a route called `code_think` serving
  * DeepSeek V4 Flash matches nothing. `dsh.modlensFamilies` lets the user name
  * those aliases without editing any file.
- * @returns {string[]} trimmed, non-empty prefixes in configured order.
+ *
+ * ADDITIVE on purpose: the setting lists EXTRA families and the built-in three are
+ * always kept. Emitting only what the user typed would silently drop them, so a
+ * user adding a gateway alias would lose the DeepSeek/GLM routes that already
+ * worked — and nothing would say so.
+ * @returns {string[]} the merged prefix list, or [] when the setting is empty.
  */
 function modlensFamilies() {
   const raw = vscode.workspace.getConfiguration("dsh").get("modlensFamilies");
-  if (!Array.isArray(raw)) return [];
-  return raw.map((value) => String(value).trim()).filter((value) => value !== "");
+  const configured = Array.isArray(raw)
+    ? raw.map((value) => String(value).trim()).filter((value) => value !== "")
+    : [];
+  if (configured.length === 0) return [];
+  const seen = new Set();
+  const merged = [];
+  for (const family of [...MODLENS_DEFAULT_FAMILIES, ...configured]) {
+    const key = family.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(family);
+  }
+  return merged;
 }
 /**
  * Quote one YAML scalar. Model-id prefixes can carry `: # @ [ ]` and friends, and

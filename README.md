@@ -38,7 +38,7 @@
 | `dsh.cwd` | 宿主工作目录（即 agent 的工作目录），留空 = 首个工作区文件夹 |
 | `dsh.dshHome` | 覆盖 `DSH_HOME`（配置、会话、插件数据等存放位置），留空 = DSH 默认路径 |
 | `dsh.enableBakedPlugins` | 是否启用内置生态插件（默认 `true`） |
-| `dsh.modlensFamilies` | 让 `@liustack/modlens` 认定为「纯文本、可桥接」的**模型 id 前缀**列表。它自带默认 `deepseek`/`glm`/`mimo`；当你的 provider 用不透明别名（例如某网关把 DeepSeek/GLM 藏在 `code_instuct`、`code_think` 后面）时在这里补上。留空 = 用它内置默认。**改动会自动重启宿主**（插件 config 在装配时读取，必须重开宿主才生效） |
+| `dsh.modlensFamilies` | **追加**给 `@liustack/modlens` 的「纯文本、可桥接」**模型 id 前缀**列表。它自带默认 `deepseek`/`glm`/`mimo`；当你的 provider 用不透明别名（例如某网关把 DeepSeek/GLM 藏在 `code_instuct`、`code_think` 后面）时在这里补上。**你填的项会与内置三项合并，永远不会把它们挤掉**（modlens 内部是 `config.families \|\| [默认]`，只发你填的会替换掉默认）。留空 = 完全不覆盖。**改动会自动重启宿主**（插件 config 在装配时读取，必须重开宿主才生效） |
 
 > `dsh.modlensFamilies` 不是写进你的 `<profile>/cordis.patch.yml`，而是由扩展生成一个覆盖层文件 `<DSH_HOME>/.dsh-vscode-profile-patch.yml`，再用 `dsh --patch` 传进去。DSH 的合成顺序是「bundles → `cordis.patch.yml` → 各 `--patch`」，所以覆盖层叠在你自己的补丁之上，**永远不会改写你自己维护的那个文件**。留空则删除该文件、不传 `--patch`。
 >
