@@ -2,7 +2,7 @@
   "name": "dsh-vscode",
   "displayName": "DeepSeek Harness (DSH) for VS Code",
   "description": "Runs the DeepSeek Harness web surface inside VS Code. All host dependencies are bundled into the extension — users need no Node.js, npm, pnpm, or Python.",
-  "version": "0.3.0-explore.33",
+  "version": "0.3.0-explore.34",
   "publisher": "your-publisher-id",
   "license": "MIT",
   "repository": {
@@ -81,6 +81,28 @@
           },
           "default": [],
           "markdownDescription": "**Extra** model-id prefixes that `@liustack/modlens` should trust as text-only and bridge with a `(modlens vision)` entry, so a text-only model gets sight.\n\nmodlens matches a family as a case-insensitive **prefix** of the model id (after stripping a leading `~` and any `vendor/` namespace), and its own default is `deepseek`, `glm`, `mimo`. Add prefixes here when your provider routes use opaque aliases — for example `code_instuct`, `code_think` on a gateway that hides DeepSeek/GLM behind them.\n\nYour entries are **added to** `deepseek`, `glm`, `mimo`; the built-in three are never dropped. (modlens resolves `config.families || [defaults]`, so a list sent without them would replace them.)\n\nLeave empty to pass no override at all. Prefer naming families explicitly over `*`: a bare `*` additionally requires the model catalog to declare `text` input, which third-party catalogs usually do not.\n\nChanging this value restarts the DSH host."
+        },
+        "dsh.opencodeProvider": {
+          "type": "object",
+          "default": {
+            "route": "opencode-go2",
+            "api": "openai-completions",
+            "baseURL": "https://opencode.ai/zen/go/v1",
+            "apiKeyEnv": "OPENCODE_GO2_API_KEY",
+            "defaultModel": "glm-5.3-flash",
+            "models": [
+              { "id": "glm-5.2" },
+              { "id": "glm-5.3-flash", "contextWindow": 1000000, "input": ["text", "image"], "reasoningEfforts": { "low": "low", "high": "high", "max": "max" } },
+              { "id": "deepseek-v4-flash" },
+              { "id": "deepseek-v4-flash-vision-exp", "name": "deepseek-v4-flash-vision-exp", "input": ["text", "image"] },
+              { "id": "mimo-v2.5", "input": ["text", "image"] },
+              { "id": "hy3" },
+              { "id": "hy3-preview" },
+              { "id": "grok-4.6" }
+            ]
+          },
+          "additionalProperties": true,
+          "markdownDescription": "The LLM route the extension **bakes into the profile's composition base**, so a brand-new DSH_HOME (or the other machine) has a working model without hand-editing `settings.yaml` — whose own `llm-pi-ai` section, if present, always wins per provider over this baked layer.\n\n`route` is the provider name shown in the model catalog; `apiKeyEnv` names an environment variable read at request time (the key itself is never written to any file); `models` entries may be plain ids or objects with `contextWindow` / `input` / `reasoningEfforts`. `defaultProvider` + `defaultModel` re-point the composition's `agent-default-model` (which ships as `deepseek-official` on a fresh home — an API you may not have).\n\nSet to `null` (or clear `route`/`baseURL`) to bake nothing. Changing this value restarts the DSH host."
         }
       }
     },

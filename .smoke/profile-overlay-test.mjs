@@ -67,7 +67,14 @@ fs.writeFileSync(path.join(HOME, "settings.yaml"), "locale:\n  preference: zh\n"
 
 // ------------------------------------------------------------------- the stub
 const disposable = { dispose() {} };
-const settings = { port: 37796, cwd: ROOT, dshHome: HOME, openOnStartup: false, enableBakedPlugins: true, modlensFamilies: FAMILIES };
+// opencodeProvider defaults to the value shipped in package.json, exactly as a real
+// activation would see it (the stub has no workspace settings of its own).
+const ovenProvider = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"))
+  .contributes.configuration.properties["dsh.opencodeProvider"].default;
+const settings = {
+  port: 37796, cwd: ROOT, dshHome: HOME, openOnStartup: false, enableBakedPlugins: true,
+  modlensFamilies: FAMILIES, opencodeProvider: ovenProvider
+};
 const vscodeStub = {
   window: {
     createOutputChannel: (name) => ({ name, appendLine: (l) => process.stdout.write(`[${name}] ${l}\n`), show() {} }),
@@ -157,15 +164,30 @@ const ext = require(path.join(ROOT, "src", "extension.js"));
   // overlay that names one row must not disturb any other. A patch list row with
   // a bare `id` could have been read as a top-level entry and re-composed the tree,
   // which would unmount every other bundled plugin while this test still passed.
-  const rowNames = (text) => new Set([...text.matchAll(/name:\s*'?([@a-z0-9._/-]+)'?/gi)].map((m) => m[1]));
-  const withRows = rowNames(out);
-  const withoutRows = rowNames(without.out);
+  // Count ROW identities (`- id:`), not `name:` occurrences: a model catalog entry
+  // legitimately carries a nested `name:` field (deepseek-v4-flash-vision-exp does),
+  // and counting those once drifted the count by exactly one.
+  const rowIds = (text) => new Set([...text.matchAll(/^-\s+id:\s*(\S+)\s*$/gm)].map((m) => m[1]));
+  const withRows = rowIds(out);
+  const withoutRows = rowIds(without.out);
   check("the overlay adds no rows", withRows.size === withoutRows.size, `${withoutRows.size} -> ${withRows.size}`);
   const lost = [...withoutRows].filter((n) => !withRows.has(n));
   check("the overlay drops no rows", lost.length === 0, "missing: " + lost.slice(0, 8).join(", "));
   for (const plugin of ["@canglongcl/dsh-web-review", "@liustack/modlens", "dsh-undo-plugin", "dsh-client-auto-continue"]) {
     check(`${plugin} still mounted`, out.includes(plugin));
   }
+
+  // The baked provider: a fresh home ships agent-default-model pointed at
+  // deepseek-official, an API the user may not have, and llm-pi-ai carries no
+  // provider at all. The overlay's composition-base values are what make one usable
+  // without touching settings.yaml, whose own layer still wins per provider.
+  const piAiRow = /^- id: llm-pi-ai[\s\S]{0,1600}?(?=\n- id: )/m.exec(out)?.[0] ?? "";
+  const admRow = /^- id: agent-default-model[\s\S]{0,300}?(?=\n- id: )/m.exec(out)?.[0] ?? "";
+  for (const needle of ["opencode.ai", "OPENCODE_GO2_API_KEY", "glm-5.3-flash", "reasoningEfforts"]) {
+    check(`llm-pi-ai carries the baked provider: ${needle}`, piAiRow.includes(needle));
+  }
+  check("agent-default-model re-pointed", /provider: opencode-go2/.test(admRow) && /model: glm-5\.3-flash/.test(admRow), admRow.replace(/\s+/g, " ").slice(0, 160));
+  check("the fresh home's deepseek-official default is replaced", !/^    provider: deepseek-official/m.test(admRow));
 
   console.log(`\nRESULT: ${failures === 0 ? "PASS" : `FAIL (${failures} check(s))`}`);
   try { fs.rmSync(TMP, { recursive: true, force: true }); } catch { /* best effort */ }
