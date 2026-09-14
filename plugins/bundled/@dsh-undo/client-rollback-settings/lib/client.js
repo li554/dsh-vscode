@@ -4832,7 +4832,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						items,
 						actions
 					});
-				}).then(() => {}, () => {
+				}).then(() => {}, (error) => {
+					// LOCAL PATCH for dsh-vscode. The rejection reason was discarded here,
+					// so an archive read that failed left NO trace anywhere: the section
+					// only said "Archived tasks are temporarily unavailable" and neither
+					// the host log nor the browser console explained why. That made the
+					// failure unactionable from a machine you cannot attach a debugger to.
+					console.error("[dsh-vscode] reading archived tasks failed:", error);
 					if (current) setState({ status: "error" });
 				});
 				return () => {
