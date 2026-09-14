@@ -29,6 +29,12 @@ const PATCHES = [
     file: "plugins/bundled/@dsh-undo/client-rollback-button/lib/client.js",
     applied: "[dsh-vscode] rollback state unavailable:",
     reverted: null
+  },
+  {
+    why: "arm() skipped silently when the prompt was not plain text or the session had no workspace, which is what leaves no rollback button AND no log line anywhere",
+    file: "plugins/bundled/@dsh-undo/rollback-undo/lib/index.js",
+    applied: "rollback undo: no undo coverage for this turn",
+    reverted: null
   }
 ];
 

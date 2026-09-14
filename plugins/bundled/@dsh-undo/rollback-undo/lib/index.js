@@ -1398,7 +1398,18 @@ let ConversationUndoService = (() => {
 			if (agent.session.header.origin === "subagent") return true;
 			const prompt = topLevelText(message);
 			const workspace = agent.session.header.cwd;
-			if (prompt === void 0 || workspace === void 0) return true;
+			// LOCAL PATCH for dsh-vscode. This skip was silent, and it is the one that
+			// explains the whole symptom surface at once: no rollback point is ever
+			// armed, so the header shows no rollback button, and /undo can only answer
+			// "nothing to roll back" — with nothing anywhere saying why. The other
+			// failure (a before-tree that cannot be captured) already logs; this one
+			// did not.
+			if (prompt === void 0 || workspace === void 0) {
+				this.ctx.logger.warn(workspace === void 0
+					? "rollback undo: no undo coverage for this turn — the session has no workspace (cwd), and a rollback point needs one; reopen this session in a folder"
+					: "rollback undo: no undo coverage for this turn — the prompt is not a single plain-text user message, and only those can be rolled back (an attachment, or a steering message sent mid-turn, is not eligible)");
+				return true;
+			}
 			if (this.rollbackWorkspaces.has(workspace)) {
 				this.recordAdmissionFailure(agent.id, prompt, "回滚正在进行，请稍后再试。");
 				return false;

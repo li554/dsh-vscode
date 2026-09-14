@@ -1150,6 +1150,37 @@ function transplantBundledPlugins(profileDir) {
   log("baked-in ecosystem plugins enabled into profile " + profileDir + " (" + copied + " self-contained entry packages)");
 }
 
+/**
+ * Report whether the host's children can actually run `git`.
+ *
+ * The bundled rollback plugin builds each turn's before-tree with `git` executed
+ * from the host process, and a capture it cannot perform is deliberately admitted
+ * without undo coverage rather than blocking the conversation. That makes "the
+ * rollback button is missing and /undo has nothing to do" a possible symptom of git
+ * being unreachable from the host's environment — which is not the same as git being
+ * installed, and is invisible without this line.
+ *
+ * @param {NodeJS.ProcessEnv} env - exactly the environment the host is spawned with.
+ * @param {string} cwd - the working directory the host is spawned in.
+ */
+function probeGit(env, cwd) {
+  try {
+    const child = spawn("git", ["--version"], { env, cwd, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+    let out = "";
+    child.stdout.on("data", (chunk) => { out += chunk.toString(); });
+    child.on("error", (error) => {
+      log(`git probe: cannot run git (${error.code ?? "error"}: ${error.message}) — rollback needs git on the PATH this host inherits, which is not the same as git being installed`);
+    });
+    child.on("close", (code) => {
+      const text = out.trim();
+      if (code === 0) log("git probe: " + (text || "git responded"));
+      else log(`git probe: "git --version" exited ${code}${text ? " — " + text : ""}`);
+    });
+  } catch (error) {
+    log("git probe failed: " + String(error));
+  }
+}
+
 /** Start the DSH web host as a child process and resolve with its bound port. */
 function startHost(requestedPort = 0) {
   return new Promise((resolve, reject) => {
@@ -1197,6 +1228,14 @@ function startHost(requestedPort = 0) {
     };
 
     log(`spawning dsh host: ${hostModulePath()} ${args.join(" ")}`);
+    // The bundled rollback plugin captures each turn's before-tree by running `git`
+    // FROM THE HOST PROCESS, and a capture it cannot perform is admitted without
+    // undo coverage on purpose ("a snapshot must never block the conversation"). So
+    // "no rollback button and /undo has nothing to roll back" can simply mean git is
+    // not on the PATH this host inherits from VS Code — which is otherwise invisible,
+    // and is a different problem from git not being installed. Probe it with the same
+    // env the host gets and say so.
+    void probeGit(env, hostCwd());
     // --expose-internals matches the upstream desktop launcher: the web
     // profile's HMR loader entry requires it (cordis-plugin-hmr checks
     // loader.internal, which only exists with this flag).

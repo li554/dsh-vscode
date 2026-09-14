@@ -174,7 +174,6 @@ python .smoke/pack.py
 答：同一份日志现在**同时落盘**在 `<globalStorage>/your-publisher-id.dsh-vscode/dsh-vscode.log`（超过 4 MB 自动轮转为 `.log.1`）。每次启动会先写一段头信息——扩展版本、`DSH_HOME`、工作目录、`dsh.port`、是否启用内置插件——因为排障真正需要的上下文正是这些，而不是随后的散行。宿主 stdout/stderr、token 交换、代理的 401 与上游错误、以及**经代理返回的非 2xx 响应（含路径）**都会记进去；`/plugins/` 的包请求除外（页面陈旧时会合法 404），且每次会话最多记 200 行以免刷爆。
 
 宿主起来后还会写一行**客户端表面**：
-
 ```
 client surface: 65 mounted of 12 shipped (every shipped client plugin mounted)
 ```
@@ -183,6 +182,26 @@ client surface: 65 mounted of 12 shipped (every shipped client plugin mounted)
 
 **问：记忆标签页 / `Failed to fetch`？**
 答：explore.17 起已**移除** `dsh-memory-evolve`。升级后重启宿主，旧 profile 里的该插件会被自动 prune；若仍看到记忆 Tab，执行 `DSH: Restart Host` 或重载窗口。`Failed to fetch` 通常是宿主进程已退出（见 Host Logs 的 `host exited` / `deactivate`），面板会自动尝试拉起；拉不起来再点 Restart Host。
+
+**问：会话头部没有「回滚」按钮，`/undo` 也说没有可回滚的消息？**
+答：回滚点是**在你自己发消息的那一刻**抓的。`rollback-undo` 挂在 `agent/pre-step` 上，为每个合格回合抓一个 before-tree（用 **git** 抓），据此决定按钮是否渲染（`if (view.value?.messageId === void 0) return null`）。所以它要求**四件事同时成立**：
+
+1. 你发的是一条**纯文本**消息——`topLevelText()` 要求 source 是 `user`、不是 `steer` 投递、且**所有内容块都是 text**；**带附件的消息直接不合格**；
+2. 该会话**有工作区**（`session.header.cwd`）；
+3. 该工作区**是 git 工作树**；
+4. 宿主进程**能跑到 `git`**——它继承 VS Code 的环境，所以「机器上装了 git」不等于「宿主能用 git」。
+
+前三条里任何一条不成立，以前都**不留痕迹**；现在宿主日志会明确写出原因：
+
+```
+rollback undo: no undo coverage for this turn — the session has no workspace (cwd), …
+rollback undo: no undo coverage for this turn — the prompt is not a single plain-text user message, …
+rollback undo: before-tree snapshot unavailable, admitting prompt without undo: <error>   （抓快照失败时）
+git probe: git version 2.50.0.windows.1        （能跑到 git）
+git probe: cannot run git (ENOENT: …)          （宿主环境里没有 git）
+```
+
+抓不了快照时插件**故意不阻塞对话**（注释写着 "Snapshot must never block the conversation"），所以「没有回滚按钮」本身不是故障，但要能从日志里看出**为什么**。
 
 **问：为什么 .vsix 有 100+ MB？**
 答：完整运行时依赖树内置在扩展内以保证离线可用，体积换取了"零依赖、开箱即用"的体验。
