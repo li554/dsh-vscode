@@ -5734,7 +5734,17 @@ window.__ModuleLoader__.load({
 			ctx.inject(["commandUi"], (scope) => {
 				scope.effect(() => scope.commandUi.register({
 					name: "skills",
-					description: t("command.skills.description"),
+					// LOCAL PATCH for dsh-vscode. The 0.1.5 client builds the '/' menu with
+					// `description: contribution.description()`, i.e. it CALLS the field, so
+					// the contribution must supply a function. web-review (written against
+					// an older client, where a plain string was accepted) passed the
+					// translated string, so that call threw
+					// "TypeError: contribution.description is not a function" and the ENTIRE
+					// command source failed — which is why '/' listed skills and no commands
+					// (/goal, /compact, /feedback, /model ...). Wrapping it in a thunk also
+					// makes the description re-translate on locale change, as the platform's
+					// own contributions do.
+					description: () => t("command.skills.description"),
 					available: () => true,
 					ui: {
 						kind: "popupSelect",
