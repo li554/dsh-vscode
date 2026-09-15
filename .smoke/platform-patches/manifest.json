@@ -128,6 +128,32 @@
         "prototype, plus that open/list/locate still exist (otherwise inspect would be",
         "dead code even while defined)."
       ]
+    },
+    {
+      "package": "@deepseek-ai/dsh-win32-process",
+      "file": "lib/index.js",
+      "expectedPackageVersion": "0.1.5-rc.2",
+      "storedAs": "dsh-win32-process/lib/index.js",
+      "why": [
+        "Silence every ordinary CreateProcessW on Windows (git, pwsh, agent tools).",
+        "",
+        "The managed Job runner path (spawnCurrentTokenJobProcess) creates the",
+        "target with CreateProcessW flags 1028 = CREATE_UNICODE_ENVIRONMENT|",
+        "CREATE_SUSPENDED. That omits CREATE_NO_WINDOW (0x08000000), so every",
+        "console application is given a visible console window for the lifetime of",
+        "the command. windowsHide on the runner Node process (patched in",
+        "dsh-subprocess-local) only hides the runner's own console — the target",
+        "created via CreateProcessW still gets one.",
+        "",
+        "The patch ORs CREATE_NO_WINDOW into the current-token Job flags, the",
+        "inherited Job path, and the piped restricted path, and sets",
+        "STARTF_USESHOWWINDOW + wShowWindow=SW_HIDE on STARTUPINFO.",
+        "",
+        "Note: dsh-sandbox-windows-acl documents that CREATE_NO_WINDOW children",
+        "can fail DLL init (STATUS_DLL_INIT_FAILED) under that sandbox's console",
+        "isolation. Ordinary subprocess-local Job launches do not use that ACL",
+        "sandbox; if a sandboxed tool starts failing after this patch, re-check."
+      ]
     }
   ]
 }
