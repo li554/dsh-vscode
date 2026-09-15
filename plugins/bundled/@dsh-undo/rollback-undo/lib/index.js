@@ -1395,7 +1395,15 @@ let ConversationUndoService = (() => {
 		}
 		/** Capture an eligible prompt's before-tree before delegating model admission. */
 		async arm(agent, message, turn) {
-			if (agent.session.header.origin === "subagent") return true;
+			// LOCAL PATCH for dsh-vscode. This was the last silent exit on the path: a
+			// subagent-origin session returns without a word, so every turn in such a
+			// session skipped arming — no journal, no rollback button, and /undo could
+			// only answer "nothing to roll back" — with the host log completely quiet
+			// about why. Everything else on this path now reports itself.
+			if (agent.session.header.origin === "subagent") {
+				this.ctx.logger.warn(`rollback undo: no undo coverage for this turn — "${agent.id}" is a subagent session (origin: subagent); rollback points are owned by the session that started it, not by its subagents`);
+				return true;
+			}
 			const prompt = topLevelText(message);
 			const workspace = agent.session.header.cwd;
 			// LOCAL PATCH for dsh-vscode. This skip was silent, and it is the one that
