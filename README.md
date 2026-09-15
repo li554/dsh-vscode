@@ -189,7 +189,7 @@ client surface: 65 mounted of 12 shipped (every shipped client plugin mounted)
 1. 你发的是一条**纯文本**消息——`topLevelText()` 要求 source 是 `user`、不是 `steer` 投递、且**所有内容块都是 text**；**带附件的消息直接不合格**；
 2. 该会话**有工作区**（`session.header.cwd`）；
 3. 该工作区**是 git 工作树**；
-4. 宿主进程**能跑到 `git`**——它继承 VS Code 的环境，所以「机器上装了 git」不等于「宿主能用 git」。
+4. 宿主进程**能跑到 `git`**——它继承 VS Code 的环境，所以「机器上装了 git」不等于「宿主能用 git」。此外还有**路径长度**这一层：`DSH_HOME` 在 VS Code 的 globalStorage 下本来就近百个字符，影子仓库在里面再叠 lineage 目录，git 又会在其上拼自己的对象/锁/临时路径——超过 Windows 260 就以 `Filename too long` 失败，每次抓快照都被判为「无回滚覆盖」。补丁给影子仓的**每次** git 调用注入 `-c core.longpaths=true`（不触碰用户仓库的任何配置）；实测 265 字符路径：不加 flag 是 `fatal: …`，加后成功且影子仓 `ls-files` 可见该文件。
 
 前三条里任何一条不成立，以前都**不留痕迹**；现在宿主日志会明确写出原因：
 

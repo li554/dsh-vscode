@@ -39,9 +39,17 @@ const MAX_DIFF_PREVIEW_CHARS = 12e3;
 	if (path.split("/").some((segment) => CAPTURE_EXCLUDED_SEGMENTS.has(segment))) return false;
 	return !hasExcludedExtension(path);
 }
-/** Execute Git with the journal-owned directory and index, never the user's index. */ async function git(workspace, shadowGit, args, options = {}) {
+/** Execute Git with the journal-owned directory and index, never the user's index. */
+async function git(workspace, shadowGit, args, options = {}) {
 	return await new Promise((resolveResult, reject) => {
-		const child = spawn("git", [...args], {
+		// LOCAL PATCH for dsh-vscode: core.longpaths. A DSH_HOME under VS Code's
+		// globalStorage is already ~90 characters, the shadow repository adds its
+		// lineage directories inside that, and git then layers its own object, lock
+		// and temp paths on top — past 260 these fail with "Filename too long" and
+		// every before-tree capture was admitted without undo coverage. The flag is
+		// ignored where long paths are not a problem, and it does not touch the
+		// user's own repository config.
+		const child = spawn("git", ["-c", "core.longpaths=true", ...args], {
 			cwd: workspace,
 			windowsHide: true,
 			env: options.shadow === false ? process.env : {
@@ -88,6 +96,8 @@ function workspacePath(workspace, path) {
 async function assertSupportedWorkspace(workspace) {
 	if (await new Promise((resolveResult, reject) => {
 		const child = spawn("git", [
+			"-c",
+			"core.longpaths=true",
 			"rev-parse",
 			"--is-inside-work-tree",
 			"--is-bare-repository"

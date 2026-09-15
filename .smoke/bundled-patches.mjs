@@ -35,6 +35,12 @@ const PATCHES = [
     file: "plugins/bundled/@dsh-undo/rollback-undo/lib/index.js",
     applied: "rollback undo: no undo coverage for this turn",
     reverted: null
+  },
+  {
+    why: "a DSH_HOME under globalStorage plus lineage dirs plus git's own object paths exceeds 260 on Windows, so every before-tree capture failed; core.longpaths is verified to flip that",
+    file: "plugins/bundled/@dsh-undo/rollback-undo/lib/index.js",
+    applied: '["-c", "core.longpaths=true", ...args]',
+    reverted: 'spawn("git", [...args], {'
   }
 ];
 
