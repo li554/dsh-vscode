@@ -407,7 +407,7 @@ Copy-Tree $Src $New ''
       if (session === undefined) return { ok: false, reason: "session-not-found" }
       const ws = await workspaceOf(session)
       if (ws === null) return { ok: false, reason: "no-workspace" }
-      const events = session.events
+      const events = Array.isArray(session.events) ? session.events : []
       const last = events.at(-1)
       const midTurn = last !== undefined && last.type === "turn/start"
       if (!midTurn) {
@@ -466,7 +466,7 @@ Copy-Tree $Src $New ''
       if (session === undefined) return { ok: false, reason: "session-not-found" }
       const ws = await workspaceOf(session)
       if (ws === null) return { ok: false, reason: "no-workspace" }
-      const events = session.events
+      const events = Array.isArray(session.events) ? session.events : []
       const last = events.at(-1)
       if (last !== undefined && last.type === "turn/start") return { ok: false, reason: "running" }
 
