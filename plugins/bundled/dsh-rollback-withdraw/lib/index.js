@@ -17,7 +17,29 @@ export default {
     const subprocess = ctx.get("subprocess")
     const sandboxPolicy = ctx.get("sandboxPolicy")
     const webServer = ctx.get("webServer")
+    const sessionPersistence = ctx.get("sessionPersistence")
     if (sessions === undefined || fs === undefined || subprocess === undefined || webServer === undefined) return
+
+    async function eventsOf(sessionId, session) {
+      if (session !== undefined && Array.isArray(session.events) && session.events.length > 0) return session.events
+      if (sessionPersistence !== undefined && typeof sessionPersistence.inspect === "function") {
+        try {
+          const stored = await sessionPersistence.inspect(sessionId)
+          if (stored && Array.isArray(stored.events)) return stored.events
+        } catch (e) { /* fall through */ }
+      }
+      return []
+    }
+
+    function userMessageText(event) {
+      const data = event && event.data
+      if (!data || !Array.isArray(data.content)) return ""
+      const texts = []
+      for (const block of data.content) {
+        if (block && block.type === "text" && typeof block.text === "string") texts.push(block.text)
+      }
+      return texts.join("")
+    }
 
     const IGNORE_DIRS = [".dsh-rollback", ".git", "node_modules", "dist", "build", "out", ".next", ".nuxt", ".output", ".cache", ".turbo", ".venv", "venv", "env", "__pycache__", ".idea", ".vscode", ".vs", "target", ".gradle", ".pytest_cache", ".mypy_cache", ".tox", ".nox", "coverage"]
     const IGNORE_FILES = [".DS_Store", "*.pyc", "*.log"]
@@ -317,7 +339,7 @@ Copy-Tree $Src $New ''
           : joinPath(checkpointDir(ws.path, session.id, prev), "tree")
         const scriptPath = joinPath(ws.path, ".dsh-rollback", "scripts", "snapshot.ps1")
         const ok = await spawnOk([
-          exe, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", scriptPath,
+          exe, "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File", scriptPath,
           "-Src", ws.path, "-Prev", prevTree, "-New", treeDir,
           "-IgnoreDirs", IGNORE_DIRS.join(","), "-IgnoreFiles", IGNORE_FILES.join(",")
         ], ws.path)
@@ -407,7 +429,7 @@ Copy-Tree $Src $New ''
       if (session === undefined) return { ok: false, reason: "session-not-found" }
       const ws = await workspaceOf(session)
       if (ws === null) return { ok: false, reason: "no-workspace" }
-      const events = Array.isArray(session.events) ? session.events : []
+      const events = await eventsOf(sessionId, session)
       const last = events.at(-1)
       const midTurn = last !== undefined && last.type === "turn/start"
       if (!midTurn) {
@@ -466,16 +488,20 @@ Copy-Tree $Src $New ''
       if (session === undefined) return { ok: false, reason: "session-not-found" }
       const ws = await workspaceOf(session)
       if (ws === null) return { ok: false, reason: "no-workspace" }
-      const events = Array.isArray(session.events) ? session.events : []
+      const events = await eventsOf(sessionId, session)
       const last = events.at(-1)
       if (last !== undefined && last.type === "turn/start") return { ok: false, reason: "running" }
 
       let msgSeq = -1
+      let promptText = ""
       if (kind === "user") {
         const seq = args.seq
-        if (!Number.isInteger(seq) || seq < 0 || seq >= events.length) return { ok: false, reason: "bad-args" }
-        if (events[seq].type !== "user/message") return { ok: false, reason: "message-not-found" }
-        msgSeq = seq
+        if (!Number.isInteger(seq) || seq < 0) return { ok: false, reason: "bad-args" }
+        for (let i = 0; i < events.length; i++) {
+          if (events[i].type === "user/message" && events[i].seq === seq) { msgSeq = i; break }
+        }
+        if (msgSeq < 0) return { ok: false, reason: "message-not-found" }
+        promptText = userMessageText(events[msgSeq])
       } else {
         const messageId = args.messageId
         if (typeof messageId !== "string") return { ok: false, reason: "bad-args" }
@@ -487,6 +513,12 @@ Copy-Tree $Src $New ''
           }
         }
         if (msgSeq < 0) return { ok: false, reason: "message-not-found" }
+        for (let i = msgSeq - 1; i >= 0; i--) {
+          if (events[i].type === "user/message") {
+            promptText = userMessageText(events[i])
+            break
+          }
+        }
       }
 
       let boundary = -1
@@ -503,7 +535,7 @@ Copy-Tree $Src $New ''
       if (manifest && typeof manifest.gitCommit === "string" && (await git()) !== null) {
         const okGit = await gitRestore(ws.path, manifest.gitCommit)
         if (!okGit) return { ok: false, reason: "restore-failed" }
-        return { ok: true, boundarySeq: boundary }
+        return { ok: true, boundarySeq: boundary, prompt: promptText }
       }
 
       const treeDir = joinPath(checkpointDir(ws.path, sessionId, boundary), "tree")
@@ -513,7 +545,7 @@ Copy-Tree $Src $New ''
         console.error("[rlbk] restore failed", String((e && e.message) || e))
         return { ok: false, reason: "restore-failed" }
       }
-      return { ok: true, boundarySeq: boundary }
+      return { ok: true, boundarySeq: boundary, prompt: promptText }
     }
 
     const rpc = {

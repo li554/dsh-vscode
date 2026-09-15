@@ -80,11 +80,34 @@ window.__ModuleLoader__.load({
         rpc("init", { sessionId }).then(() => {}).catch(() => {});
       }
 
+      function seedComposerDraft(sessionId, text) {
+        if (!text) return false;
+        try {
+          const input = ctx.get("conversation.input");
+          const shell = input && typeof input.shell === "function" ? input.shell(sessionId) : null;
+          if (shell && typeof shell.setDraft === "function") {
+            shell.setDraft(text);
+            return true;
+          }
+        } catch (e) { /* ignore */ }
+        return false;
+      }
+
       async function executeWithdraw(sessionId, kind, ident) {
         const res = await rpc("prepare", { sessionId, kind, ...ident });
         if (!res || !res.ok) return { ok: false, reason: (res && res.reason) || "unknown" };
-        const childId = await sessions.fork({ sessionId, atSeq: res.boundarySeq, increaseTitle: true });
-        sessions.open(childId);
+        // Stay on this session: files are restored; put the withdrawn prompt
+        // back in the composer. Forking here re-queued old prompts on send.
+        const prompt = typeof res.prompt === "string" ? res.prompt : "";
+        if (!seedComposerDraft(sessionId, prompt) && prompt) {
+          let tries = 0;
+          const retry = () => {
+            tries += 1;
+            if (seedComposerDraft(sessionId, prompt)) return;
+            if (tries < 20) setTimeout(retry, 100);
+          };
+          setTimeout(retry, 80);
+        }
         return { ok: true };
       }
 
