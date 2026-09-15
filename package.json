@@ -1,8 +1,8 @@
 {
   "name": "dsh-vscode",
   "displayName": "DeepSeek Harness (DSH) for VS Code",
-  "description": "Runs the DeepSeek Harness web surface inside VS Code. All host dependencies are bundled into the extension — users need no Node.js, npm, pnpm, or Python.",
-  "version": "0.3.0-explore.36",
+  "description": "Runs the DeepSeek Harness web surface inside VS Code. All host dependencies are bundled into the extension 鈥?users need no Node.js, npm, pnpm, or Python.",
+  "version": "0.3.0-explore.45",
   "publisher": "your-publisher-id",
   "license": "MIT",
   "repository": {
@@ -80,7 +80,7 @@
             "type": "string"
           },
           "default": [],
-          "markdownDescription": "**Extra** model-id prefixes that `@liustack/modlens` should trust as text-only and bridge with a `(modlens vision)` entry, so a text-only model gets sight.\n\nmodlens matches a family as a case-insensitive **prefix** of the model id (after stripping a leading `~` and any `vendor/` namespace), and its own default is `deepseek`, `glm`, `mimo`. Add prefixes here when your provider routes use opaque aliases —for example `code_instuct`, `code_think` on a gateway that hides DeepSeek/GLM behind them.\n\nYour entries are **added to** `deepseek`, `glm`, `mimo`; the built-in three are never dropped. (modlens resolves `config.families || [defaults]`, so a list sent without them would replace them.)\n\nLeave empty to pass no override at all. Prefer naming families explicitly over `*`: a bare `*` additionally requires the model catalog to declare `text` input, which third-party catalogs usually do not.\n\nChanging this value restarts the DSH host."
+          "markdownDescription": "**Extra** model-id prefixes that `@liustack/modlens` should trust as text-only and bridge with a `(modlens vision)` entry, so a text-only model gets sight.\n\nmodlens matches a family as a case-insensitive **prefix** of the model id (after stripping a leading `~` and any `vendor/` namespace), and its own default is `deepseek`, `glm`, `mimo`. Add prefixes here when your provider routes use opaque aliases 鈥攆or example `code_instuct`, `code_think` on a gateway that hides DeepSeek/GLM behind them.\n\nYour entries are **added to** `deepseek`, `glm`, `mimo`; the built-in three are never dropped. (modlens resolves `config.families || [defaults]`, so a list sent without them would replace them.)\n\nLeave empty to pass no override at all. Prefer naming families explicitly over `*`: a bare `*` additionally requires the model catalog to declare `text` input, which third-party catalogs usually do not.\n\nChanging this value restarts the DSH host."
         }
       }
     },
@@ -117,3 +117,4 @@
     "@vscode/vsce": "^3.3.0"
   }
 }
+

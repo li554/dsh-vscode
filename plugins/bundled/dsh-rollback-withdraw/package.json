@@ -1,0 +1,42 @@
+{
+  "name": "dsh-rollback-withdraw",
+  "version": "0.1.1",
+  "description": "Trae-style withdraw for DeepSeek Harness Web: a rollback button on every user/assistant message that restores the workspace code (git commits or hard-link file snapshots) and forks the session back to the last completed turn. 会话撤回插件：每条消息一键回滚代码与对话。",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "rollback",
+    "withdraw",
+    "undo",
+    "version-control",
+    "session-fork"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  }
+}

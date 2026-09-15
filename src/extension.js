@@ -566,7 +566,7 @@ const BUNDLED_PLUGINS = [
   "@dsh-vscode/p2h-bridge",
   "@liustack/modlens",
   "dsh-client-auto-continue",
-  "dsh-undo-plugin",
+  "dsh-rollback-withdraw",
   "dsh-mnemon"
 ];
 /** Plugins that older vsix releases bundled but this build does not. A DSH_HOME
@@ -617,7 +617,16 @@ const RETIRED_PLUGINS = [
   // retired by dsh-vscode explore.17: advisor 400-storm on session switch + host deaths
   "dsh-memory-evolve",
   // retired by dsh-vscode explore.20: broke chat composer / command list in the panel
-  "graph-memory"
+  "graph-memory",
+  // retired by dsh-vscode explore.45: replaced by dsh-rollback-withdraw
+  "dsh-undo-plugin",
+  "@dsh-undo/client-rollback-button",
+  "@dsh-undo/client-rollback-settings",
+  "@dsh-undo/client-rollback-toolcards",
+  "@dsh-undo/client-rollback-trailfold",
+  "@dsh-undo/rollback-archive",
+  "@dsh-undo/rollback-fork",
+  "@dsh-undo/rollback-undo"
 ];
 /** Platform web profile bundles. They must ALWAYS precede the baked plugins:
  * they provide webServer (and the other services every UI bundle waits on).
