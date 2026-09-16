@@ -1,6 +1,0 @@
-# dsh-rollback-withdraw bundle patch: one host row.
-# The package also declares dsh.client, so the same row is the browser
-# roster entry the modules node half scans into __DSH_BOOT__.
-- insert:
-    - id: rollback-withdraw
-      name: 'dsh-rollback-withdraw'
