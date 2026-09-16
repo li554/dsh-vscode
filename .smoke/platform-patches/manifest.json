@@ -140,6 +140,28 @@
         "the target still got a visible one. Confirmed safe after archive/branch",
         "slowness was traced to a dirty DSH_HOME (old sessions/checkpoints), not this flag."
       ]
+    },
+    {
+      "package": "@deepseek-ai/dsh-api-session-controller",
+      "file": "lib/index.js",
+      "expectedPackageVersion": "0.1.5-rc.2",
+      "storedAs": "dsh-api-session-controller/lib/index.js",
+      "why": [
+        "Fork seed must not swallow the next user/message after the cut turn.",
+        "Original loop advanced cut until turn/start, so a queued next prompt",
+        "was included in the child; the agent then auto-ran it and the user's",
+        "new send was queued behind it. Also patched lib/types/commands.js",
+        "with the same cut logic (duplicate host fork implementation)."
+      ]
+    },
+    {
+      "package": "@deepseek-ai/dsh-api-session-controller",
+      "file": "lib/types/commands.js",
+      "expectedPackageVersion": "0.1.5-rc.2",
+      "storedAs": "dsh-api-session-controller/lib/types/commands.js",
+      "why": [
+        "Duplicate fork implementation of the same cut loop; kept in sync with lib/index.js LOCAL PATCH."
+      ]
     }
   ]
 }
