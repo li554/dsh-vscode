@@ -708,7 +708,7 @@ var SessionCommandController = class {
 			const composition = await this.agents.composeAgent(this.agents.presetForObservation(source));
 			try {
 				const { provider, model } = this.ctx.agentDefaultModel.currentSelection();
-				await this.ctx.agents.create({
+				const handle = await this.ctx.agents.create({
 					sessionId: childId,
 					seed: source.events.slice(0, cut),
 					inheritedEventCount: cut,
@@ -724,6 +724,12 @@ var SessionCommandController = class {
 					},
 					setup: composition.setup
 				});
+				// LOCAL PATCH for dsh-vscode: seed may still rebuild the parent's
+				// unclaimed next-turn/next-step inbox (inserts written before the
+				// fork boundary's turn/end). The child then claims that stale prompt
+				// first when the user sends, and the real new send is queued behind
+				// it. Always start the forked child with an empty inbox.
+				handle.agent.inbox.clear();
 			} catch (error) {
 				throw new RemoteError("gateway/internal", `failed to fork session "${request.sessionId}": ${String(error)}`, {});
 			}

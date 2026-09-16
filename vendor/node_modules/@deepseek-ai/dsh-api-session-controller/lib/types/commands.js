@@ -242,7 +242,7 @@ export class SessionCommandController {
             const composition = await this.agents.composeAgent(this.agents.presetForObservation(source));
             try {
                 const { provider, model } = this.ctx.agentDefaultModel.currentSelection();
-                await this.ctx.agents.create({
+                const handle = await this.ctx.agents.create({
                     sessionId: childId,
                     seed: source.events.slice(0, cut),
                     inheritedEventCount: cut,
@@ -257,6 +257,8 @@ export class SessionCommandController {
                     agentOptions: { provider, model },
                     setup: composition.setup,
                 });
+                // LOCAL PATCH for dsh-vscode: never inherit the parent's pending inbox.
+                handle.agent.inbox.clear();
             }
             catch (error) {
                 throw new RemoteError('gateway/internal', `failed to fork session "${request.sessionId}": ${String(error)}`, {});
