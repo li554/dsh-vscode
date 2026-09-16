@@ -685,14 +685,16 @@ var SessionCommandController = class {
 			// next turn/start, which swallowed any intervening user/message events
 			// (the next prompt already sitting after the completed turn). The child
 			// then auto-ran that "next" instruction when the agent started, and the
-			// user's real new prompt was queued behind it. Stop at turn/start OR
-			// user/message so the seed ends on the completed turn only.
+			// user's real new prompt was queued behind it. Stop at turn/start,
+			// user/message, OR agent/inbox/spliced so the seed ends on the completed
+			// turn only and does not rehydrate the parent's pending next-turn inbox.
 			const boundaryIndex = source.events.findIndex((event) => event === boundary || (event.type === "turn/end" && event.seq === boundary.seq));
 			let cut = SessionLogOffset(boundaryIndex >= 0 ? boundaryIndex + 1 : boundary.seq + 1);
 			while (
 				cut < source.events.length &&
 				source.events[cut]?.type !== "turn/start" &&
-				source.events[cut]?.type !== "user/message"
+				source.events[cut]?.type !== "user/message" &&
+				source.events[cut]?.type !== "agent/inbox/spliced"
 			) {
 				cut = SessionLogOffset(cut + 1);
 			}
