@@ -222,6 +222,23 @@
         var a7 = useState(null); var openDropdown = a7[0], setOpenDropdown = a7[1];
         var a8 = useState(null); var openMenu = a8[0], setOpenMenu = a8[1];
         var a9 = useState(false); var busy = a9[0], setBusy = a9[1];
+        // Two-step delete confirm. Native confirm() is blocked in the VS Code
+        // webview sandbox (allow-modals is not set), so arm → click again.
+        var a11 = useState(null); var armedConfirm = a11[0], setArmedConfirm = a11[1];
+        var armTimerRef = useRef(null);
+
+        function armOrRun(key) {
+          if (armedConfirm !== key) {
+            setArmedConfirm(key);
+            if (armTimerRef.current) clearTimeout(armTimerRef.current);
+            armTimerRef.current = setTimeout(function () { setArmedConfirm(null); }, 4000);
+            showToast('success', fmt(t, 'confirmAgain'));
+            return false;
+          }
+          setArmedConfirm(null);
+          if (armTimerRef.current) { clearTimeout(armTimerRef.current); armTimerRef.current = null; }
+          return true;
+        }
 
         // Preview modal state: { open, sid, title, loading, data, error }
         var a10 = useState(null); var previewModal = a10[0], setPreviewModal = a10[1];
@@ -293,7 +310,7 @@
 
         function del(sid, title) {
           if (busy) return;
-          if (!confirm(fmt(t, 'confirmDelete', title || sid))) return;
+          if (!armOrRun('del:' + sid)) return;
           setBusy(true);
           fetchJson(API_BASE + '/delete', {
             method: 'POST', headers: { 'content-type': 'application/json' },
@@ -317,7 +334,7 @@
 
         function delWs(wsTitle, sids) {
           if (busy || !sids || sids.length === 0) return;
-          if (!confirm(fmt(t, 'confirmDeleteWs', wsTitle, sids.length))) return;
+          if (!armOrRun('delWs:' + wsTitle)) return;
           setBusy(true);
           setOpenMenu(null);
           fetchJson(API_BASE + '/delete', {
@@ -335,7 +352,7 @@
 
         function delAll() {
           if (busy || archives.length === 0) return;
-          if (!confirm(fmt(t, 'confirmDeleteAll', archives.length))) return;
+          if (!armOrRun('delAll')) return;
           setBusy(true);
           fetchJson(API_BASE + '/delete-all', {
             method: 'POST', headers: { 'content-type': 'application/json' },
@@ -496,7 +513,7 @@
               title: t('deleteAllTip'),
               disabled: busy || archives.length === 0,
               onClick: delAll
-            }, IconTrash(13), h('span', null, t('deleteAll')))
+            }, IconTrash(13), h('span', null, armedConfirm === 'delAll' ? fmt(t, 'confirmAgainShort') : t('deleteAll')))
           ),
           loading ? h('div', { className: 'cdx-am-loading' }, t('loading'))
           : archives.length === 0 ? h('div', { className: 'cdx-am-empty' }, t('empty'))
@@ -515,7 +532,7 @@
                       h('button', { type: 'button', className: 'cdx-am-btn-more', 'data-am-more-btn': gTitle, title: t('projectActions'), onClick: function (e) { e.stopPropagation(); setOpenMenu(menuOpen ? null : gTitle); setOpenDropdown(null); } }, IconMore(14)),
                       h('div', { className: 'cdx-am-menu-popover', 'data-open': menuOpen },
                         h('button', { type: 'button', className: 'cdx-am-menu-item', onClick: function (e) { e.stopPropagation(); delWs(gTitle, sids); } },
-                          IconTrash(14), h('span', null, t('deleteAllInProject'))
+                          IconTrash(14), h('span', null, armedConfirm === 'delWs:' + gTitle ? fmt(t, 'confirmAgainShort') : t('deleteAllInProject'))
                         )
                       )
                     )
@@ -547,7 +564,7 @@
                           type: 'button', className: 'cdx-am-btn-action cdx-am-btn-danger',
                           title: t('deleteArchive'),
                           onClick: function () { del(item.sessionId, item.title); }
-                        }, IconTrash(13), h('span', null, t('deletePermanently')))
+                        }, IconTrash(13), h('span', null, armedConfirm === 'del:' + item.sessionId ? fmt(t, 'confirmAgainShort') : t('deletePermanently')))
                       )
                     );
                   })
@@ -597,7 +614,7 @@
                 h('button', {
                   type: 'button', className: 'cdx-am-btn-action cdx-am-btn-danger',
                   onClick: function () { del(previewModal.sid, previewModal.title); }
-                }, IconTrash(13), h('span', null, t('deletePermanently')))
+                }, IconTrash(13), h('span', null, armedConfirm === 'del:' + previewModal.sid ? fmt(t, 'confirmAgainShort') : t('deletePermanently')))
               )
             )
           ) : null
@@ -620,6 +637,8 @@
         loading: '加载已归档对话中…', empty: '暂无已归档的对话。', noMatch: '未找到匹配的归档对话。',
         deleted: '已从磁盘彻底删除会话', loadFailed: '加载失败', unarchiveFailed: '恢复失败',
         deleteFailed: '删除失败', deleteWsFailed: '删除项目归档失败',
+        confirmAgain: '再次点击确认删除（4 秒内有效）',
+        confirmAgainShort: '确认删除',
         confirmDelete: '确认从磁盘彻底物理删除会话「{0}」？\n此操作将删除 session.jsonl.zstd 文件并清理所有记录，无法恢复！',
         confirmDeleteWs: '确认彻底物理删除「{0}」项目下的全部 {1} 个归档会话？\n磁盘文件将全部移除，无法恢复！',
         restoredToast: '已恢复会话「{0}」到侧边栏。', deletedWsToast: '已彻底删除「{0}」项目下的所有归档会话。'
@@ -639,6 +658,8 @@
         loading: 'Loading archived chats...', empty: 'No archived conversations.', noMatch: 'No matching archived chats.',
         deleted: 'Session permanently deleted from disk', loadFailed: 'Load failed', unarchiveFailed: 'Restore failed',
         deleteFailed: 'Delete failed', deleteWsFailed: 'Failed to delete project archives',
+        confirmAgain: 'Click again to confirm delete (within 4s)',
+        confirmAgainShort: 'Confirm delete',
         confirmDelete: 'Permanently delete session \"{0}\" from disk?\nThis will remove session.jsonl.zstd and cannot be undone!',
         confirmDeleteWs: 'Permanently delete all {1} archived chats in \"{0}\"?\nAll disk files will be removed and cannot be undone!',
         restoredToast: 'Restored conversation \"{0}\" to sidebar.', deletedWsToast: 'Permanently deleted all archives in \"{0}\".'
