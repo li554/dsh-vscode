@@ -298,10 +298,16 @@
           fetchJson(API_BASE + '/delete', {
             method: 'POST', headers: { 'content-type': 'application/json' },
             body: JSON.stringify({ sessionId: sid })
-          }).then(function () {
+          }).then(function (r) {
             setBusy(false);
             if (previewModal && previewModal.sid === sid) setPreviewModal(null);
-            showToast('success', fmt(t, 'deleted'));
+            if (r && Array.isArray(r.errors) && r.errors.length) {
+              showToast('error', fmt(t, 'deleteFailed') + ': ' + r.errors.join('; '));
+            } else if (r && Array.isArray(r.removed) && r.removed.length === 0) {
+              showToast('error', fmt(t, 'deleteFailed') + ': not found');
+            } else {
+              showToast('success', fmt(t, 'deleted'));
+            }
             load();
           }).catch(function (e) {
             setBusy(false);

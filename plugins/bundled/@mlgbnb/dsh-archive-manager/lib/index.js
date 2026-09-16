@@ -752,7 +752,14 @@ function isLoopbackRequest(request) {
   const origin = request.headers.origin
   if (origin === undefined) return true
   try {
-    return new URL(origin).host === hostUrl.host
+    // LOCAL PATCH: VS Code webview talks through 127.0.0.1:proxy while the
+    // Host header may be the ephemeral host port — both must count as loopback.
+    const originUrl = new URL(origin)
+    const originLoopback =
+      originUrl.hostname === '127.0.0.1' ||
+      originUrl.hostname === 'localhost' ||
+      originUrl.hostname === '[::1]'
+    return originLoopback || originUrl.host === hostUrl.host
   } catch {
     return false
   }
