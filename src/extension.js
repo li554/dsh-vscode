@@ -566,7 +566,7 @@ const BUNDLED_PLUGINS = [
   "@dsh-vscode/p2h-bridge",
   "@liustack/modlens",
   "dsh-client-auto-continue",
-  "dsh-undo-plugin",
+  "dsh-rewind-plugin",
   "dsh-mnemon"
 ];
 /** Plugins that older vsix releases bundled but this build does not. A DSH_HOME
@@ -617,7 +617,17 @@ const RETIRED_PLUGINS = [
   // retired by dsh-vscode explore.17: advisor 400-storm on session switch + host deaths
   "dsh-memory-evolve",
   // retired by dsh-vscode explore.20: broke chat composer / command list in the panel
-  "graph-memory"
+  "graph-memory",
+  // retired by from-33-rewind: replaced by dsh-rewind-plugin
+  "dsh-undo-plugin",
+  "@dsh-undo/client-rollback-button",
+  "@dsh-undo/client-rollback-settings",
+  "@dsh-undo/client-rollback-toolcards",
+  "@dsh-undo/client-rollback-trailfold",
+  "@dsh-undo/rollback-archive",
+  "@dsh-undo/rollback-fork",
+  "@dsh-undo/rollback-undo",
+  "dsh-rollback-withdraw"
 ];
 /** Platform web profile bundles. They must ALWAYS precede the baked plugins:
  * they provide webServer (and the other services every UI bundle waits on).
@@ -1246,7 +1256,7 @@ function startHost(requestedPort = 0) {
     // (tab switch without retainContextWhenHidden) can SIGTERM the host.
     // detached:true puts the host in its own process group so it survives
     // view dispose; deactivate still taskkill's the tree.
-    const child = spawn(process.execPath, ["--expose-internals", hostModulePath(), ...args], {
+    const child = spawn(process.execPath, ["--expose-internals", "--max-old-space-size=8192", hostModulePath(), ...args], {
       cwd: hostCwd(),
       env,
       stdio: ["ignore", "pipe", "pipe"],
