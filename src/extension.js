@@ -567,6 +567,8 @@ const BUNDLED_PLUGINS = [
   "@liustack/modlens",
   "dsh-client-auto-continue",
   "dsh-rewind-plugin",
+  "@mlgbnb/dsh-archive-manager",
+  "dsh-zh-kit",
   "dsh-mnemon"
 ];
 /** Plugins that older vsix releases bundled but this build does not. A DSH_HOME
@@ -605,7 +607,7 @@ const RETIRED_PLUGINS = [
   "@linxin666/dsh-liangshen",
   "@linxin666/dsh-pet",
   "@linxin666/dsh-tool-describe-image",
-  "@mlgbnb/dsh-archive-manager",
+  // NOTE: @mlgbnb/dsh-archive-manager re-added as explore.57 — not retired.
   "@huanlin/dsh-plugin-better-sidebar-plugin-office",
   "@dsh-external/dsh-super-injector",
   "dsh-auto-compact",
@@ -613,7 +615,8 @@ const RETIRED_PLUGINS = [
   "dsh-file-review",
   "dsh-free-search",
   "dsh-miraculous-standard",
-  "dsh-zh-kit",
+  // NOTE: dsh-zh-kit was in the 0.1.5 retirement list; re-added as explore.57
+  // (must NOT stay in RETIRED_PLUGINS when bundled).
   // retired by dsh-vscode explore.17: advisor 400-storm on session switch + host deaths
   "dsh-memory-evolve",
   // retired by dsh-vscode explore.20: broke chat composer / command list in the panel

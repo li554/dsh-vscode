@@ -128,6 +128,18 @@
         "prototype, plus that open/list/locate still exist (otherwise inspect would be",
         "dead code even while defined)."
       ]
+    },
+    {
+      "package": "@deepseek-ai/dsh-win32-process",
+      "file": "lib/index.js",
+      "expectedPackageVersion": "0.1.5-rc.2",
+      "storedAs": "dsh-win32-process/lib/index.js",
+      "why": [
+        "CREATE_NO_WINDOW on the ordinary Job runner CreateProcessW.",
+        "windowsHide on the runner Node process only hides the runner console;",
+        "the target still got a visible one. Confirmed safe after archive/branch",
+        "slowness was traced to a dirty DSH_HOME (old sessions/checkpoints), not this flag."
+      ]
     }
   ]
 }

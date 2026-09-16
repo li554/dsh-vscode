@@ -1,0 +1,8 @@
+# dsh-archive-manager plugin registration patch
+# Inserts the archive-manager plugin row into the web profile roster.
+# The host half (exports ".") provides HTTP routes for listing/deleting
+# archived sessions; the browser half (exports "./client") renders a
+# management card inside the settings page.
+- insert:
+    - id: archive-manager
+      name: '@mlgbnb/dsh-archive-manager'
