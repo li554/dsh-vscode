@@ -163,6 +163,56 @@ function dshHomeForHost() {
 }
 
 /**
+ * Publisher ids that once shipped this extension. VS Code keys globalStorage
+ * by `<publisher>.<name>`, so changing the publisher strands the old
+ * `dsh-home` under a sibling folder the new install never reads.
+ */
+const LEGACY_PUBLISHER_STORAGE_IDS = ["your-publisher-id.dsh-vscode"];
+
+/** True when a DSH_HOME looks like it already holds user data. */
+function dshHomeLooksUsed(home) {
+  try {
+    if (!fs.statSync(home).isDirectory()) return false;
+    for (const name of ["settings.yaml", "sessions", ".credentials.yaml", "profiles", "memories"]) {
+      if (fs.existsSync(path.join(home, name))) return true;
+    }
+    return fs.readdirSync(home).length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * One-shot: if the current extension's dsh-home is still empty and a previous
+ * publisher's globalStorage has data, copy that data over. Only runs when the
+ * user has not set `dsh.dshHome`, never overwrites a used current home, and
+ * leaves the legacy folder in place as a backup.
+ */
+function migrateLegacyPublisherHome() {
+  try {
+    const configured = String(vscode.workspace.getConfiguration("dsh").get("dshHome") ?? "").trim();
+    if (configured !== "") return;
+    if (!extensionContext?.globalStorageUri?.fsPath) return;
+    const currentHome = path.join(extensionContext.globalStorageUri.fsPath, "dsh-home");
+    if (dshHomeLooksUsed(currentHome)) return;
+    const storageRoot = path.dirname(extensionContext.globalStorageUri.fsPath);
+    for (const legacyId of LEGACY_PUBLISHER_STORAGE_IDS) {
+      const legacyHome = path.join(storageRoot, legacyId, "dsh-home");
+      if (!dshHomeLooksUsed(legacyHome)) continue;
+      fs.mkdirSync(currentHome, { recursive: true });
+      fs.cpSync(legacyHome, currentHome, { recursive: true });
+      log(`migrated DSH_HOME from legacy publisher storage: ${legacyHome} -> ${currentHome}`);
+      try {
+        fs.writeFileSync(path.join(currentHome, ".migrated-from-publisher"), legacyId + "\n");
+      } catch { /* marker is best-effort */ }
+      return;
+    }
+  } catch (err) {
+    log("legacy publisher home migration failed: " + String(err && err.message ? err.message : err));
+  }
+}
+
+/**
  * Fixed port the DSH host binds. Using a fixed port (instead of --port 0) lets
  * us configure the webview's portMapping synchronously in resolveWebviewView,
  * before the webview receives any html. VS Code 1.134 runs webviews with
@@ -1676,6 +1726,11 @@ async function activate(context) {
   // not reconstructible from the lines that follow.
   log(`=== dsh-vscode ${context.extension?.packageJSON?.version ?? "?"} | ${new Date().toISOString()} ===`);
   log(`extension path: ${context.extensionPath}`);
+  // Before the first host boot: if the publisher id changed, the new
+  // globalStorage folder is empty while sessions/settings still live under the
+  // old publisher. Copy them forward once so an upgrade does not look like a
+  // wipe.
+  migrateLegacyPublisherHome();
   log(`DSH_HOME: ${dshHomeForHost()}`);
   log(`cwd: ${hostCwd()}`);
   log(`dsh.port: ${hostPortFor()} | baked plugins: ${String(vscode.workspace.getConfiguration("dsh").get("enableBakedPlugins"))}`);
