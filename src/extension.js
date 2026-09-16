@@ -169,46 +169,87 @@ function dshHomeForHost() {
  */
 const LEGACY_PUBLISHER_STORAGE_IDS = ["your-publisher-id.dsh-vscode"];
 
-/** True when a DSH_HOME looks like it already holds user data. */
-function dshHomeLooksUsed(home) {
+/**
+ * True when a DSH_HOME holds user data the user would care about (sessions,
+ * credentials, real settings). Scaffold the extension recreates on every boot
+ * (`profiles/`, empty `sessions/`, etc.) does NOT count — otherwise a first
+ * open under the new publisher would mark the home "used" and block migration.
+ */
+function dshHomeHasUserData(home) {
   try {
-    if (!fs.statSync(home).isDirectory()) return false;
-    for (const name of ["settings.yaml", "sessions", ".credentials.yaml", "profiles", "memories"]) {
-      if (fs.existsSync(path.join(home, name))) return true;
+    const sessions = path.join(home, "sessions");
+    try {
+      if (fs.statSync(sessions).isDirectory() && fs.readdirSync(sessions).length > 0) return true;
+    } catch { /* no sessions */ }
+    if (fs.existsSync(path.join(home, ".credentials.yaml"))) return true;
+    try {
+      const text = fs.readFileSync(path.join(home, "settings.yaml"), "utf8").trim();
+      // A non-empty settings file is user config; a missing/blank one is not.
+      if (text !== "" && text !== "---") return true;
+    } catch { /* no settings */ }
+    const memories = path.join(home, "memories");
+    try {
+      if (fs.statSync(memories).isDirectory() && fs.readdirSync(memories).length > 0) return true;
+    } catch { /* no memories */ }
+  } catch { /* unreadable */ }
+  return false;
+}
+
+/** Candidate legacy DSH_HOME locations, highest priority first. */
+function legacyHomeCandidates() {
+  const out = [];
+  try {
+    if (extensionContext?.globalStorageUri?.fsPath) {
+      const storageRoot = path.dirname(extensionContext.globalStorageUri.fsPath);
+      for (const id of LEGACY_PUBLISHER_STORAGE_IDS) {
+        out.push(path.join(storageRoot, id, "dsh-home"));
+      }
     }
-    return fs.readdirSync(home).length > 0;
-  } catch {
-    return false;
-  }
+  } catch { /* ignore */ }
+  // Older builds fell back to these when globalStorage was unavailable.
+  out.push(path.join(os.homedir(), ".dsh-vscode"));
+  return out;
 }
 
 /**
- * One-shot: if the current extension's dsh-home is still empty and a previous
- * publisher's globalStorage has data, copy that data over. Only runs when the
- * user has not set `dsh.dshHome`, never overwrites a used current home, and
- * leaves the legacy folder in place as a backup.
+ * Copy user data from the first candidate legacy home into the current
+ * extension-owned home when the current one has none (or when `force` is set
+ * by the manual command after an explicit confirm). Runs on activate (after
+ * VS Code reloads — not at the VSIX install click). Leaves the source in place.
+ * @param {{ force?: boolean }} [opts]
+ * @returns {string} a short status line for the log / manual command.
  */
-function migrateLegacyPublisherHome() {
+function migrateLegacyPublisherHome(opts = {}) {
   try {
     const configured = String(vscode.workspace.getConfiguration("dsh").get("dshHome") ?? "").trim();
-    if (configured !== "") return;
-    if (!extensionContext?.globalStorageUri?.fsPath) return;
+    if (configured !== "") return "skipped: dsh.dshHome is set";
+    if (!extensionContext?.globalStorageUri?.fsPath) return "skipped: no globalStorage";
     const currentHome = path.join(extensionContext.globalStorageUri.fsPath, "dsh-home");
-    if (dshHomeLooksUsed(currentHome)) return;
-    const storageRoot = path.dirname(extensionContext.globalStorageUri.fsPath);
-    for (const legacyId of LEGACY_PUBLISHER_STORAGE_IDS) {
-      const legacyHome = path.join(storageRoot, legacyId, "dsh-home");
-      if (!dshHomeLooksUsed(legacyHome)) continue;
+    if (!opts.force && dshHomeHasUserData(currentHome)) return "skipped: current home already has user data";
+    const candidates = legacyHomeCandidates();
+    log("legacy-home candidates: " + candidates.join(" | "));
+    for (const legacyHome of candidates) {
+      if (path.resolve(legacyHome) === path.resolve(currentHome)) continue;
+      if (!dshHomeHasUserData(legacyHome)) {
+        log("legacy-home skip (no user data): " + legacyHome);
+        continue;
+      }
       fs.mkdirSync(currentHome, { recursive: true });
+      // Copy tree; do not delete the source. Existing empty scaffold in the
+      // destination is overwritten file-by-file by cpSync's default behaviour.
       fs.cpSync(legacyHome, currentHome, { recursive: true });
-      log(`migrated DSH_HOME from legacy publisher storage: ${legacyHome} -> ${currentHome}`);
       try {
-        fs.writeFileSync(path.join(currentHome, ".migrated-from-publisher"), legacyId + "\n");
+        fs.writeFileSync(path.join(currentHome, ".migrated-from-publisher"), legacyHome + "\n");
       } catch { /* marker is best-effort */ }
-      return;
+      const msg = `migrated DSH_HOME from ${legacyHome} -> ${currentHome}`;
+      log(msg);
+      return msg;
     }
+    return "skipped: no legacy home with user data found";
   } catch (err) {
-    log("legacy publisher home migration failed: " + String(err && err.message ? err.message : err));
+    const msg = "legacy home migration failed: " + String(err && err.message ? err.message : err);
+    log(msg);
+    return msg;
   }
 }
 
@@ -1729,8 +1770,9 @@ async function activate(context) {
   // Before the first host boot: if the publisher id changed, the new
   // globalStorage folder is empty while sessions/settings still live under the
   // old publisher. Copy them forward once so an upgrade does not look like a
-  // wipe.
-  migrateLegacyPublisherHome();
+  // wipe. This runs on extension activate (VS Code startup / Reload Window
+  // after install), NOT at the moment of "Install from VSIX".
+  log("legacy-home migrate: " + migrateLegacyPublisherHome());
   log(`DSH_HOME: ${dshHomeForHost()}`);
   log(`cwd: ${hostCwd()}`);
   log(`dsh.port: ${hostPortFor()} | baked plugins: ${String(vscode.workspace.getConfiguration("dsh").get("enableBakedPlugins"))}`);
@@ -1757,6 +1799,31 @@ async function activate(context) {
     await vscode.env.openExternal(vscode.Uri.parse(hostAuthUrl()));
   });
   const logs = vscode.commands.registerCommand("dsh.showLogs", () => { if (output) output.show(); });
+  const migrate = vscode.commands.registerCommand("dsh.migrateLegacyHome", async () => {
+    const configured = String(vscode.workspace.getConfiguration("dsh").get("dshHome") ?? "").trim();
+    if (configured !== "") {
+      void vscode.window.showWarningMessage("DSH: clear dsh.dshHome first, then run Migrate Legacy Home again.");
+      return;
+    }
+    if (!extensionContext?.globalStorageUri?.fsPath) {
+      void vscode.window.showWarningMessage("DSH: no globalStorage available.");
+      return;
+    }
+    const currentHome = path.join(extensionContext.globalStorageUri.fsPath, "dsh-home");
+    let force = false;
+    if (dshHomeHasUserData(currentHome)) {
+      const pick = await vscode.window.showWarningMessage(
+        "DSH: the current home already has sessions/settings. Overwrite by copying from the legacy home?",
+        { modal: true },
+        "Overwrite from legacy"
+      );
+      if (pick !== "Overwrite from legacy") return;
+      force = true;
+    }
+    const status = migrateLegacyPublisherHome({ force });
+    void vscode.window.showInformationMessage("DSH: " + status);
+    if (status.startsWith("migrated")) void restartHost();
+  });
   // A plugin's cordis config is read when the plugin is applied, so a settings
   // change only takes effect on a fresh host. Killing the running one is enough:
   // a live view re-attaches through restartHost, and a hidden view re-forks with
@@ -1766,7 +1833,7 @@ async function activate(context) {
     log("dsh.modlensFamilies changed -> restarting the host so the new overlay applies");
     void restartHost();
   });
-  const subscriptions = [providerHandle, open, restart, browser, logs];
+  const subscriptions = [providerHandle, open, restart, browser, logs, migrate];
   if (settingsWatcher) subscriptions.push(settingsWatcher);
   context.subscriptions.push(...subscriptions);
 
