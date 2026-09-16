@@ -31,9 +31,15 @@ const MAX_JSON_BODY_BYTES = 512 * 1024
 
 const ZSTD_MAGIC = 4247762216
 
-/** DSH home directory. */
+/** DSH home directory. Prefer process.env.DSH_HOME (set by the dsh-vscode host spawn). */
 export function dshHome() {
-  return resolveDshHome()
+  const fromEnv = process.env && process.env.DSH_HOME
+  if (typeof fromEnv === "string" && fromEnv.trim() !== "") return fromEnv.trim()
+  try {
+    return resolveDshHome()
+  } catch {
+    return undefined
+  }
 }
 
 /** Path to workspace.json. */
@@ -362,10 +368,21 @@ export function extractSessionDetail(dataDir, maxMessages = 50) {
  * List every archived session with metadata.
  */
 export function listArchives(ctx) {
-  const workspace = readJsonFile(workspacePath())
-  const projcache = readJsonFile(projcachePath())
+  const home = dshHome()
+  if (!home) return []
+  const workspace = readJsonFile(join(home, 'storages', 'workspace.json'))
+  const projcache = readJsonFile(join(home, 'storages', 'session_projcache.json'))
 
-  const archivedIds = ctx?.workspaceRegistry?.archivedSessionIds ?? workspace?.global?.archivedSessionIds ?? []
+  // Prefer the live registry; fall back to workspace.json. Live IDs must never
+  // be ghost-filtered just because a path lookup failed.
+  const liveIds = ctx && ctx.workspaceRegistry && Array.isArray(ctx.workspaceRegistry.archivedSessionIds)
+    ? ctx.workspaceRegistry.archivedSessionIds.map(String)
+    : []
+  const diskIds = Array.isArray(workspace?.global?.archivedSessionIds)
+    ? workspace.global.archivedSessionIds.map(String)
+    : []
+  const archivedIds = [...new Set([...liveIds, ...diskIds])]
+  const liveSet = new Set(liveIds)
   const workspaces = workspace?.tables?.workspaces ?? {}
   const sessions = projcache?.tables?.sessions ?? {}
 
@@ -411,8 +428,8 @@ export function listArchives(ctx) {
       }
     }
 
-    // Ghost detection: no disk file and no projcache record
-    if (!hasDataFile && !sessionMeta) {
+    // Ghost only when the ID is not in the live registry AND has no disk evidence
+    if (!hasDataFile && !sessionMeta && !liveSet.has(sid)) {
       ghostIds.push(sid)
       continue
     }
@@ -434,11 +451,11 @@ export function listArchives(ctx) {
     })
   }
 
-  // Auto-prune ghost IDs from workspace.json
+  // Auto-prune ghost IDs from workspace.json only (never mutate live state)
   if (ghostIds.length > 0 && workspace?.global?.archivedSessionIds) {
     try {
       workspace.global.archivedSessionIds = workspace.global.archivedSessionIds.filter((id) => !ghostIds.includes(id))
-      writeJsonFile(workspacePath(), workspace)
+      writeJsonFile(join(home, 'storages', 'workspace.json'), workspace)
     } catch {}
   }
 
