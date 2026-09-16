@@ -245,20 +245,43 @@ export function decodeZstdLog(filePath) {
   }
 }
 
+/** Find a session transcript file inside a session data directory. */
+export function findSessionDataFile(dataDir) {
+  if (!existsSync(dataDir)) return undefined
+  // Prefer current v3 naming, then classic names.
+  const preferred = [
+    'session.v3.jsonl.zstd',
+    'session.jsonl.zstd',
+    'session.v3.jsonl',
+    'session.jsonl',
+  ]
+  for (const name of preferred) {
+    const p = join(dataDir, name)
+    if (existsSync(p)) return p
+  }
+  // Any other session*.jsonl[.zstd]
+  try {
+    for (const name of readdirSync(dataDir)) {
+      if (/^session(\.v\d+)?\.jsonl(\.zstd)?$/i.test(name)) {
+        return join(dataDir, name)
+      }
+    }
+  } catch {}
+  return undefined
+}
+
 /** Read full transcript text from data directory. */
 export function readTranscriptText(dataDir) {
-  const zstdPath = join(dataDir, 'session.jsonl.zstd')
-  const jsonlPath = join(dataDir, 'session.jsonl')
-
-  if (existsSync(zstdPath)) {
-    return decodeZstdLog(zstdPath)
+  const dataFile = findSessionDataFile(dataDir)
+  if (!dataFile) return ''
+  if (dataFile.endsWith('.zstd')) {
+    return decodeZstdLog(dataFile)
   }
-  if (existsSync(jsonlPath)) {
-    try {
-      return readFileSync(jsonlPath, 'utf8')
-    } catch {}
+  try {
+    return readFileSync(dataFile, 'utf8')
+  } catch {
+    return ''
   }
-  return ''
 }
 
 /** Read title and metadata directly from session log data file. */
@@ -280,7 +303,7 @@ export function readSessionMetaFromDataFile(dataDir) {
       if (ev.type === 'session') {
         if (ev.createdAt) createdAt = ev.createdAt
         if (ev.cwd) cwd = ev.cwd
-      } else if (ev.type === 'session/title/set' || ev.type === 'title') {
+      } else if (ev.type === 'session/title/set' || ev.type === 'title' || ev.type === 'session/title') {
         title = ev.title || ev.data?.title || title
       } else if (ev.type === 'turn/start') {
         turns++
@@ -415,9 +438,8 @@ export function listArchives(ctx) {
 
     if (dataDir !== undefined) {
       dataSize = dirSize(dataDir)
-      const zstdPath = join(dataDir, 'session.jsonl.zstd')
-      const jsonlPath = join(dataDir, 'session.jsonl')
-      hasDataFile = existsSync(zstdPath) || existsSync(jsonlPath)
+      const dataFile = findSessionDataFile(dataDir)
+      hasDataFile = dataFile !== undefined
 
       // Fallback extraction from data file
       if (hasDataFile && (!title || !createdAt || turns === 0)) {
@@ -641,6 +663,9 @@ export async function deleteSessions(ctx, sessionIds) {
       } catch (err) {
         errors.push(sid + ': ' + (err instanceof Error ? err.message : String(err)))
       }
+    } else {
+      // Still count as removed if it was only in the archive registry.
+      found = true
     }
 
     if (found) {
