@@ -10,7 +10,7 @@
  * mounted once at session creation and nothing re-reads the file.
  */
 import type { ReactNode } from 'react';
-import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client';
+import type { SnapshotStore } from '@deepseek-ai/dsh-client-store';
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots';
 import { type AgentPresetSectionState } from './section-store.ts';
 /** Registration-side business face for the management section. */

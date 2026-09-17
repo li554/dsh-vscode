@@ -4,6 +4,8 @@
 
 为 DeepSeek Harness (DSH) Web 界面提供与 Codex 1:1 一致的**会话归档管理**功能，支持在设置页中直观查看、搜索/筛选、**预览对话内容**、一键取消归档以及彻底删除归档会话。
 
+当前版本要求 DSH `>=0.1.2-alpha.2`，并支持通过 `DSH_HOME` 指定 DSH 数据目录。
+
 [![npm version](https://img.shields.io/npm/v/@mlgbnb/dsh-archive-manager.svg)](https://www.npmjs.com/package/@mlgbnb/dsh-archive-manager)
 [![npm downloads](https://img.shields.io/npm/dm/@mlgbnb/dsh-archive-manager.svg)](https://www.npmjs.com/package/@mlgbnb/dsh-archive-manager)
 
@@ -35,6 +37,12 @@
 
 DSH 采用 Cordis 模块化微内核架构，你可以通过以下方式安装该插件：
 
+### 环境要求
+
+- DSH `>=0.1.2-alpha.2`
+- Web Profile
+- Node.js 内置 `zlib`（无需额外安装 `zstd` 命令行工具）
+
 ### 方法一：通过 NPM 线上源安装（推荐）
 
 #### 1. 使用 DSH 官方 CLI 命令一键安装
@@ -43,23 +51,32 @@ DSH 采用 Cordis 模块化微内核架构，你可以通过以下方式安装�
 dsh plugin --profile web add -w @mlgbnb/dsh-archive-manager
 ```
 
+如需固定当前版本，可执行：
+
+```bash
+dsh plugin --profile web add -w "@mlgbnb/dsh-archive-manager@1.0.10"
+```
+
 #### 2. 或者在 Web Profile 目录下通过 npm/pnpm 安装
 
 ```bash
+# 已设置 DSH_HOME 时
+cd "$DSH_HOME/profiles/web"
+# 未设置 DSH_HOME 时
 cd ~/.dsh/profiles/web
 npm i @mlgbnb/dsh-archive-manager
 # 或使用 pnpm
 pnpm add -w @mlgbnb/dsh-archive-manager
 ```
 
-安装完成后，请确认 `~/.dsh/profiles/web/package.json` 中的 `dsh.profile.bundles` 数组已包含 `@mlgbnb/dsh-archive-manager`：
+安装完成后，请确认 `$DSH_HOME/profiles/web/package.json`（未设置 `DSH_HOME` 时为 `~/.dsh/profiles/web/package.json`）中的 `dsh.profile.bundles` 数组已包含 `@mlgbnb/dsh-archive-manager`：
 
 ```json
 {
   "name": "dsh-profile-web",
   "private": true,
   "dependencies": {
-    "@mlgbnb/dsh-archive-manager": "^1.0.0"
+    "@mlgbnb/dsh-archive-manager": "^1.0.10"
   },
   "dsh": {
     "profile": {
@@ -84,7 +101,7 @@ pnpm add -w @mlgbnb/dsh-archive-manager
 dsh plugin --profile web add -w "link:/path/to/dsh/plugin/dsh-archive-manager"
 ```
 
-> **注意**：如果执行 `add` 后启动报错提示子包重复声明，请检查 `~/.dsh/profiles/web/package.json` 中的 `dsh.profile.bundles` 数组，确保其中仅包含根包（如 `@mlgbnb/dsh-archive-manager`、`@linxin666/dsh-web-ui-all` 等），避免包含子组件包。
+> **注意**：如果执行 `add` 后启动报错提示子包重复声明，请检查 `$DSH_HOME/profiles/web/package.json`（未设置 `DSH_HOME` 时为 `~/.dsh/profiles/web/package.json`）中的 `dsh.profile.bundles` 数组，确保其中仅包含根包（如 `@mlgbnb/dsh-archive-manager`、`@linxin666/dsh-web-ui-all` 等），避免包含子组件包。
 
 ---
 
@@ -118,3 +135,5 @@ dsh-archive-manager/
 └── src/
     └── index.ts       # TypeScript 伴生源文件（类型声明与 Host 入口说明）
 ```
+
+插件运行时会读取 DSH 的 `storages/workspace.json`、`storages/session_projcache.json` 和 `sessions/` 目录。数据根目录由 DSH_HOME 路径解析规则决定，默认是 `~/.dsh`。

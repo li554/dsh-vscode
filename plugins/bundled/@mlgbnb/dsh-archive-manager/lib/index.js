@@ -14,8 +14,8 @@
 
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync, rmSync, statSync, readdirSync } from 'node:fs'
 import { join, dirname, basename } from 'node:path'
-import { homedir } from 'node:os'
 import { zstdDecompressSync } from 'node:zlib'
+import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 
 /** Stable cordis plugin name. */
 export const name = 'archive-manager'
@@ -31,11 +31,15 @@ const MAX_JSON_BODY_BYTES = 512 * 1024
 
 const ZSTD_MAGIC = 4247762216
 
-/** DSH home directory — the extension host exports DSH_HOME, so prefer it over ~/.dsh. */
+/** DSH home directory. Prefer process.env.DSH_HOME (set by the dsh-vscode host spawn). */
 export function dshHome() {
-  const override = process.env.DSH_HOME
-  if (typeof override === 'string' && override.trim() !== '') return override
-  return join(homedir(), '.dsh')
+  const fromEnv = process.env && process.env.DSH_HOME
+  if (typeof fromEnv === "string" && fromEnv.trim() !== "") return fromEnv.trim()
+  try {
+    return resolveDshHome()
+  } catch {
+    return undefined
+  }
 }
 
 /** Path to workspace.json. */
@@ -241,20 +245,43 @@ export function decodeZstdLog(filePath) {
   }
 }
 
+/** Find a session transcript file inside a session data directory. */
+export function findSessionDataFile(dataDir) {
+  if (!existsSync(dataDir)) return undefined
+  // Prefer current v3 naming, then classic names.
+  const preferred = [
+    'session.v3.jsonl.zstd',
+    'session.jsonl.zstd',
+    'session.v3.jsonl',
+    'session.jsonl',
+  ]
+  for (const name of preferred) {
+    const p = join(dataDir, name)
+    if (existsSync(p)) return p
+  }
+  // Any other session*.jsonl[.zstd]
+  try {
+    for (const name of readdirSync(dataDir)) {
+      if (/^session(\.v\d+)?\.jsonl(\.zstd)?$/i.test(name)) {
+        return join(dataDir, name)
+      }
+    }
+  } catch {}
+  return undefined
+}
+
 /** Read full transcript text from data directory. */
 export function readTranscriptText(dataDir) {
-  const zstdPath = join(dataDir, 'session.jsonl.zstd')
-  const jsonlPath = join(dataDir, 'session.jsonl')
-
-  if (existsSync(zstdPath)) {
-    return decodeZstdLog(zstdPath)
+  const dataFile = findSessionDataFile(dataDir)
+  if (!dataFile) return ''
+  if (dataFile.endsWith('.zstd')) {
+    return decodeZstdLog(dataFile)
   }
-  if (existsSync(jsonlPath)) {
-    try {
-      return readFileSync(jsonlPath, 'utf8')
-    } catch {}
+  try {
+    return readFileSync(dataFile, 'utf8')
+  } catch {
+    return ''
   }
-  return ''
 }
 
 /** Read title and metadata directly from session log data file. */
@@ -276,7 +303,7 @@ export function readSessionMetaFromDataFile(dataDir) {
       if (ev.type === 'session') {
         if (ev.createdAt) createdAt = ev.createdAt
         if (ev.cwd) cwd = ev.cwd
-      } else if (ev.type === 'session/title/set' || ev.type === 'title') {
+      } else if (ev.type === 'session/title/set' || ev.type === 'title' || ev.type === 'session/title') {
         title = ev.title || ev.data?.title || title
       } else if (ev.type === 'turn/start') {
         turns++
@@ -364,10 +391,21 @@ export function extractSessionDetail(dataDir, maxMessages = 50) {
  * List every archived session with metadata.
  */
 export function listArchives(ctx) {
-  const workspace = readJsonFile(workspacePath())
-  const projcache = readJsonFile(projcachePath())
+  const home = dshHome()
+  if (!home) return []
+  const workspace = readJsonFile(join(home, 'storages', 'workspace.json'))
+  const projcache = readJsonFile(join(home, 'storages', 'session_projcache.json'))
 
-  const archivedIds = ctx?.workspaceRegistry?.archivedSessionIds ?? workspace?.global?.archivedSessionIds ?? []
+  // Prefer the live registry; fall back to workspace.json. Live IDs must never
+  // be ghost-filtered just because a path lookup failed.
+  const liveIds = ctx && ctx.workspaceRegistry && Array.isArray(ctx.workspaceRegistry.archivedSessionIds)
+    ? ctx.workspaceRegistry.archivedSessionIds.map(String)
+    : []
+  const diskIds = Array.isArray(workspace?.global?.archivedSessionIds)
+    ? workspace.global.archivedSessionIds.map(String)
+    : []
+  const archivedIds = [...new Set([...liveIds, ...diskIds])]
+  const liveSet = new Set(liveIds)
   const workspaces = workspace?.tables?.workspaces ?? {}
   const sessions = projcache?.tables?.sessions ?? {}
 
@@ -400,9 +438,8 @@ export function listArchives(ctx) {
 
     if (dataDir !== undefined) {
       dataSize = dirSize(dataDir)
-      const zstdPath = join(dataDir, 'session.jsonl.zstd')
-      const jsonlPath = join(dataDir, 'session.jsonl')
-      hasDataFile = existsSync(zstdPath) || existsSync(jsonlPath)
+      const dataFile = findSessionDataFile(dataDir)
+      hasDataFile = dataFile !== undefined
 
       // Fallback extraction from data file
       if (hasDataFile && (!title || !createdAt || turns === 0)) {
@@ -413,8 +450,8 @@ export function listArchives(ctx) {
       }
     }
 
-    // Ghost detection: no disk file and no projcache record
-    if (!hasDataFile && !sessionMeta) {
+    // Ghost only when the ID is not in the live registry AND has no disk evidence
+    if (!hasDataFile && !sessionMeta && !liveSet.has(sid)) {
       ghostIds.push(sid)
       continue
     }
@@ -436,11 +473,11 @@ export function listArchives(ctx) {
     })
   }
 
-  // Auto-prune ghost IDs from workspace.json
+  // Auto-prune ghost IDs from workspace.json only (never mutate live state)
   if (ghostIds.length > 0 && workspace?.global?.archivedSessionIds) {
     try {
       workspace.global.archivedSessionIds = workspace.global.archivedSessionIds.filter((id) => !ghostIds.includes(id))
-      writeJsonFile(workspacePath(), workspace)
+      writeJsonFile(join(home, 'storages', 'workspace.json'), workspace)
     } catch {}
   }
 
@@ -626,6 +663,9 @@ export async function deleteSessions(ctx, sessionIds) {
       } catch (err) {
         errors.push(sid + ': ' + (err instanceof Error ? err.message : String(err)))
       }
+    } else {
+      // Still count as removed if it was only in the archive registry.
+      found = true
     }
 
     if (found) {
@@ -712,7 +752,14 @@ function isLoopbackRequest(request) {
   const origin = request.headers.origin
   if (origin === undefined) return true
   try {
-    return new URL(origin).host === hostUrl.host
+    // LOCAL PATCH: VS Code webview talks through 127.0.0.1:proxy while the
+    // Host header may be the ephemeral host port — both must count as loopback.
+    const originUrl = new URL(origin)
+    const originLoopback =
+      originUrl.hostname === '127.0.0.1' ||
+      originUrl.hostname === 'localhost' ||
+      originUrl.hostname === '[::1]'
+    return originLoopback || originUrl.host === hostUrl.host
   } catch {
     return false
   }

@@ -2,7 +2,8 @@
  * @deepseek-ai/dsh-headless — one-shot direct Agent driver. The bundle patch
  * rides over dsh-base without Host, HTTP, or browser plugins; this runner
  * creates one Agent through the core registry, drives the task to quiescence,
- * flushes its Session, prints the final assistant text, and exits.
+ * streams provider reasoning to stderr, flushes its Session, prints the final
+ * assistant text to stdout, and exits.
  *
  * @module @deepseek-ai/dsh-headless
  */

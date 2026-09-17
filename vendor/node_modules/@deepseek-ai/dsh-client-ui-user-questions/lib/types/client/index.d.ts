@@ -12,10 +12,9 @@
  * separate chain entry per shape would race the same carrier, so the shape
  * choice lives inside this entry — see QuestionComposer.
  */
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client';
+import type { Context as ClientContext } from '@deepseek-ai/cordis';
 import { type QuestionKey } from './locales.ts';
-export { PendingQuestion } from './contract/slots.ts';
-export type { PlanReview, QuestionAnswer, QuestionComposerProps, QuestionWait, } from './contract/slots.ts';
+export type { PendingQuestion, PlanReview, QuestionAnswer, QuestionComposerProps, QuestionWait, } from './contract/slots.ts';
 export type { QuestionKey } from './locales.ts';
 declare module '@deepseek-ai/dsh-client-ui-slots' {
     interface LocaleNamespaceMap {
@@ -23,7 +22,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
         question: QuestionKey;
     }
 }
-/** Required services: the slot registry and the question composer's copy. */
+/** Required services: Agent scopes, Remote Events, Session UI, Slot registry, and copy. */
 export declare const inject: string[];
 /**
  * Client plugin body: register the `question` dictionaries and the question

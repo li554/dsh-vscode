@@ -1,11 +1,11 @@
 /**
- * Code Mode codegen — Python flavor. The pure projection from registered tool schemas to the
+ * PTC mode codegen — Python flavor. The pure projection from registered tool schemas to the
  * Python SDK text the model programs against under `runtime.language === 'python'`. Sibling of
  * {@link ./ts-types.ts | ts-types.ts}; the two files are two projections of the same registry
  * store, keyed by the loaded {@link @deepseek-ai/dsh-code-runtime#CodeRuntime.language | code
  * runtime's language}.
  *
- * Under `mode: 'code'` the native tool schemas are omitted from the request, so this generated
+ * Under `mode: 'ptc'` the native tool schemas are omitted from the request, so this generated
  * SDK is the model's ONLY source for each tool's argument names, required fields, types,
  * descriptions, and canonical output shapes; under `mode: 'both'` the native schemas ship
  * alongside it and it is one of two. Object-shaped arguments and outputs therefore render as one

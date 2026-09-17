@@ -1,6 +1,6 @@
 {
   "name": "@canglongcl/dsh-web-review",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "DSH web review plugin: page preview, element annotation, visual adjustments, and AI-driven workspace source edits",
   "publishConfig": {
     "access": "public",
@@ -31,7 +31,6 @@
     "client": {
       "inject": [
         "@deepseek-ai/dsh-client-locale",
-        "@deepseek-ai/dsh-client-runtime",
         "@deepseek-ai/dsh-client-ui-commands",
         "@deepseek-ai/dsh-client-ui-conversation",
         "@deepseek-ai/dsh-client-ui-layout",

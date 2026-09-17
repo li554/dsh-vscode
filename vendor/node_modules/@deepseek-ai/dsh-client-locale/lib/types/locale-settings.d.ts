@@ -4,10 +4,14 @@ import z from '@deepseek-ai/schemastery';
 export declare const LOCALE_SETTINGS_NAMESPACE = "locale";
 /** Field carrying an explicit locale selection; absence delegates to the browser. */
 export declare const LOCALE_PREFERENCE_FIELD = "preference";
+/** Accepted BCP 47-style language ids. */
+export declare const LOCALE_ID_PATTERN: RegExp;
 /** Locale identifiers shipped by the browser client. */
 export declare const LOCALE_IDS: readonly ["zh", "en"];
-/** Shipped locale identifier. */
-export type LocaleId = typeof LOCALE_IDS[number];
+/** Locale identifier shipped by the browser client. */
+export type BuiltInLocaleId = typeof LOCALE_IDS[number];
+/** Open locale identifier accepted from language-pack plugins. */
+export type LocaleId = string;
 /** Durable locale section shared by the Host schema and the browser scope. */
 export interface LocaleSettings {
     /** Explicit locale selection; absence delegates to the browser. */

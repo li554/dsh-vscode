@@ -3,7 +3,7 @@
  * `contextBreakdown` composition (system prompt, tools, conversation).
  * Renders nothing until a provider reports both pressure and a route
  * capacity. */
-import type { UseProjection } from '@deepseek-ai/dsh-client-runtime/client';
+import type { UseProjection } from '@deepseek-ai/dsh-api-session-controller/client';
 import type { ComposerBarProps } from '../contract/slots.ts';
 export interface ContextMeterProps {
     useProjection: UseProjection;

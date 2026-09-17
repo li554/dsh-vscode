@@ -27,8 +27,8 @@
  */
 import type { AuthContext, CredentialStore } from '@earendil-works/pi-ai';
 import { LlmAdapter } from '@deepseek-ai/dsh-llm';
-import type { GenerateOptions, LlmModelInfo, LlmProviderInfo, LlmResolvedModelInfo, PreparedAdapterCall, ResolvedRetryPolicy, StreamChunk } from '@deepseek-ai/dsh-llm';
-import type { AttachmentStore } from '@deepseek-ai/dsh-attachment';
+import type { GenerateOptions, ImageAttachmentAccess, LlmModelInfo, LlmProviderInfo, LlmResolvedModelInfo, PreparedAdapterCall, ResolvedRetryPolicy, StreamChunk } from '@deepseek-ai/dsh-llm';
+import type { AttachmentStore, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment';
 import type { ResolvedPiAiProviderProfile } from './config.ts';
 /** Constructor options for {@link PiAiAdapter}: the two resolution hooks the plugin owns. */
 export interface PiAiAdapterOptions {
@@ -54,6 +54,8 @@ export interface PiAiAdapterOptions {
     auth: PiAiAuthInjection;
     /** Resolve the optional durable attachment service at request time. */
     resolveAttachments?: () => AttachmentStore | undefined;
+    /** Bridge one attachment reference into the current model-tool execution world. */
+    resolveImageAccess?: (attachments: AttachmentStore, ref: ImageAttachmentRef) => ImageAttachmentAccess | undefined;
     /**
      * Observe one assistant history message degrading to provider-neutral
      * conversion because its stored replay state is unusable by this build.

@@ -4,7 +4,8 @@
  * live in sibling modules annotated with these
  * aliases; the service shell wires them to ctx.
  */
-import type { InputTriggerCandidate, TokenSpan, TriggerChar, TriggerGuard, TriggerPosition } from '../types.ts';
+import type { TokenSpan } from '@deepseek-ai/dsh-client-ui-conversation/client';
+import type { InputTriggerCandidate, TriggerChar, TriggerGuard, TriggerPosition } from '../types.ts';
 /** A detected trigger token under the caret. */
 export interface TriggerHit {
     readonly trigger: TriggerChar;
@@ -59,6 +60,10 @@ export type MenuEvent = {
 } | {
     readonly type: 'move';
     readonly dir: 1 | -1;
+} | {
+    readonly type: 'hover';
+    readonly source: string;
+    readonly index: number;
 } | {
     readonly type: 'close';
 };

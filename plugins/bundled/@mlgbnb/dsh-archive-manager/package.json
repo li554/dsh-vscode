@@ -1,6 +1,6 @@
 {
   "name": "@mlgbnb/dsh-archive-manager",
-  "version": "1.0.7",
+  "version": "1.0.10",
   "description": "DSH Archive Manager - preview, restore, and delete archived sessions from the settings page",
   "type": "module",
   "main": "lib/index.js",
@@ -14,6 +14,9 @@
     "./package.json": "./package.json"
   },
   "dsh": {
+    "engines": {
+      "dsh": ">=0.1.2-alpha.2"
+    },
     "bundle": {
       "patch": "./cordis.patch.yml"
     },
@@ -21,8 +24,7 @@
       "inject": [
         "@deepseek-ai/dsh-client-runtime",
         "@deepseek-ai/dsh-client-locale",
-        "@deepseek-ai/dsh-client-ui-settings",
-        "@deepseek-ai/dsh-client-ui-slots"
+        "@deepseek-ai/dsh-client-ui-settings"
       ],
       "platform": "web"
     }
@@ -37,7 +39,9 @@
   ],
   "author": "DSH Harness Agent",
   "license": "MIT",
-  "dependencies": {},
+  "dependencies": {
+    "@deepseek-ai/dsh-home-paths": "0.1.2-alpha.2"
+  },
   "peerDependencies": {
     "react": "^18.2.0"
   },

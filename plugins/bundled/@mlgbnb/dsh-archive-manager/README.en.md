@@ -9,6 +9,8 @@
 
 **DSH Archive Manager** is a DeepSeek Harness (DSH) Web UI plugin that adds a Codex-style archived session manager to the settings page. It lets you view, search, filter, **preview conversation history**, restore, and permanently delete archived sessions, with live synchronization to the sidebar.
 
+The current release requires DSH `>=0.1.2-alpha.2` and supports the `DSH_HOME` environment variable for selecting the DSH data directory.
+
 ## Features
 
 - **Codex 1:1 look and interaction**
@@ -31,6 +33,12 @@
 
 DSH uses the Cordis modular microkernel architecture. You can install the plugin in either of the following ways.
 
+### Requirements
+
+- DSH `>=0.1.2-alpha.2`
+- The Web Profile
+- Node.js built-in `zlib` (no external `zstd` CLI is required)
+
 ### Option 1: Install from npm (recommended)
 
 #### 1. Use the DSH CLI
@@ -39,23 +47,32 @@ DSH uses the Cordis modular microkernel architecture. You can install the plugin
 dsh plugin --profile web add -w @mlgbnb/dsh-archive-manager
 ```
 
+To pin the current release:
+
+```bash
+dsh plugin --profile web add -w "@mlgbnb/dsh-archive-manager@1.0.10"
+```
+
 #### 2. Or install it in the web profile directory
 
 ```bash
+# When DSH_HOME is set
+cd "$DSH_HOME/profiles/web"
+# When DSH_HOME is unset
 cd ~/.dsh/profiles/web
 npm i @mlgbnb/dsh-archive-manager
 # or with pnpm
 pnpm add -w @mlgbnb/dsh-archive-manager
 ```
 
-After installation, make sure `~/.dsh/profiles/web/package.json` contains `@mlgbnb/dsh-archive-manager` in its `dsh.profile.bundles` array:
+After installation, make sure `$DSH_HOME/profiles/web/package.json` (`~/.dsh/profiles/web/package.json` when `DSH_HOME` is unset) contains `@mlgbnb/dsh-archive-manager` in its `dsh.profile.bundles` array:
 
 ```json
 {
   "name": "dsh-profile-web",
   "private": true,
   "dependencies": {
-    "@mlgbnb/dsh-archive-manager": "^1.0.0"
+    "@mlgbnb/dsh-archive-manager": "^1.0.10"
   },
   "dsh": {
     "profile": {
@@ -75,7 +92,7 @@ After installation, make sure `~/.dsh/profiles/web/package.json` contains `@mlgb
 dsh plugin --profile web add -w "link:/path/to/dsh/plugin/dsh-archive-manager"
 ```
 
-> If startup reports duplicate sub-package declarations after `add`, check the `dsh.profile.bundles` array in `~/.dsh/profiles/web/package.json` to ensure it only contains root packages (such as `@mlgbnb/dsh-archive-manager`, `@linxin666/dsh-web-ui-all`, etc.).
+> If startup reports duplicate sub-package declarations after `add`, check the `dsh.profile.bundles` array in `$DSH_HOME/profiles/web/package.json` (`~/.dsh/profiles/web/package.json` when `DSH_HOME` is unset) to ensure it only contains root packages (such as `@mlgbnb/dsh-archive-manager`, `@linxin666/dsh-web-ui-all`, etc.).
 
 ## Usage
 
@@ -105,6 +122,8 @@ dsh-archive-manager/
 └── src/
     └── index.ts       # TypeScript companion source (type declarations and host entry notes)
 ```
+
+At runtime, the plugin reads `storages/workspace.json`, `storages/session_projcache.json`, and the `sessions/` directory under the DSH data root. The root is resolved using DSH's `DSH_HOME` rules and defaults to `~/.dsh`.
 
 ## License
 

@@ -14,6 +14,21 @@ export type PluginsEventFrame = {
     id: string;
     rev: string;
 };
+/** Browser wire-parse result: known frame, forward-compatible unknown type, or malformed payload. */
+export type PluginsEventParseResult = {
+    kind: 'frame';
+    frame: PluginsEventFrame;
+} | {
+    kind: 'unknown';
+} | {
+    kind: 'invalid';
+};
+/**
+ * Validate one JSON-decoded SSE payload before it can mutate module state.
+ * @param value - Parsed JSON value from the EventSource message.
+ * @returns the known frame, an unknown-type marker, or an invalid marker.
+ */
+export declare function parsePluginsEventFrame(value: unknown): PluginsEventParseResult;
 /** System SSE endpoint pushing graph/rebuilt frames (wire protocol constant). */
 export declare const EVENTS_ENDPOINT = "/plugins/events";
 //# sourceMappingURL=events.d.ts.map

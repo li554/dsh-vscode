@@ -4,11 +4,11 @@
  *
  * The section declares `settings.plugins.tab`; its own `configurable` tab then
  * declares `settings.plugin.item` and renders whatever cards were registered
- * into it. The three cards this package ships are the host-plane sections the
+ * into it. The cards this package ships are the host-plane sections the
  * deployment already exposes; each binds its namespace through the client
  * settings scope, which keeps them unaware of one another and of other tabs.
  */
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client';
+import type { Context as ClientContext } from '@deepseek-ai/cordis';
 export type { PluginsSettingsSectionInjected, PluginsSettingsSectionProps } from './PluginsSettingsSection.tsx';
 export type { ConfigurablePluginsTabProps } from './ConfigurablePluginsTab.tsx';
 export type { ConfigurablePluginsTabFace, ConfigurablePluginsTabState } from './tab-store.ts';

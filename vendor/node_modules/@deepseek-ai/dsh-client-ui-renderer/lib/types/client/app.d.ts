@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
 import type { Context } from '@deepseek-ai/cordis';
 /** Inputs available after the UI renderer's inject set activates. */
 export interface AssemblyDeps {
-    /** Client context carrying the slots and sessions services. */
+    /** Client context carrying the renderer-owned Slot registry. */
     ctx: Context;
 }
 /**

@@ -7,6 +7,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 
 /** Stable cordis plugin name. */
 export const name = 'archive-manager'
@@ -26,6 +27,11 @@ export interface ArchiveInfo {
   outputTokens: number
   dataSize: number
   hasDataFile: boolean
+}
+
+/** Resolve the active DSH data root, including a DSH_HOME override. */
+export function dshHome(): string {
+  return resolveDshHome()
 }
 
 export function apply(ctx: Context, _config?: any): void {

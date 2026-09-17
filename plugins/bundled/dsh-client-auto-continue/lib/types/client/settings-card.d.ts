@@ -1,6 +1,6 @@
-import { type SettingsScope, type SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client';
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots';
 import { type AutoContinueSettings } from './engine.ts';
+import { type SettingsScope, type SnapshotStore } from './dsh-store-compat.ts';
 import { type CardActions, type CardFieldState, type CardShell } from './settings-form.ts';
 /** What the auto-continue card renders. */
 export interface AutoContinueSettingsCardState extends CardShell {
@@ -18,6 +18,7 @@ export interface AutoContinueSettingsCardState extends CardShell {
     freshMs: CardFieldState;
     verbose: CardFieldState;
     classify: CardFieldState;
+    retryableErrorPatterns: CardFieldState;
     backoffFactor: CardFieldState;
     backoffMaxMs: CardFieldState;
     notify: CardFieldState;

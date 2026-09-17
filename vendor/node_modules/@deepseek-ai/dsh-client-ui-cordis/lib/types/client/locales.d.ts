@@ -40,6 +40,7 @@ export declare const zh: {
     'action.remove': string;
     'action.retry': string;
     'action.rollback': string;
+    'action.inspect': string;
     'render.failedAbdicated': string;
     'render.failedHeld': string;
     'a11y.defining': string;
@@ -100,6 +101,7 @@ export declare const en: {
     'action.remove': string;
     'action.retry': string;
     'action.rollback': string;
+    'action.inspect': string;
     'render.failedAbdicated': string;
     'render.failedHeld': string;
     'a11y.defining': string;

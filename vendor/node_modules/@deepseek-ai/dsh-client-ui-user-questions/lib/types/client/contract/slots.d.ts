@@ -1,26 +1,24 @@
-/**
- * Question-composer slot contract: the registrant-side props composition for
- * the conversation-owned `conversation.composer` slot, plus the question
- * domain face over the runtime's carrier object. The carrier (PendingWait)
- * owns envelope transport only; the question protocol — answer value shape,
- * cancelled error encoding, receipt checks — lives HERE, with the package
- * that consumes it.
- */
-import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots';
-import type { PendingWait } from '@deepseek-ai/dsh-client-runtime/client';
-import type { QuestionResponsePayload } from '@deepseek-ai/dsh-api-remotes/client';
-/** The pending question carrier the owner dispatches into the composer slot. */
-export type QuestionWait = PendingWait<'question'>;
+/** Question composer props and one pending Remote waterfall response. */
+import type { PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots';
+import type { SessionId } from '@deepseek-ai/dsh-session/types';
+import type { AskUserQuestionAnswer, AskUserQuestionItem } from '@deepseek-ai/dsh-user-questions';
+import type { createQuestionDraftStore } from '../draft-store.ts';
+declare module '@deepseek-ai/dsh-client-ui-session/client' {
+    interface SessionPendingInteractionMap {
+        /** Pending question or plan-review request. */
+        question: PendingQuestion;
+    }
+}
 /** One structured answer batch covering every question of the request. */
-export type QuestionAnswer = QuestionResponsePayload['answer'];
-/** One question of the request, as the carrier payload carries it. */
-type QuestionItem = QuestionWait['payload']['questions'][number];
+export type QuestionAnswer = AskUserQuestionAnswer;
+/** One question of the request. */
+type QuestionItem = AskUserQuestionItem;
 /** One option the asker offered on a question. */
 type QuestionOption = NonNullable<QuestionItem['options']>[number];
 /**
  * A request narrowed to the `plan-review` presentation intent: everything the
  * decision card renders and answers with, so the panel never re-reads the
- * request shape. `approve` and `decline` are the asker's own options — an
+ * request fields. `approve` and `decline` are the asker's own options — an
  * answer must carry one of those labels verbatim — and `plan` is the markdown
  * body under review.
  */
@@ -55,31 +53,48 @@ export interface PlanReview {
  * @returns The narrowed review, or undefined when the generic flow owns it.
  */
 export declare function planReviewOf(questions: readonly QuestionItem[]): PlanReview | undefined;
-/**
- * Question domain face over the carrier: render identity and questions
- * transparently forwarded; answer/cancel own the wire encoding (the success
- * fields and the cancelled error) and turn a rejected carrier receipt into a
- * thrown error. Components mint one per carrier via useMemo (never inside a
- * select — a per-dispatch mint would churn identity and break memoization).
- */
+/** One answerable Client presentation of a pending Host waterfall. */
 export declare class PendingQuestion {
-    private readonly wait;
+    #private;
+    readonly sessionId: SessionId;
+    /** Presentation discriminator used by Session pending-interaction consumers. */
+    readonly kind: 'question' | 'plan-review';
+    /** Opaque render identity and request key for the Session-scoped draft store. */
+    readonly key: string;
+    /** The request's question list. */
+    readonly questions: readonly AskUserQuestionItem[];
+    /** Result returned by the Remote Event listener to the Host waterfall. */
+    readonly result: Promise<QuestionAnswer>;
     /**
-     * @param wait - the runtime carrier for one pending question request.
+     * @param sessionId - Agent/Session identity owning the scoped request.
+     * @param questions - complete question batch.
+     * @param signal - Host request and delivery lifetime.
      */
-    constructor(wait: QuestionWait);
-    /** Opaque render identity (React key / draft remount axis), forwarded from the carrier. */
-    get key(): string;
-    /** The request's question list, forwarded from the carrier payload. */
-    get questions(): QuestionWait['payload']['questions'];
+    constructor(sessionId: SessionId, questions: readonly AskUserQuestionItem[], signal?: AbortSignal);
     /**
-     * Deliver the whole answer batch; a rejected carrier receipt throws.
+     * Resolve the Host waterfall with the whole answer batch.
      * @param answer - complete structured answer batch.
      */
     answer(answer: QuestionAnswer): Promise<void>;
-    /** Reject the whole wait (the host resolves the tool call as cancelled); a rejected receipt throws. */
+    /** Delegate an unanswered request to the next waterfall listener. */
+    delegate(): void;
+    /**
+     * Test whether a rejection requests waterfall delegation.
+     * @param reason - rejection received from {@link PendingQuestion.result}.
+     * @returns whether {@link PendingQuestion.delegate} produced it.
+     */
+    isDelegation(reason: unknown): boolean;
+    /** Reject the Host waterfall because the user closed the question. */
     cancel(): Promise<void>;
+    /**
+     * End an unanswered presentation when its transport, scope, or plugin lifetime ends.
+     * @param reason - rejection exposed to the waiting Remote Event listener.
+     */
+    abort(reason: unknown): void;
+    private finish;
 }
+/** Pending value returned by the composer-chain selector. */
+export type QuestionWait = PendingQuestion;
 /**
  * Full component props: the framework runtime share (chain currency +
  * session/global standard kit) plus the chain `matched` share — the entry's
@@ -87,7 +102,7 @@ export declare class PendingQuestion {
  * standard locale seat; the carrier plus the domain face above carry the
  * whole behavior surface.
  */
-export type QuestionComposerProps = PropsRuntime<'conversation.composer'> & {
+export type QuestionComposerProps = PropsRuntime<'conversation.composer'> & PropsStore<ReturnType<typeof createQuestionDraftStore>> & {
     matched: QuestionWait;
 } & PropsLocale<'question'>;
 export {};

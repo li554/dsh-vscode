@@ -12,11 +12,8 @@ window.__ModuleLoader__.load({
 		* @param props - Host-supplied mark presentation.
 		* @returns the official whale mark.
 		*/
-		function OfficialBrandMark({ size, className }) {
-			return (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.FishLogo, {
-				size,
-				className
-			});
+		function OfficialBrandMark({ size }) {
+			return (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.FishLogo, { size });
 		}
 		/**
 		* Render the official name artwork without its independently slotted mark.
@@ -30,15 +27,16 @@ window.__ModuleLoader__.load({
 		/** Required service: the UI slot registry. */
 		const inject = ["slots"];
 		/**
-		* Fill every shipped brand slot as one declaration-aware registration set.
+		* Fill the sidebar brand slots as one declaration-aware registration set. The
+		* conversation hero stays on its declaring package's animated fish fallback,
+		* so the official build registers nothing there.
 		* @param ctx - Client root context.
 		*/
 		function apply(ctx) {
-			ctx.slots.inject("sidebar.brand.mark", () => ctx.slots.inject("sidebar.brand.name", () => ctx.slots.inject("conversation.hero.brand.mark", function* () {
+			ctx.slots.inject("sidebar.brand.mark", () => ctx.slots.inject("sidebar.brand.name", function* () {
 				yield ctx.slots.register({ name: "sidebar.brand.mark" }, OfficialBrandMark);
 				yield ctx.slots.register({ name: "sidebar.brand.name" }, OfficialBrandName);
-				yield ctx.slots.register({ name: "conversation.hero.brand.mark" }, OfficialBrandMark);
-			})));
+			}));
 		}
 		//#endregion
 		exports.apply = apply;

@@ -1,0 +1,167 @@
+{
+  "_comment": [
+    "Vendored-platform patches for dsh-vscode.",
+    "",
+    "vendor/ is COMMITTED, so these patches normally ride along with it. They are",
+    "stored here because vendor/ is also regenerated wholesale on every platform",
+    "upgrade (npm install into a staging dir, then robocopy over vendor/node_modules),",
+    "which would silently drop them and reintroduce the bugs they fix.",
+    "",
+    "Run `.smoke/platform-patches.py verify` after refreshing vendor/, and `apply`",
+    "to put them back. pack.py runs verify before packaging, so an unpatched tree",
+    "cannot be shipped. ExpectedPackageVersion guards against applying a patch to a",
+    "different upstream release: apply refuses unless the installed version matches."
+  ],
+  "patches": [
+    {
+      "package": "@deepseek-ai/dsh-session-format-v0-to-v1",
+      "file": "lib/index.js",
+      "expectedPackageVersion": "0.1.5-rc.2",
+      "storedAs": "dsh-session-format-v0-to-v1/lib/index.js",
+      "why": [
+        "The released-v0 validators are exact and the v0->v1 migration refuses a",
+        "Session carrying anything outside the released shape. Correct for the",
+        "released format, but this deployment bakes third-party plugins that wrote",
+        "into sessions freely, and one offending event makes a whole session",
+        "unobservable. On a real 30-session history the strict validators refused",
+        "1251 events across 21 sessions, in four shapes:",
+        "  1. a content block with a plugin annotation (dsh-file-review's",
+        "     `dshFileReview` on an empty text block appended to a tool result);",
+        "  2. a kind:'plugin' source with an extra member (dsh-web-review's",
+        "     `snapshotId`);",
+        "  3. a kind:'plugin' source pairing `summary` with a non-notice form",
+        "     (dsh-mnemon's `instructions` + summary);",
+        "  4. `subagent/descriptor` version 2 from the `sidechat` plugin, where the",
+        "     released spec froze on version 3.",
+        "The patch drops (1)(2)(3)'s unreleased members and the stray summary, and",
+        "coerces (4)'s version 2 to 3, each logged once. Required members, missing",
+        "members and unknown kinds still refuse, and the source v0 artifact is never",
+        "modified."
+      ]
+    },
+    {
+      "package": "@deepseek-ai/dsh-api-settings-controller",
+      "file": "lib/index.js",
+      "expectedPackageVersion": "0.1.5-rc.2",
+      "storedAs": "dsh-api-settings-controller/lib/index.js",
+      "why": [
+        "Restores the embedded 'open configuration file' bridge, which 0.1.5 deleted",
+        "along with dsh-host-apiproxy.",
+        "",
+        "In 0.1.1 that package's settings handler ran `if (DSH_EMBEDDED === \"1\")`",
+        "and wrote `[dsh-vscode:open-settings] <path>` on stdout so the containing VS",
+        "Code extension could reveal the document in its own editor, because the",
+        "native opener is invisible in an embedded deployment. 0.1.5 moved settings",
+        "to dsh-api-settings-controller, which calls openTextFile UNCONDITIONALLY —",
+        "the env check and the sentinel are gone, and openSettingsDocument (unlike",
+        "openAgentPresetDirectory) has no 'return the path instead' branch. Nothing",
+        "in 0.1.5 reads DSH_EMBEDDED at all (the only DSH_* env seams left are",
+        "DSH_AGENTS_HOME, DSH_BUNDLED_SKILL_DIR, DSH_TELEMETRY_DISABLED,",
+        "DSH_WEB_FETCH_PROVIDER and DSH_WEB_SEARCH_PROVIDER), so there is no official",
+        "seam to use instead: the panel's 'open configuration file' silently did",
+        "nothing after the upgrade.",
+        "",
+        "The patch re-adds the branch in the handler that took over the same job, and",
+        "leaves the internals.openTextFile seam intact (asserted by",
+        ".smoke/embedded-open-settings-test.mjs, which drives the real controller",
+        "with stubbed internals both with and without DSH_EMBEDDED=1)."
+      ]
+    },
+    {
+      "package": "@deepseek-ai/dsh-subprocess-local",
+      "file": "lib/index.js",
+      "expectedPackageVersion": "0.1.5-rc.2",
+      "storedAs": "dsh-subprocess-local/lib/index.js",
+      "why": [
+        "Stops a console window from appearing for the lifetime of every command.",
+        "",
+        "launchWindowsJob is the path Windows normally takes: it spawns the managed",
+        "job runner with",
+        "",
+        "    child = (internals.spawn ?? spawn)(command, [...prefix, '--', ...argv], {",
+        "      cwd, env, stdio: runnerStdio(...)",
+        "    });",
+        "",
+        "and no windowsHide. Windows therefore gives that runner a fresh console, so",
+        "a terminal window pops up when a command starts and closes when it finishes.",
+        "",
+        "The omission is upstream's, and visibly an oversight: the FALLBACK path in the",
+        "same package, spawnSubprocess, already passes",
+        "`windowsHide: platform === 'win32'` beside `detached: platform !== 'win32'`.",
+        "Only the primary Windows path forgot it. The option is ignored off Windows, so",
+        "the patch is inert on Linux and macOS.",
+        "",
+        "Found by auditing every child_process call site in the tree for windowsHide",
+        "rather than grepping for it: this call is written",
+        "`(internals.spawn ?? spawn)(`, so a pattern anchored on `spawn(` misses it, and",
+        "the file-level question 'does this file mention windowsHide' also misses it",
+        "because the taskkill calls in the same package do set it."
+      ]
+    },
+    {
+      "package": "@deepseek-ai/dsh-session-persistence-jsonl",
+      "file": "lib/index.js",
+      "expectedPackageVersion": "0.1.5-rc.2",
+      "storedAs": "dsh-session-persistence-jsonl/lib/index.js",
+      "why": [
+        "Makes Archived Tasks readable again on this platform.",
+        "",
+        "The bundled @dsh-undo/* plugins were built against a newer persistence",
+        "contract whose service exposes inspect(id). This backend does not, so every",
+        "archived — that is, non-live — session failed with",
+        "",
+        "    sessionArchive.list failed gateway/internal:",
+        "    this.ctx.sessionPersistence.inspect is not a function",
+        "",
+        "Live sessions never reach it: the callers prefer",
+        "`ctx.sessions.get(id)?.events` and only fall back to persistence for sessions",
+        "with no live handle, which is exactly the archived set.",
+        "",
+        "The service class itself is a bare `class extends Service { constructor }` in",
+        "the base package; the methods live in this jsonl backend, whose API is",
+        "locate/create/open/flush/stat/list/requireStoredLog. The patch adds",
+        "inspect(id, options) on top of `open(id, 'read')` + `handle.read()`, so it",
+        "introduces no new storage behavior, and callers only read `.events`.",
+        "",
+        "Asserted behaviorally, not textually, by .smoke/persistence-inspect-test.mjs:",
+        "it imports the real module and checks inspect is a 2-arity function on the",
+        "prototype, plus that open/list/locate still exist (otherwise inspect would be",
+        "dead code even while defined)."
+      ]
+    },
+    {
+      "package": "@deepseek-ai/dsh-win32-process",
+      "file": "lib/index.js",
+      "expectedPackageVersion": "0.1.5-rc.2",
+      "storedAs": "dsh-win32-process/lib/index.js",
+      "why": [
+        "CREATE_NO_WINDOW on the ordinary Job runner CreateProcessW.",
+        "windowsHide on the runner Node process only hides the runner console;",
+        "the target still got a visible one. Confirmed safe after archive/branch",
+        "slowness was traced to a dirty DSH_HOME (old sessions/checkpoints), not this flag."
+      ]
+    },
+    {
+      "package": "@deepseek-ai/dsh-api-session-controller",
+      "file": "lib/index.js",
+      "expectedPackageVersion": "0.1.5-rc.2",
+      "storedAs": "dsh-api-session-controller/lib/index.js",
+      "why": [
+        "Fork seed must not swallow the next user/message after the cut turn.",
+        "Original loop advanced cut until turn/start, so a queued next prompt",
+        "was included in the child; the agent then auto-ran it and the user's",
+        "new send was queued behind it. Also patched lib/types/commands.js",
+        "with the same cut logic (duplicate host fork implementation)."
+      ]
+    },
+    {
+      "package": "@deepseek-ai/dsh-api-session-controller",
+      "file": "lib/types/commands.js",
+      "expectedPackageVersion": "0.1.5-rc.2",
+      "storedAs": "dsh-api-session-controller/lib/types/commands.js",
+      "why": [
+        "Duplicate fork implementation of the same cut loop; kept in sync with lib/index.js LOCAL PATCH."
+      ]
+    }
+  ]
+}

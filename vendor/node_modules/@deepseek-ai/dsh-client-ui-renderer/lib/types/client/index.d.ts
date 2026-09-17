@@ -1,9 +1,8 @@
 import type { Context } from '@deepseek-ai/cordis';
-import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots';
-/** Selector hook over a session's conversation snapshot. */
-export type UseSession<Snap extends object = object> = SnapshotSelectorHook<Snap>;
-export type { ChainRenderOpts, HostObservable, RenderOpts, SessionProvideInfo, SnapshotSelectorHook, SlotRenderer, SlotRendererHost, StoreInstanceLike, } from '@deepseek-ai/dsh-client-ui-slots';
-export type { SessionProviderProps } from './session-provider.tsx';
+import { SlotRegistry } from './registry.ts';
+export { SlotRegistry } from './registry.ts';
+export type { RootOwnerProps } from './registry.ts';
+export type { ChainRenderOpts, HostObservable, RenderOpts, SnapshotSelectorHook, SlotRenderer, ScopedStandardSourceBinding, SlotRendererHost, SlotScopeAdapter, StandardSourceBinding, StoreInstanceLike, } from '@deepseek-ai/dsh-client-ui-slots';
 /** Mount operation exposed to the framework-free boot kernel. */
 export interface UiRendererService {
     /**
@@ -14,7 +13,17 @@ export interface UiRendererService {
     mount: (container: HTMLElement) => () => void;
 }
 declare module '@deepseek-ai/cordis' {
+    interface Events {
+        /**
+         * A slot declaration or registration set changed.
+         * @mode emit
+         * @param key - mutated SlotMap key.
+         */
+        'slots/changed'(key: string): void;
+    }
     interface Context {
+        /** Renderer-owned UI composition registry. */
+        slots: SlotRegistry;
         /** Mount face provided after the UI renderer activates. */
         uiRenderer: UiRendererService;
     }

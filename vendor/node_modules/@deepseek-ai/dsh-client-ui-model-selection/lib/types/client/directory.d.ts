@@ -1,15 +1,17 @@
 /**
  * Per-session model directory: the ONE state both selection entries share.
- * The /model popup and the composer-seat selector load through the same
- * controller and submit through the same selectModel call, so the host stays
- * the single fact source and the store is one shared echo — a switch made in
- * either entry is what the other shows next.
+ * The /model popup and composer seat combine one shared Host catalog with the
+ * Session's durable selection projection, then submit through the same
+ * selectModel call. A switch made in either entry updates this shared state.
  */
-import type { IApiClient, ModelCatalogFailure, ModelProviderGroup, ModelSelection, SessionId, SessionModels } from '@deepseek-ai/dsh-api-remotes/client';
-import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client';
+import type { ModelCatalogFailure, ModelProviderGroup, ModelSelection } from '@deepseek-ai/dsh-api-session-controller/types';
+import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client';
+import type { TypertClientRemote } from '@deepseek-ai/dsh-typert-protocol';
+import type { ObservableSnapshot, SnapshotStore } from '@deepseek-ai/dsh-client-store';
+import type { ModelCatalogDirectory } from './catalog.ts';
 /** Directory snapshot both entries render from. */
 export interface ModelDirectoryState {
-    /** Model selection the host reports for the next assembled step; null before the first load. */
+    /** Effective selection: durable next-request projection, then Host default. */
     current: ModelSelection | null;
     /**
      * Whether an adapter serves the current selection's provider, as the host reports
@@ -33,38 +35,43 @@ export declare class ModelDirectory {
     private readonly sessions;
     private readonly sessionId;
     private readonly available;
+    private readonly catalog;
+    private readonly projected;
     /** The shared snapshot both entries render from (uSES-safe store). */
     readonly store: SnapshotStore<ModelDirectoryState>;
-    /** Latest operation wins; an older response never overwrites a newer one. */
+    /** Latest selection operation wins; an older response never overwrites a newer one. */
     private generation;
     private disposed;
+    private resolved;
+    private readonly unsubscribeCatalog;
+    private readonly unsubscribeSelection;
     /**
      * @param sessions - the session wire face (captured from the plugin's root connection).
      * @param sessionId - the owning session.
      * @param available - whether this session may use Agent-bound model RPCs.
+     * @param catalog - Host-generation catalog shared by every Session.
+     * @param projected - durable model selection projected from Session history.
      */
-    constructor(sessions: Pick<IApiClient['sessions'], 'models' | 'selectModel'>, sessionId: SessionId, available: () => boolean);
+    constructor(sessions: Pick<TypertClientRemote['session'], 'selectModel'>, sessionId: SessionId, available: () => boolean, catalog: ModelCatalogDirectory, projected: ObservableSnapshot<unknown>);
     /**
-     * Refresh the advisory directory (both entries call this on open).
-     * Failure preserves the last good groups and current selection.
+     * Ensure the Host generation's shared advisory catalog is loaded.
      * @returns the fresh directory value.
      */
-    load(): Promise<SessionModels>;
+    load(): Promise<ModelDirectoryState>;
     /**
-     * Select the complete provider/model/reasoning selection (both entries submit through here). Success
-     * updates the shared current; failure surfaces on the store and throws so
-     * each entry's own retry surface engages.
+     * Select the complete provider/model/reasoning selection. The durable
+     * projection frame updates the shared current; failures surface on the store
+     * and throw so each entry's own retry surface engages.
      * @param selection - provider, provider-owned model id, and optional adapter-owned effort.
    */
     select(selection: ModelSelection): Promise<void>;
     /**
-     * Drop the previous Host generation's projection and repull it. Clearing
-     * first prevents an unconsumed process-local selection from being displayed
-     * while the restarted Host has restored the last logged model selection.
+     * Invalidate an in-flight selection response from the previous Host generation.
      */
     resetConnected(): void;
     /** Scope teardown: late settlements lose write access to the store. */
     dispose(): void;
     private assertAvailable;
+    private syncInputs;
 }
 //# sourceMappingURL=directory.d.ts.map

@@ -1,7 +1,9 @@
 import { Service } from "@deepseek-ai/cordis";
 import z from "@deepseek-ai/schemastery";
 import { z as z$1 } from "zod";
-import { assertNever, deepFreeze, isAgentLoopRequest } from "@deepseek-ai/dsh-llm";
+import { isAgentLoopRequest } from "@deepseek-ai/dsh-llm";
+import { assertNever, deepFreeze } from "@deepseek-ai/dsh-util-values";
+import { SessionSeq } from "@deepseek-ai/dsh-session";
 //#region lib/types/normalize.js
 /** Title text normalization and UTF-8-safe truncation. */
 /** Operating-system-command escape sequences, including unterminated tails. */
@@ -84,41 +86,15 @@ function SessionTitleProviderId(id) {
 var SessionTitleInvalidError = class extends Error {
 	name = "SessionTitleInvalidError";
 };
-/**
-* Collect human text-bearing user messages in log order.
-* @param events - session log or persisted replay.
-* @param throughSeq - optional inclusive event boundary.
-* @returns eligible messages with exact source seqs.
-*/
-function collectSessionTitleMessages(events, throughSeq) {
-	const messages = [];
-	for (const event of events) {
-		if (throughSeq !== void 0 && event.seq > throughSeq) break;
-		if (event.type !== "user/message" || event.data.source.kind !== "user") continue;
-		const text = event.data.content.filter((block) => block.type === "text").map((block) => block.text).join("\n");
-		if (normalizeSessionTitle(text, Number.MAX_SAFE_INTEGER).length === 0) continue;
-		messages.push({
-			seq: event.seq,
-			text
-		});
-	}
-	return messages;
-}
-/**
-* Fold the latest logged title without consulting mutable metadata.
-* @param events - live or persisted session log.
-* @returns the latest immutable title snapshot, or `undefined`.
-*/
-function foldSessionTitle(events) {
-	const event = events.findLast((item) => item.type === "session/title");
-	if (event === void 0) return void 0;
-	return deepFreeze({
-		title: event.data.title,
-		messageSeqs: [...event.data.messageSeqs],
-		source: copySessionTitleSource(event.data.source),
-		eventSeq: event.seq,
-		updatedAt: event.time
-	});
+/** Extract one eligible human text message from a session event. */
+function sessionTitleUserMessageOf(event) {
+	if (event.type !== "user/message" || event.data.source.kind !== "user") return void 0;
+	const text = event.data.content.filter((block) => block.type === "text").map((block) => block.text).join("\n");
+	if (normalizeSessionTitle(text, Number.MAX_SAFE_INTEGER).length === 0) return void 0;
+	return {
+		seq: event.seq,
+		text
+	};
 }
 /** Defensive copy of a logged title source (the snapshot must not alias log-owned objects). */
 function copySessionTitleSource(source) {
@@ -138,9 +114,91 @@ function copySessionTitleSource(source) {
 function assertPositiveInteger(name, value) {
 	if (!Number.isInteger(value) || value <= 0) throw new Error(`session-title: ${name} must be a positive integer`);
 }
+/**
+* Convert title projection state into an immutable snapshot.
+* @param state - the title unit's folded state.
+* @returns the immutable snapshot.
+*/
+function titleSnapshotFromState(state) {
+	return deepFreeze({
+		title: state.title,
+		messageSeqs: [...state.messageSeqs],
+		source: copySessionTitleSource(state.source),
+		eventSeq: state.eventSeq,
+		updatedAt: state.updatedAt
+	});
+}
+const EMPTY_TITLE_INPUT = {
+	first: null,
+	count: 0,
+	lastSeq: null
+};
+const sessionTitleUserMessageSchema = z$1.object({
+	seq: z$1.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).transform(SessionSeq),
+	text: z$1.string()
+}).strict();
+const titleInputStateSchema = z$1.object({
+	first: sessionTitleUserMessageSchema.nullable(),
+	count: z$1.number().int().nonnegative(),
+	lastSeq: z$1.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).transform(SessionSeq).nullable()
+}).strict().superRefine((state, context) => {
+	const empty = state.first === null && state.lastSeq === null && state.count === 0;
+	const populated = state.first !== null && state.lastSeq !== null && state.count > 0 && state.first.seq <= state.lastSeq;
+	if (!empty && !populated) context.addIssue({
+		code: "custom",
+		message: "title input state must pair its count with first and last message seqs"
+	});
+});
+/**
+* Collect eligible human text messages from a session log, in seq order.
+* The full eligible prefix is only materialized for one provider generation,
+* so it is scanned from the log at execution time rather than retained by
+* the O(1) `titleInput` projection.
+* @param events - the session event log.
+* @param throughSeq - optional inclusive upper seq bound.
+* @returns eligible messages with exact source seqs.
+*/
+function collectSessionTitleMessages(events, throughSeq) {
+	const messages = [];
+	for (const event of events) {
+		if (throughSeq !== void 0 && event.seq > throughSeq) break;
+		const message = sessionTitleUserMessageOf(event);
+		if (message !== void 0) messages.push(message);
+	}
+	return messages;
+}
+const titleViewSchema = z$1.string().min(1).nullable();
+/** Latest logged title text and its client view. */
+const titleProjectionDefinition = {
+	key: "title",
+	stateVersion: 1,
+	stateSchema: titleViewSchema,
+	init: () => null,
+	apply: (state, event) => event.type === "session/title" ? event.data.title : state,
+	wire: {
+		viewSchema: titleViewSchema,
+		view: (state) => state
+	}
+};
+/**
+* Fold the latest logged title without consulting mutable metadata.
+* @param events - live or persisted session log.
+* @returns the latest immutable title snapshot, or `undefined`.
+*/
+function foldSessionTitle(events) {
+	const event = events.findLast((item) => item.type === "session/title");
+	if (event === void 0) return void 0;
+	return titleSnapshotFromState({
+		title: event.data.title,
+		messageSeqs: event.data.messageSeqs,
+		source: event.data.source,
+		eventSeq: event.seq,
+		updatedAt: event.time
+	});
+}
 /** Log-backed title fold plus asynchronous fallback generation. */
 var SessionTitleService = class extends Service {
-	static inject = ["sessions"];
+	static inject = ["sessions", "sessionProjections"];
 	static Config = z.object({
 		fallbackMaxWords: z.number().step(1).min(1).required(),
 		fallbackMaxBytes: z.number().step(1).min(1).required(),
@@ -174,19 +232,21 @@ var SessionTitleService = class extends Service {
 			await this.drain(this.inFlight);
 			this.work.clear();
 		}, "sessionTitle lifecycle");
-		ctx.inject(["sessionProjections"], (projectionCtx) => {
-			const titleSchema = z$1.union([z$1.string().min(1), z$1.null()]);
-			projectionCtx.sessionProjections.register({
-				key: "title",
-				stateSchema: titleSchema,
-				init: () => null,
-				apply: (state, event) => event.type === "session/title" ? event.data.title : state,
-				wire: {
-					viewSchema: titleSchema,
-					view: (state) => state
-				},
-				stateVersion: 1
-			});
+		ctx.sessionProjections.register(titleProjectionDefinition);
+		ctx.sessionProjections.register({
+			key: "titleInput",
+			stateVersion: 3,
+			stateSchema: titleInputStateSchema,
+			init: () => EMPTY_TITLE_INPUT,
+			apply: (state, event) => {
+				const message = sessionTitleUserMessageOf(event);
+				if (message === void 0) return state;
+				return {
+					first: state.first ?? message,
+					count: state.count + 1,
+					lastSeq: message.seq
+				};
+			}
 		});
 		ctx.on("session/event", (session, event) => {
 			switch (event.type) {
@@ -219,7 +279,7 @@ var SessionTitleService = class extends Service {
 	* @returns latest title snapshot, or `undefined` before eligible input.
 	*/
 	get(session) {
-		return foldSessionTitle(session.events);
+		return foldSessionTitle(session.snapshotEvents());
 	}
 	/**
 	* Accept an explicit user title. Appends a `session/title` event with the
@@ -261,12 +321,11 @@ var SessionTitleService = class extends Service {
 		this.assertServiceActive();
 		if (this.ctx.sessions.get(session.id) !== session) throw new Error(`session "${session.id}" is not live in this store`);
 		const registration = this.registration;
-		const messages = collectSessionTitleMessages(session.events);
-		const latest = messages.at(-1);
-		if (registration === void 0 || registration.closing || latest === void 0) {
+		const input = this.titleInputOf(session);
+		if (registration === void 0 || registration.closing || input.lastSeq === null) {
 			const current = this.get(session);
-			const [first] = messages;
-			if (current?.source.kind === "user" && first !== void 0) {
+			const first = input.first;
+			if (current?.source.kind === "user" && first !== null) {
 				this.appendFallback(session, first);
 				signal?.throwIfAborted();
 				return this.get(session);
@@ -280,7 +339,7 @@ var SessionTitleService = class extends Service {
 		const work = this.activate({
 			registration,
 			revision,
-			throughSeq: latest.seq
+			throughSeq: input.lastSeq
 		}, state, signal);
 		const config = session.requestHeader()?.config;
 		const route = config === void 0 ? void 0 : {
@@ -319,12 +378,12 @@ var SessionTitleService = class extends Service {
 	/** Schedule fallback creation and any provider cadence for one eligible event. */
 	onUserMessage(session, event) {
 		if (!this.serviceActive()) return;
-		if (event.data.source.kind !== "user" || collectSessionTitleMessages([event]).length === 0) return;
+		if (event.data.source.kind !== "user" || sessionTitleUserMessageOf(event) === void 0) return;
 		if (this.get(session)?.source.kind === "user") return;
 		const registration = this.registration;
 		if (registration !== void 0 && !registration.closing) {
-			const messages = collectSessionTitleMessages(session.events, event.seq);
-			if (registration.provider.automatic === "all-prompts" || session.header.parentSession === void 0 && messages.length === 1 && this.get(session) === void 0) {
+			const count = this.titleInputOf(session).count;
+			if (registration.provider.automatic === "all-prompts" || session.header.parentSession === void 0 && count === 1 && this.get(session) === void 0) {
 				const state = this.stateFor(session);
 				state.pending = {
 					registration,
@@ -361,9 +420,9 @@ var SessionTitleService = class extends Service {
 		const state = session === void 0 ? void 0 : this.work.get(session);
 		const pending = state?.pending;
 		if (session === void 0 || state === void 0 || pending === void 0) return;
-		const boundary = session.events.findLast((event) => event.type === "step/start" || event.type === "step/end");
+		const boundary = this.ctx.sessionProjections.stateOf(session, "turnBoundary")?.lastStepBoundary;
 		const route = session.requestHeader()?.config;
-		if (boundary?.type !== "step/start" || boundary.seq <= pending.throughSeq || route?.provider !== options.provider || route.model !== options.model) return;
+		if (boundary?.kind !== "start" || boundary.seq <= pending.throughSeq || route?.provider !== options.provider || route.model !== options.model) return;
 		this.startPending(session, state, pending, {
 			provider: options.provider,
 			model: options.model
@@ -394,7 +453,7 @@ var SessionTitleService = class extends Service {
 			this.assertCurrent(session, work);
 			await this.ensureFallback(session);
 			this.assertCurrent(session, work);
-			const messages = collectSessionTitleMessages(session.events, work.throughSeq);
+			const messages = collectSessionTitleMessages(session.snapshotEvents(), work.throughSeq);
 			const result = await work.registration.provider.generate({
 				session,
 				messages,
@@ -430,10 +489,11 @@ var SessionTitleService = class extends Service {
 		const order = new Map(messages.map((message, index) => [message.seq, index]));
 		let previous = -1;
 		for (const seq of candidate.messageSeqs) {
-			if (typeof seq !== "number") throw new Error("session-title provider messageSeqs must be unique, ordered seqs from the request");
-			const index = order.get(seq);
-			if (!Number.isSafeInteger(seq) || seq < 0 || index === void 0 || index <= previous) throw new Error("session-title provider messageSeqs must be unique, ordered seqs from the request");
-			messageSeqs.push(seq);
+			if (typeof seq !== "number" || !Number.isSafeInteger(seq) || seq < 0) throw new Error("session-title provider messageSeqs must be unique, ordered seqs from the request");
+			const sessionSeq = SessionSeq(seq);
+			const index = order.get(sessionSeq);
+			if (index === void 0 || index <= previous) throw new Error("session-title provider messageSeqs must be unique, ordered seqs from the request");
+			messageSeqs.push(sessionSeq);
 			previous = index;
 		}
 		const modelCandidate = candidate.model;
@@ -493,6 +553,9 @@ var SessionTitleService = class extends Service {
 			this.work.set(session, state);
 		}
 		return state;
+	}
+	titleInputOf(session) {
+		return this.ctx.sessionProjections.stateOf(session, "titleInput");
 	}
 	/** Queue detached service work and retain it through service disposal. */
 	defer(task) {
@@ -554,8 +617,8 @@ var SessionTitleService = class extends Service {
 		this.assertServiceActive();
 		const current = this.get(session);
 		if (current !== void 0) return current;
-		const [first] = collectSessionTitleMessages(session.events);
-		if (first === void 0) return void 0;
+		const first = this.titleInputOf(session).first;
+		if (first === null) return void 0;
 		const title = fallbackSessionTitle(first.text, this.config.fallbackMaxWords, this.config.fallbackMaxBytes);
 		if (title.length === 0) return void 0;
 		const state = this.stateFor(session);
@@ -581,4 +644,4 @@ var SessionTitleService = class extends Service {
 	}
 };
 //#endregion
-export { SessionTitleInvalidError, SessionTitleProviderId, SessionTitleService, SessionTitleService as default, collectSessionTitleMessages, fallbackSessionTitle, foldSessionTitle, normalizeSessionTitle, truncateTitleUtf8 };
+export { SessionTitleInvalidError, SessionTitleProviderId, SessionTitleService, SessionTitleService as default, fallbackSessionTitle, foldSessionTitle, normalizeSessionTitle, titleProjectionDefinition, truncateTitleUtf8 };

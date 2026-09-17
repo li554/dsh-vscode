@@ -9,13 +9,13 @@ import z from "@deepseek-ai/schemastery";
 * consumers, so it cannot move into a preset. What a preset CAN own is the
 * presentation: `ctx.tools.presentAs()` declares it for the mounting SCOPE,
 * which is the preset's standing mount, so the declaration covers every agent
-* joined to that preset and a Code Mode preset runs beside native ones in one
+* joined to that preset and a PTC mode preset runs beside native ones in one
 * process. One row per composition, not one per session.
 *
-* A code mode needs a TypeScript code runtime, which is a host-plane service
+* A PTC mode needs a TypeScript code runtime, which is a host-plane service
 * ([`dsh-code-runtime-worker-thread`](../../code-runtime/code-runtime-worker/README.md)).
 * This row therefore waits for it rather than assuming it: a preset selecting
-* Code Mode against a deployment that composes no runtime fails at mount, named
+* PTC mode against a deployment that composes no runtime fails at mount, named
 * in the preset's own activation audit, instead of at the first prompt.
 * @module @deepseek-ai/dsh-agent-tool-presentation
 */
@@ -30,7 +30,7 @@ const inject = ["tools"];
 /** Runtime schema. */
 const Config = z.object({ mode: z.union([
 	"native",
-	"code",
+	"ptc",
 	"both"
 ]).required() });
 /**

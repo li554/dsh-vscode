@@ -1,6 +1,5 @@
 // src/index.ts
 import z2 from "@deepseek-ai/schemastery";
-import { settingsNamespace } from "@deepseek-ai/dsh-settings";
 
 // node_modules/@deepseek-ai/dsh-llm/lib/index.js
 import { createRequire } from "node:module";
@@ -98,12 +97,26 @@ var RetryPolicySchema = z.union([normalPolicySchema, alwaysPolicySchema]);
 var { version } = createRequire(import.meta.url)("../package.json");
 
 // src/shared/core.ts
+var LOCALIZED_TEXT_DEFAULTS = {
+  zh: {
+    continueText: "继续",
+    continueTextMaxTokens: "继续",
+    guardPendingText: "(上一步工具「{tool}」可能未完成, 先确认状态再继续, 不要重复执行)",
+    guardDoneText: "(上一步工具「{tool}」已完成, 结果: {result}; 不要重复执行, 直接继续)",
+    loopText: "(检测到你可能陷入循环, 请停止重复刚才的动作, 换一种方式继续)"
+  },
+  en: {
+    continueText: "Continue",
+    continueTextMaxTokens: "Continue",
+    guardPendingText: '(The previous tool "{tool}" may not have completed. Check its state before continuing and do not run it again.)',
+    guardDoneText: '(The previous tool "{tool}" completed successfully. Result: {result}; do not run it again. Continue from there.)',
+    loopText: "(You may be stuck in a loop. Stop repeating the last action and continue with a different approach.)"
+  }
+};
 var DEFAULT_CONFIG = {
-  continueText: "继续",
-  continueTextMaxTokens: "继续",
+  locale: "zh",
+  ...LOCALIZED_TEXT_DEFAULTS.zh,
   guardTools: true,
-  guardPendingText: "(上一步工具「{tool}」可能未完成, 先确认状态再继续, 不要重复执行)",
-  guardDoneText: "(上一步工具「{tool}」已完成, 结果: {result}; 不要重复执行, 直接继续)",
   graceMs: 3e3,
   cooldownMs: 2e4,
   maxConsecutive: 3,
@@ -112,6 +125,7 @@ var DEFAULT_CONFIG = {
   freshMs: 15 * 60 * 1e3,
   verbose: true,
   classify: true,
+  retryableErrorPatterns: "",
   backoffFactor: 2,
   backoffMaxMs: 3e5,
   notify: false,
@@ -121,8 +135,7 @@ var DEFAULT_CONFIG = {
   loopWindowMs: 3e4,
   loopShortCount: 12,
   loopRepeatText: 4,
-  loopToolRepeat: 5,
-  loopText: "(检测到你可能陷入循环, 请停止重复刚才的动作, 换一种方式继续)"
+  loopToolRepeat: 5
 };
 function numberOr(value, fallback) {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : fallback;
@@ -132,11 +145,14 @@ function booleanOr(value, fallback) {
 }
 function resolveConfig(section) {
   const value = section ?? {};
-  const text = typeof value.continueText === "string" && value.continueText.trim() !== "" ? value.continueText : DEFAULT_CONFIG.continueText;
-  const maxTokensText = typeof value.continueTextMaxTokens === "string" && value.continueTextMaxTokens.trim() !== "" ? value.continueTextMaxTokens : DEFAULT_CONFIG.continueTextMaxTokens;
-  const guardPendingText = typeof value.guardPendingText === "string" && value.guardPendingText.trim() !== "" ? value.guardPendingText : DEFAULT_CONFIG.guardPendingText;
-  const guardDoneText = typeof value.guardDoneText === "string" && value.guardDoneText.trim() !== "" ? value.guardDoneText : DEFAULT_CONFIG.guardDoneText;
+  const locale = value.locale === "en" ? "en" : "zh";
+  const localized = LOCALIZED_TEXT_DEFAULTS[locale];
+  const text = typeof value.continueText === "string" && value.continueText.trim() !== "" ? value.continueText : localized.continueText;
+  const maxTokensText = typeof value.continueTextMaxTokens === "string" && value.continueTextMaxTokens.trim() !== "" ? value.continueTextMaxTokens : localized.continueTextMaxTokens;
+  const guardPendingText = typeof value.guardPendingText === "string" && value.guardPendingText.trim() !== "" ? value.guardPendingText : localized.guardPendingText;
+  const guardDoneText = typeof value.guardDoneText === "string" && value.guardDoneText.trim() !== "" ? value.guardDoneText : localized.guardDoneText;
   return {
+    locale,
     continueText: text,
     continueTextMaxTokens: maxTokensText,
     guardTools: booleanOr(value.guardTools, DEFAULT_CONFIG.guardTools),
@@ -150,6 +166,7 @@ function resolveConfig(section) {
     freshMs: numberOr(value.freshMs, DEFAULT_CONFIG.freshMs),
     verbose: booleanOr(value.verbose, DEFAULT_CONFIG.verbose),
     classify: booleanOr(value.classify, DEFAULT_CONFIG.classify),
+    retryableErrorPatterns: typeof value.retryableErrorPatterns === "string" ? value.retryableErrorPatterns.trim() : DEFAULT_CONFIG.retryableErrorPatterns,
     backoffFactor: Math.max(1, numberOr(value.backoffFactor, DEFAULT_CONFIG.backoffFactor)),
     backoffMaxMs: numberOr(value.backoffMaxMs, DEFAULT_CONFIG.backoffMaxMs),
     notify: booleanOr(value.notify, DEFAULT_CONFIG.notify),
@@ -160,14 +177,16 @@ function resolveConfig(section) {
     loopShortCount: Math.max(2, numberOr(value.loopShortCount, DEFAULT_CONFIG.loopShortCount)),
     loopRepeatText: Math.max(2, numberOr(value.loopRepeatText, DEFAULT_CONFIG.loopRepeatText)),
     loopToolRepeat: Math.max(2, numberOr(value.loopToolRepeat, DEFAULT_CONFIG.loopToolRepeat)),
-    loopText: typeof value.loopText === "string" && value.loopText.trim() !== "" ? value.loopText : DEFAULT_CONFIG.loopText
+    loopText: typeof value.loopText === "string" && value.loopText.trim() !== "" ? value.loopText : localized.loopText
   };
 }
 function isNonHumanReason(kind) {
   return kind === "error" || kind === "interrupted" || kind === "max-tokens";
 }
-function isTransientFailure(failure) {
-  const haystack = `${failure.code} ${failure.message}`.toLowerCase();
+function isTransientFailure(failure, retryableErrorPatterns = "") {
+  const haystack = `${failure.code} ${failure.status ?? ""} ${failure.message}`.toLowerCase();
+  const explicitlyRetryable = retryableErrorPatterns.split(/\r?\n/).map((pattern) => pattern.trim().toLowerCase()).filter((pattern) => pattern !== "").some((pattern) => haystack.includes(pattern));
+  if (explicitlyRetryable) return true;
   const status = failure.status;
   if (status !== void 0 && (status === 401 || status === 403)) return false;
   const permanent = /auth|unauthor|forbidden|credential|api[_-]?key|permission/i.test(haystack) || /insufficient.*(balance|quota)|billing|payment|quota.*exceeded.*(?!retry)/i.test(haystack) || /model.*not[_-]?found|unknown[_-]?model|model[_-]?not[_-]?found|not.*support.*model/i.test(haystack) || /context.*(length|limit|overflow|exceed)|token.*limit|max.*context/i.test(haystack) || /invalid[_-]?request|bad[_-]?request/i.test(haystack);
@@ -184,6 +203,46 @@ function fillTemplate(template, ctx) {
   return template.replace(/\{code\}/g, ctx.facts?.code ?? "").replace(/\{message\}/g, ctx.facts?.message ?? "").replace(/\{status\}/g, ctx.facts?.status !== void 0 ? String(ctx.facts.status) : "").replace(/\{tool\}/g, ctx.tool ?? "").replace(/\{turn\}/g, ctx.turn !== void 0 ? String(ctx.turn) : "").replace(/\{errorCount\}/g, ctx.errorCount !== void 0 ? String(ctx.errorCount) : "").replace(/\{sessionTitle\}/g, ctx.sessionTitle ?? "").replace(/\{elapsed\}/g, formatElapsed(ctx.elapsedMs)).replace(/\{result\}/g, ctx.result ?? "");
 }
 var TOOL_RESULT_CAP = 160;
+function stableFingerprint(value) {
+  let first = 2166136261;
+  let second = 2654435769;
+  let length = 0;
+  const feed = (text) => {
+    length += text.length;
+    for (let i = 0; i < text.length; i += 1) {
+      const code = text.charCodeAt(i);
+      first = Math.imul(first ^ code, 16777619) >>> 0;
+      second = Math.imul(second ^ code, 2246822507) >>> 0;
+      second = (second ^ second >>> 13) >>> 0;
+    }
+  };
+  const walk = (part) => {
+    if (part === null) {
+      feed("null");
+    } else if (Array.isArray(part)) {
+      feed("[");
+      for (const item of part) {
+        walk(item);
+        feed(",");
+      }
+      feed("]");
+    } else if (typeof part === "object") {
+      feed("{");
+      const record = part;
+      for (const key of Object.keys(record).sort()) {
+        feed(JSON.stringify(key));
+        feed(":");
+        walk(record[key]);
+        feed(",");
+      }
+      feed("}");
+    } else {
+      feed(`${typeof part}:${JSON.stringify(part) ?? String(part)}`);
+    }
+  };
+  walk(value);
+  return `${first.toString(16).padStart(8, "0")}${second.toString(16).padStart(8, "0")}:${length}`;
+}
 function extractText(blocks, cap) {
   let out = "";
   const walk = (value) => {
@@ -203,10 +262,262 @@ function extractText(blocks, cap) {
   walk(blocks);
   return out.slice(0, cap);
 }
-function toolResultFacts(data) {
-  const failed = data.error !== void 0 || data.message?.content?.[0]?.isError === true;
-  return { ok: !failed, excerpt: extractText(data.message?.content?.[0]?.content, TOOL_RESULT_CAP) };
+function toolCorrelationKey(data, callId) {
+  if (callId === void 0 || typeof data.turn !== "number" || typeof data.step !== "number") {
+    return void 0;
+  }
+  return JSON.stringify([data.turn, data.step, callId]);
 }
+function resultBlock(data) {
+  return data.message?.content?.find((part) => part.type === "tool-result");
+}
+function toolResultCallId(data) {
+  if (resultBlock(data) === void 0) return void 0;
+  const sourceId = data.message?.source?.kind === "tool" ? data.message.source.callId : void 0;
+  const blockId = resultBlock(data)?.toolCallId;
+  const source = typeof sourceId === "string" && sourceId !== "" ? sourceId : void 0;
+  const block = typeof blockId === "string" && blockId !== "" ? blockId : void 0;
+  if (source !== void 0 && block !== void 0 && source !== block) return void 0;
+  return source ?? block;
+}
+function toolResultFacts(data) {
+  const result = resultBlock(data);
+  const failed = data.error !== void 0 || result?.isError === true;
+  return {
+    ok: !failed,
+    excerpt: extractText(result?.content, TOOL_RESULT_CAP),
+    identity: stableFingerprint({ content: result?.content ?? [], isError: failed })
+  };
+}
+var MAX_PENDING_TOOL_CALLS = 64;
+var MAX_SEEN_TOOL_CALL_IDS = 256;
+var ToolInvocationTracker = class {
+  constructor() {
+    this.pendingById = /* @__PURE__ */ new Map();
+    this.pendingInOrder = [];
+    this.seenCalls = /* @__PURE__ */ new Map();
+    this.seenInOrder = [];
+    this.lastEventSeq = -1;
+  }
+  reset() {
+    this.pendingById.clear();
+    this.pendingInOrder.length = 0;
+    this.seenCalls.clear();
+    this.seenInOrder.length = 0;
+    this.latest = void 0;
+    this.run = void 0;
+    this.repeatSignal = void 0;
+    this.lastEventSeq = -1;
+  }
+  /** 新回合边界：清空工具态，同时把重放水位推进到 turn/start。 */
+  startTurn(seq) {
+    if (!Number.isSafeInteger(seq) || seq < 0 || seq <= this.lastEventSeq) return;
+    this.reset();
+    this.lastEventSeq = seq;
+  }
+  /** 回合已结束：保留最后一次调用的护栏，丢弃不再可用的 loop 关联态。 */
+  resetRepeat() {
+    this.pendingById.clear();
+    this.pendingInOrder.length = 0;
+    this.seenCalls.clear();
+    this.seenInOrder.length = 0;
+    this.run = void 0;
+    this.repeatSignal = void 0;
+  }
+  recordCall(event) {
+    if (!this.acceptEventSeq(event.seq)) return false;
+    this.repeatSignal = void 0;
+    const data = event.data;
+    if (typeof data.name !== "string") {
+      this.breakCorrelation();
+      return true;
+    }
+    const key = `${data.name}
+${typeof data.arguments === "string" ? data.arguments : ""}`;
+    const callId = typeof data.callId === "string" && data.callId !== "" ? data.callId : void 0;
+    const id = toolCorrelationKey(data, callId);
+    if (id === void 0) {
+      this.breakCorrelation({
+        id: void 0,
+        name: data.name,
+        key,
+        result: void 0,
+        resultSeq: void 0
+      });
+      return true;
+    }
+    const seen = this.seenCalls.get(id);
+    if (seen !== void 0) {
+      this.breakCorrelation({
+        id: void 0,
+        name: data.name,
+        key,
+        result: void 0,
+        resultSeq: void 0
+      });
+      return true;
+    }
+    const call = {
+      id,
+      name: data.name,
+      key,
+      result: void 0,
+      resultSeq: void 0
+    };
+    this.latest = call;
+    this.pendingById.set(id, call);
+    this.pendingInOrder.push(call);
+    this.seenCalls.set(id, call);
+    this.seenInOrder.push(id);
+    this.trim(call);
+    return true;
+  }
+  recordResult(event) {
+    if (!this.acceptEventSeq(event.seq)) return void 0;
+    const data = event.data;
+    const id = toolCorrelationKey(data, toolResultCallId(data));
+    if (id === void 0) {
+      this.breakCorrelation(this.latest);
+      return void 0;
+    }
+    const surfaceOp = event.surfaceOp;
+    if (typeof surfaceOp === "object" && surfaceOp !== null) {
+      const call2 = this.seenCalls.get(id);
+      if (surfaceOp.start !== surfaceOp.end || call2 === void 0 || call2.result === void 0 || call2.resultSeq !== surfaceOp.start) {
+        this.breakCorrelation(this.latest);
+        return void 0;
+      }
+      call2.result = toolResultFacts(data);
+      call2.resultSeq = event.seq;
+      this.breakCorrelation(this.latest);
+      return void 0;
+    }
+    const call = this.pendingById.get(id);
+    if (call === void 0) {
+      const seen = this.seenCalls.get(id);
+      const duplicate = seen?.result;
+      const incoming = toolResultFacts(data);
+      if (seen !== void 0 && duplicate !== void 0 && seen.resultSeq === event.seq && duplicate.identity === incoming.identity) {
+        return void 0;
+      }
+      if (seen !== void 0 && duplicate !== void 0) {
+        seen.result = void 0;
+        seen.resultSeq = void 0;
+      }
+      this.breakCorrelation(this.latest);
+      return void 0;
+    }
+    if (call.result !== void 0) {
+      const incoming = toolResultFacts(data);
+      if (call.resultSeq === event.seq && call.result.identity === incoming.identity) {
+        return void 0;
+      }
+      call.result = void 0;
+      call.resultSeq = void 0;
+      this.breakCorrelation(this.latest);
+      return void 0;
+    }
+    call.result = toolResultFacts(data);
+    call.resultSeq = event.seq;
+    return this.drainCompleted();
+  }
+  guard() {
+    const latest = this.latest;
+    if (latest === void 0) return { kind: "none" };
+    if (latest.result === void 0) return { kind: "pending", tool: latest.name };
+    if (latest.result.ok) {
+      return { kind: "done", tool: latest.name, result: latest.result.excerpt };
+    }
+    return { kind: "failed", tool: latest.name };
+  }
+  lastTool() {
+    return this.latest?.name;
+  }
+  /** 下一模型 step 是稳定边界；此前 replacement/新调用会先清除候选。 */
+  confirmRepeatAtStep(seq) {
+    if (!this.acceptEventSeq(seq)) return void 0;
+    const signal = this.pendingInOrder.length === 0 ? this.repeatSignal : void 0;
+    this.repeatSignal = void 0;
+    return signal;
+  }
+  /** 非工具 surface range replacement（如 compaction summary）同样终止旧工具证据。 */
+  recordSurfaceReplacement(seq) {
+    if (!this.acceptEventSeq(seq)) return;
+    this.breakCorrelation(this.latest);
+  }
+  restore(events, untilSeq) {
+    this.reset();
+    for (const event of events) {
+      if (event.seq >= untilSeq) continue;
+      if (event.type === "turn/start") this.startTurn(event.seq);
+      else if (event.type === "step/start") this.confirmRepeatAtStep(event.seq);
+      else if (event.type === "tool/call") this.recordCall(event);
+      else if (event.type === "tool/result") this.recordResult(event);
+      else if ((event.type === "user/message" || event.type === "assistant/message") && typeof event.surfaceOp === "object" && event.surfaceOp !== null) {
+        this.recordSurfaceReplacement(event.seq);
+      }
+    }
+  }
+  acceptEventSeq(seq) {
+    if (!Number.isSafeInteger(seq) || seq < 0) {
+      this.breakCorrelation(this.latest);
+      return false;
+    }
+    if (seq <= this.lastEventSeq) return false;
+    this.lastEventSeq = seq;
+    return true;
+  }
+  breakCorrelation(latest, preserve) {
+    this.pendingById.clear();
+    this.pendingInOrder.length = 0;
+    this.invalidateRunHistory();
+    this.latest = latest;
+    if (preserve?.id !== void 0 && preserve.result === void 0 && this.seenCalls.get(preserve.id) === preserve) {
+      this.pendingById.set(preserve.id, preserve);
+      this.pendingInOrder.push(preserve);
+    }
+  }
+  invalidateRunHistory() {
+    this.run = void 0;
+    this.repeatSignal = void 0;
+  }
+  trim(current) {
+    while (this.pendingInOrder.length > MAX_PENDING_TOOL_CALLS) {
+      this.breakCorrelation(current, current);
+    }
+    while (this.seenInOrder.length > MAX_SEEN_TOOL_CALL_IDS) {
+      const id = this.seenInOrder.shift();
+      if (id !== void 0) {
+        this.seenCalls.delete(id);
+        this.breakCorrelation(current, current);
+      }
+    }
+  }
+  drainCompleted() {
+    let advanced = false;
+    while (this.pendingInOrder[0]?.result !== void 0) {
+      const call = this.pendingInOrder.shift();
+      if (call === void 0 || call.result === void 0) break;
+      advanced = true;
+      if (call.id !== void 0) this.pendingById.delete(call.id);
+      this.advanceRun(call);
+    }
+    if (!advanced) return void 0;
+    return this.refreshRepeatSignal();
+  }
+  advanceRun(call) {
+    if (call.result === void 0) return;
+    if (this.run?.key === call.key && this.run.identity === call.result.identity) {
+      this.run.count += 1;
+    } else {
+      this.run = { key: call.key, tool: call.name, identity: call.result.identity, count: 1 };
+    }
+  }
+  refreshRepeatSignal() {
+    this.repeatSignal = this.pendingInOrder.length === 0 && this.run !== void 0 ? { tool: this.run.tool, count: this.run.count } : void 0;
+    return this.repeatSignal;
+  }
+};
 function effectiveCooldown(consecutive, base, factor, max) {
   const multiplier = Math.pow(factor, consecutive);
   return Math.min(Math.max(base, base * multiplier), Math.max(base, max));
@@ -225,41 +536,116 @@ function emptyDayStats() {
 }
 var freshState = () => ({
   consecutive: 0,
-  lastAutoAt: 0,
   lastAttemptAt: 0,
-  lastSentText: "",
+  pendingEchoMessageIds: /* @__PURE__ */ new Map(),
   pendingTimer: void 0,
   running: void 0,
   queued: 0,
   subagent: false,
   lastFailure: void 0,
   lastFailureAt: 0,
-  lastTool: void 0,
-  lastToolResult: void 0,
+  tools: new ToolInvocationTracker(),
   lastTurn: void 0,
   pendingRecoveryAt: 0,
   shortRun: 0,
   lastShortAt: 0,
   lastAssistantText: "",
   sameTextRun: 0,
-  toolRun: void 0,
+  streamTail: "",
+  streamLastSegment: "",
+  streamRepeatRun: 0,
   loopFired: false,
-  loopCancelled: false,
   loopRetryTimer: void 0
 });
 var RECOVERY_WINDOW_MS = 10 * 60 * 1e3;
 var ECHO_WINDOW_MS = 10 * 60 * 1e3;
+var MAX_PENDING_ECHO_MESSAGE_IDS = 64;
+function prunePendingEchoMessageIds(state, now) {
+  for (const [messageId, queuedAt] of state.pendingEchoMessageIds) {
+    if (now - queuedAt > ECHO_WINDOW_MS) state.pendingEchoMessageIds.delete(messageId);
+  }
+}
+function trackPendingEcho(state, messageId) {
+  const now = Date.now();
+  prunePendingEchoMessageIds(state, now);
+  state.pendingEchoMessageIds.set(messageId, now);
+  while (state.pendingEchoMessageIds.size > MAX_PENDING_ECHO_MESSAGE_IDS) {
+    const oldest = state.pendingEchoMessageIds.keys().next();
+    if (oldest.done) break;
+    state.pendingEchoMessageIds.delete(oldest.value);
+  }
+}
+function forgetPendingEcho(state, messageId) {
+  state.pendingEchoMessageIds.delete(messageId);
+}
 function isOurEcho(state, event) {
   if (event.type !== "user/message") return false;
   const message = event.data;
   if (message.source.kind !== "user") return false;
-  if (state.lastSentText === "") return false;
-  if (Date.now() - state.lastAutoAt > ECHO_WINDOW_MS) return false;
-  const text = message.content.filter((part) => part.type === "text").map((part) => part.text).join("");
-  return text === state.lastSentText;
+  if (state.pendingEchoMessageIds.size === 0) return false;
+  const now = Date.now();
+  prunePendingEchoMessageIds(state, now);
+  return state.pendingEchoMessageIds.delete(message.id);
 }
 
 // src/host/engine.ts
+var NOTICE_COPY = {
+  zh: {
+    notContinuedTitle: "dsh-auto-continue: 未自动继续",
+    permanentErrorBody: (sessionId, summary) => `${sessionId}: 永久性错误 ${summary}，需要人工处理`,
+    resumeAction: "立即续跑",
+    pauseAction: "暂停该会话 1 小时",
+    continuedTitle: "dsh-auto-continue: 已自动继续",
+    continuedBody: (sessionId, text, count) => `${sessionId}: 已发送「${text}」(第 ${count} 次连续)`,
+    stoppedTitle: "dsh-auto-continue: 已停止自动继续",
+    stoppedBody: (sessionId, count) => `${sessionId}: 连续失败 ${count} 次, 需要人工介入`
+  },
+  en: {
+    notContinuedTitle: "dsh-auto-continue: Not continued",
+    permanentErrorBody: (sessionId, summary) => `${sessionId}: Permanent error ${summary}; manual intervention required`,
+    resumeAction: "Resume now",
+    pauseAction: "Pause this session for 1 hour",
+    continuedTitle: "dsh-auto-continue: Continued automatically",
+    continuedBody: (sessionId, text, count) => `${sessionId}: Sent "${text}" (consecutive attempt ${count})`,
+    stoppedTitle: "dsh-auto-continue: Auto-continue stopped",
+    stoppedBody: (sessionId, count) => `${sessionId}: ${count} consecutive failures; manual intervention required`
+  }
+};
+var LOOP_GUARD_CANCEL_CAUSE = {
+  kind: "hook",
+  reason: "dsh-auto-continue:loop-guard"
+};
+var STREAM_NEAR_DUPLICATE_MAX_CHARS = 2048;
+var STREAM_TAIL_MAX_CHARS = 4096;
+function snapshotSessionEvents(session) {
+  const compatible = session;
+  if (typeof compatible.snapshotEvents === "function") return compatible.snapshotEvents();
+  if (compatible.events !== void 0) return compatible.events;
+  throw new TypeError("session exposes neither snapshotEvents() nor events");
+}
+function parseFailureFacts(value) {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return void 0;
+  const failure = value;
+  const code = typeof failure.code === "string" && failure.code.trim() !== "" ? failure.code : void 0;
+  const message = typeof failure.message === "string" && failure.message.trim() !== "" ? failure.message : void 0;
+  const status = typeof failure.status === "number" && Number.isFinite(failure.status) ? failure.status : void 0;
+  if (code === void 0 && message === void 0 && status === void 0) return void 0;
+  return {
+    code: code ?? "UNKNOWN",
+    message: message ?? code ?? `HTTP ${status}`,
+    ...status !== void 0 ? { status } : {}
+  };
+}
+function readReasonKind(value) {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return void 0;
+  const kind = value.kind;
+  return typeof kind === "string" && kind.trim() !== "" ? kind : void 0;
+}
+function isLoopGuardCancelReason(value) {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const cause = value;
+  return cause.kind === LOOP_GUARD_CANCEL_CAUSE.kind && cause.reason === LOOP_GUARD_CANCEL_CAUSE.reason;
+}
 var AutoContinueRunner = class {
   /**
    * @param ctx - host plugin context (agents registry, session events, settings).
@@ -275,7 +661,15 @@ var AutoContinueRunner = class {
     this.noticeListeners = /* @__PURE__ */ new Set();
     this.stateListeners = /* @__PURE__ */ new Set();
     this.disposed = false;
-    ctx.on("session/event", (session, event) => this.onHostEvent(session, event));
+    this.disposeSessionEvents = ctx.on("session/event", (session, event) => {
+      try {
+        this.onHostEvent(session, event);
+      } catch (error) {
+        console.error(
+          `[auto-continue] 会话事件处理异常 ${session.id}: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    });
     const config = this.getConfig();
     if (config.scanOnBoot) {
       void this.bootScanLoop();
@@ -337,7 +731,9 @@ var AutoContinueRunner = class {
     this.emitState();
   }
   dispose() {
+    if (this.disposed) return;
     this.disposed = true;
+    this.disposeSessionEvents();
     for (const state of this.states.values()) {
       if (state.pendingTimer !== void 0) clearTimeout(state.pendingTimer);
       if (state.loopRetryTimer !== void 0) clearTimeout(state.loopRetryTimer);
@@ -358,40 +754,23 @@ var AutoContinueRunner = class {
    */
   onHostEvent(session, event) {
     const sessionId = session.id;
+    if ((event.type === "user/message" || event.type === "assistant/message") && typeof event.surfaceOp === "object" && event.surfaceOp !== null) {
+      this.state(sessionId).tools.recordSurfaceReplacement(event.seq);
+      return;
+    }
     if (event.type === "tool/call") {
-      const name = event.data.name;
-      if (typeof name === "string") {
-        const state = this.state(sessionId);
-        state.lastTool = name;
-        state.lastToolResult = "pending";
-        state.shortRun = 0;
-        const key = `${name}
-${event.data.arguments}`;
-        if (state.toolRun?.key === key) {
-          state.toolRun.waiting = true;
-        } else {
-          state.toolRun = { key, count: 1, lastResult: void 0, waiting: false };
-        }
-      }
+      const state = this.state(sessionId);
+      if (state.tools.recordCall(event)) state.shortRun = 0;
     } else if (event.type === "tool/result") {
       const state = this.state(sessionId);
-      if (state.lastToolResult === "pending") {
-        const facts = toolResultFacts(event.data);
-        state.lastToolResult = facts;
-        const run = state.toolRun;
-        if (run !== void 0 && run.waiting) {
-          run.waiting = false;
-          if (run.lastResult !== void 0 && run.lastResult === facts.excerpt) {
-            run.count += 1;
-            this.checkLoop(sessionId, state);
-          } else {
-            run.lastResult = facts.excerpt;
-            run.count = 1;
-          }
-        } else if (run !== void 0 && !run.waiting) {
-          run.lastResult = facts.excerpt;
-        }
-      }
+      state.tools.recordResult(event);
+    } else if (event.type === "step/start") {
+      const state = this.state(sessionId);
+      const repeat = state.tools.confirmRepeatAtStep(event.seq);
+      if (repeat !== void 0) this.checkLoop(sessionId, state, repeat);
+    } else if (event.type === "assistant/chunk") {
+      const state = this.state(sessionId);
+      this.onAssistantChunk(sessionId, state, event);
     } else if (event.type === "assistant/message") {
       const state = this.state(sessionId);
       this.onAssistantMessage(sessionId, state, event);
@@ -403,6 +782,98 @@ ${event.data.arguments}`;
     const content = event.data.message.content;
     if (!Array.isArray(content)) return "";
     return content.filter((part) => part.type === "text").map((part) => part.text).join("");
+  }
+  assistantChunkText(event) {
+    return event.data.chunk.type === "text-delta" ? event.data.chunk.text : "";
+  }
+  normalizedSegment(text) {
+    return text.replace(/\s+/g, " ").trim();
+  }
+  isNearDuplicateSegment(left, right) {
+    if (left === right) return true;
+    const leftLen = left.length;
+    const rightLen = right.length;
+    const longer = Math.max(leftLen, rightLen);
+    const shorter = Math.min(leftLen, rightLen);
+    if (shorter === 0 || shorter / longer < 0.85) return false;
+    if (longer > STREAM_NEAR_DUPLICATE_MAX_CHARS) return false;
+    const maxDistance = Math.max(6, Math.floor(longer * 0.08));
+    if (Math.abs(leftLen - rightLen) > maxDistance) return false;
+    return this.withinEditDistance(left, right, maxDistance);
+  }
+  withinEditDistance(left, right, maxDistance) {
+    if (left === right) return true;
+    if (maxDistance < 0) return false;
+    const leftLen = left.length;
+    const rightLen = right.length;
+    if (Math.abs(leftLen - rightLen) > maxDistance) return false;
+    if (leftLen === 0 || rightLen === 0) return Math.max(leftLen, rightLen) <= maxDistance;
+    const unreachable = maxDistance + 1;
+    let previous = new Int32Array(rightLen + 1);
+    let current = new Int32Array(rightLen + 1);
+    previous.fill(unreachable);
+    for (let col = 0; col <= Math.min(rightLen, maxDistance); col += 1) {
+      previous[col] = col;
+    }
+    for (let row = 1; row <= leftLen; row += 1) {
+      current.fill(unreachable);
+      if (row <= maxDistance) current[0] = row;
+      const firstCol = Math.max(1, row - maxDistance);
+      const lastCol = Math.min(rightLen, row + maxDistance);
+      let minInRow = unreachable;
+      for (let col = firstCol; col <= lastCol; col += 1) {
+        const insertion = (current[col - 1] ?? unreachable) + 1;
+        const deletion = (previous[col] ?? unreachable) + 1;
+        const substitution = (previous[col - 1] ?? unreachable) + (left.charCodeAt(row - 1) === right.charCodeAt(col - 1) ? 0 : 1);
+        const score = Math.min(insertion, deletion, substitution, unreachable);
+        current[col] = score;
+        if (score < minInRow) minInRow = score;
+      }
+      if (minInRow > maxDistance) return false;
+      [previous, current] = [current, previous];
+    }
+    return (previous[rightLen] ?? unreachable) <= maxDistance;
+  }
+  noteStreamSegment(sessionId, state, segment) {
+    const normalized = this.normalizedSegment(segment);
+    const config = this.getConfig();
+    if (normalized === "") return;
+    if (normalized.length < config.loopShortChars) {
+      state.streamLastSegment = "";
+      state.streamRepeatRun = 0;
+      return;
+    }
+    if (state.streamLastSegment !== "" && this.isNearDuplicateSegment(normalized, state.streamLastSegment)) {
+      state.streamRepeatRun += 1;
+      state.streamLastSegment = normalized;
+    } else {
+      state.streamLastSegment = normalized;
+      state.streamRepeatRun = 1;
+    }
+    if (state.streamRepeatRun >= config.loopRepeatText) {
+      this.log(
+        `检测到流式消息内复读 ${sessionId}: 连续 ${state.streamRepeatRun} 段近似重复文本`
+      );
+      this.interruptLoop(sessionId, state);
+    }
+  }
+  onAssistantChunk(sessionId, state, event) {
+    if (!this.getConfig().loopGuard || !state.running || state.loopFired) return;
+    const chunk = this.assistantChunkText(event);
+    if (chunk === "") return;
+    const merged = `${state.streamTail}${chunk}`.replace(/\r/g, "");
+    const pieces = merged.split(/\n(?:[ \t]*\n)+/u);
+    const tail = pieces.pop() ?? "";
+    for (const piece of pieces) this.noteStreamSegment(sessionId, state, piece);
+    if (tail.length <= STREAM_TAIL_MAX_CHARS) {
+      state.streamTail = tail;
+      return;
+    }
+    state.streamTail = tail.slice(-STREAM_TAIL_MAX_CHARS);
+    if (/\S/u.test(tail)) {
+      state.streamLastSegment = "";
+      state.streamRepeatRun = 0;
+    }
   }
   onAssistantMessage(sessionId, state, event) {
     if (!this.getConfig().loopGuard) return;
@@ -425,53 +896,55 @@ ${event.data.arguments}`;
       state.shortRun = 0;
       state.lastShortAt = 0;
     }
+    const streamTail = state.streamTail;
+    state.streamTail = "";
+    if (streamTail !== "") this.noteStreamSegment(sessionId, state, streamTail);
+    state.streamLastSegment = "";
+    state.streamRepeatRun = 0;
     this.checkLoop(sessionId, state);
   }
   /** 两个循环信号的公共检查; 命中且本回合未打断过则打断。 */
-  checkLoop(sessionId, state) {
+  checkLoop(sessionId, state, toolRepeat) {
     if (!this.getConfig().loopGuard) return;
     if (state.loopFired) return;
     if (!state.running) return;
     const config = this.getConfig();
     if (state.sameTextRun >= config.loopRepeatText) {
       this.log(`检测到空转循环 ${sessionId}: 连续 ${state.sameTextRun} 条相同消息`);
-      void this.interruptLoop(sessionId, state);
+      this.interruptLoop(sessionId, state);
     } else if (state.shortRun >= config.loopShortCount) {
       this.log(`检测到空转循环 ${sessionId}: 连续 ${state.shortRun} 条短句且无工具调用`);
-      void this.interruptLoop(sessionId, state);
-    } else if (state.toolRun !== void 0 && state.toolRun.count >= config.loopToolRepeat) {
-      const toolName = state.toolRun.key.split("\n")[0] ?? "?";
-      this.log(`检测到工具死循环 ${sessionId}: 「${toolName}」连续 ${state.toolRun.count} 次(同参数同结果)`);
-      void this.interruptLoop(sessionId, state);
+      this.interruptLoop(sessionId, state);
+    } else if (toolRepeat !== void 0 && toolRepeat.count >= config.loopToolRepeat) {
+      this.log(`检测到工具死循环 ${sessionId}: 「${toolRepeat.tool}」连续 ${toolRepeat.count} 次(同参数同结果)`);
+      this.interruptLoop(sessionId, state);
     }
   }
   /**
    * 打断运行中的回合: cancel(带来源标记)+ 进冷却。
-   * 随后的 turn/end aborted 会因 loopCancelled 走「可恢复中断」路径,
-   * 用 loopText 重启回合——不会与用户手动停止混淆。
+   * 只有随后持久化的 turn/end 精确携带专属 hook cause 时,
+   * 才会用 loopText 重启回合——DSH 的 first-cause 语义保证用户 Stop 优先。
    */
-  async interruptLoop(sessionId, state) {
+  interruptLoop(sessionId, state) {
     if (state.loopFired) return;
     if (Date.now() - state.lastAttemptAt < this.cooldownFor(state)) {
       this.log(`跳过循环打断 ${sessionId}: 处于冷却期`);
       return;
     }
     state.loopFired = true;
-    state.loopCancelled = true;
     state.lastAttemptAt = Date.now();
-    this.bumpStat({ looped: 1 });
     try {
       const agent = this.ctx.agents.get(sessionId);
       if (agent === void 0) {
         this.log(`打断循环失败 ${sessionId}: 无 live agent`);
-        state.loopCancelled = false;
+        state.loopFired = false;
         return;
       }
-      agent.cancel({ kind: "user" }, { keepInbox: true });
+      agent.cancel(LOOP_GUARD_CANCEL_CAUSE, { keepInbox: true });
       this.log(`已打断循环 ${sessionId}: cancel 已受理`);
     } catch (error) {
       this.log(`打断循环失败 ${sessionId}: ${error instanceof Error ? error.message : String(error)}`);
-      state.loopCancelled = false;
+      state.loopFired = false;
     }
   }
   onSessionEvent(sessionId, event) {
@@ -479,15 +952,15 @@ ${event.data.arguments}`;
     switch (event.type) {
       case "turn/start":
         state.running = true;
-        state.lastTool = void 0;
-        state.lastToolResult = void 0;
+        state.tools.startTurn(event.seq);
         state.shortRun = 0;
         state.lastShortAt = 0;
         state.lastAssistantText = "";
         state.sameTextRun = 0;
-        state.toolRun = void 0;
+        state.streamTail = "";
+        state.streamLastSegment = "";
+        state.streamRepeatRun = 0;
         state.loopFired = false;
-        state.loopCancelled = false;
         if (state.loopRetryTimer !== void 0) {
           clearTimeout(state.loopRetryTimer);
           state.loopRetryTimer = void 0;
@@ -496,29 +969,42 @@ ${event.data.arguments}`;
         break;
       case "turn/end": {
         state.running = false;
+        const loopCancelPending = state.loopFired;
+        state.loopFired = false;
         this.cancelPending(sessionId, "收到新的 turn/end");
         const reason = event.data.reason;
-        if (reason.kind === "completed") {
+        const reasonKind = readReasonKind(reason);
+        if (reasonKind === void 0) {
+          console.error(`[auto-continue] 忽略畸形 turn/end ${sessionId}: reason 无法解释`);
+          break;
+        }
+        if (reasonKind === "completed") {
           state.consecutive = 0;
           state.lastFailure = void 0;
           this.noteRecovery(sessionId, "completed");
-        } else if (reason.kind === "aborted") {
-          if (state.loopCancelled) {
-            state.loopCancelled = false;
-            state.loopFired = false;
+        } else if (reasonKind === "aborted") {
+          if (isLoopGuardCancelReason(reason.reason)) {
+            if (loopCancelPending) this.bumpStat({ looped: 1 });
             state.pendingRecoveryAt = 0;
             state.shortRun = 0;
             state.lastShortAt = 0;
             state.lastAssistantText = "";
             state.sameTextRun = 0;
-            state.toolRun = void 0;
+            state.streamTail = "";
+            state.streamLastSegment = "";
+            state.streamRepeatRun = 0;
+            state.tools.resetRepeat();
             const cooldown = this.cooldownFor(state);
             const remaining = cooldown - (Date.now() - state.lastAttemptAt);
             if (remaining > 0) {
               if (state.loopRetryTimer !== void 0) clearTimeout(state.loopRetryTimer);
               state.loopRetryTimer = setTimeout(() => {
                 state.loopRetryTimer = void 0;
-                this.schedule(sessionId, "loop:aborted");
+                try {
+                  this.schedule(sessionId, "loop:aborted");
+                } catch (error) {
+                  console.error(`[auto-continue] loop 重启异常 ${sessionId}: ${error instanceof Error ? error.message : String(error)}`);
+                }
               }, remaining);
               this.log(`loop 重启延迟 ${remaining}ms(冷却期) ${sessionId}`);
             } else {
@@ -528,22 +1014,22 @@ ${event.data.arguments}`;
             state.consecutive = 0;
             state.pendingRecoveryAt = 0;
           }
-        } else if (reason.kind === "blocked") {
-        } else if (reason.kind === "interrupted") {
+        } else if (reasonKind === "blocked") {
+        } else if (reasonKind === "interrupted") {
           state.consecutive = 0;
           state.pendingRecoveryAt = 0;
-        } else if (reason.kind === "error") {
-          const error = reason.error;
-          state.lastFailure = {
-            code: typeof error.code === "string" ? error.code : "UNKNOWN",
-            message: typeof error.message === "string" ? error.message : String(error),
-            ...typeof error.status === "number" ? { status: error.status } : {}
-          };
+        } else if (reasonKind === "error") {
+          const failure = parseFailureFacts(reason.error);
+          if (failure === void 0) {
+            console.error(`[auto-continue] 忽略畸形 turn/end ${sessionId}: error details 无法解释`);
+            break;
+          }
+          state.lastFailure = failure;
           state.lastTurn = event.data.turn;
           state.lastFailureAt = Date.now();
           this.noteRecovery(sessionId, "error");
           this.onTurnFailure(sessionId, "turn/end:error", state.lastFailure);
-        } else if (reason.kind === "max-tokens") {
+        } else if (reasonKind === "max-tokens") {
           state.lastFailureAt = Date.now();
           this.noteRecovery(sessionId, "error");
           this.schedule(sessionId, "turn/end:max-tokens");
@@ -564,15 +1050,17 @@ ${event.data.arguments}`;
   // ---------- host 帧 ----------
   onTurnFailure(sessionId, reason, failure) {
     const config = this.getConfig();
-    if (config.classify && !isTransientFailure(failure)) {
+    if (config.classify && !isTransientFailure(failure, config.retryableErrorPatterns)) {
+      const copy = NOTICE_COPY[config.locale];
       const summary = `${failure.code}${failure.status !== void 0 ? ` (HTTP ${failure.status})` : ""}`;
       this.log(`跳过 ${sessionId}(${reason}): 永久性失败 ${summary} — ${failure.message}`);
       this.bumpStat({ skipped: 1, code: failure.code });
       if (config.notify) {
         this.notify(
-          "dsh-auto-continue: 未自动继续",
-          `${sessionId}: 永久性错误 ${summary}，需要人工处理`,
-          this.notifyOptions(sessionId)
+          sessionId,
+          copy.notContinuedTitle,
+          copy.permanentErrorBody(sessionId, summary),
+          this.notifyOptions(sessionId, config.locale)
         );
       }
       return;
@@ -580,11 +1068,12 @@ ${event.data.arguments}`;
     this.schedule(sessionId, reason);
   }
   /** 通知操作按钮与回调(「立即续跑」/「暂停该会话 1 小时」)。 */
-  notifyOptions(sessionId) {
+  notifyOptions(sessionId, locale) {
+    const copy = NOTICE_COPY[locale];
     return {
       actions: [
-        { action: "resume", title: "立即续跑" },
-        { action: "pause1h", title: "暂停该会话 1 小时" }
+        { action: "resume", title: copy.resumeAction },
+        { action: "pause1h", title: copy.pauseAction }
       ],
       onAction: (action) => this.onNotifyAction(sessionId, action)
     };
@@ -614,11 +1103,12 @@ ${event.data.arguments}`;
     }
   }
   /** 通知桥: 产生一条通知事件, SSE 端点推给 browser 侧展示。 */
-  notify(title, body, options) {
+  notify(sessionId, title, body, options) {
     const notice = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       title,
       body,
+      sessionId,
       ...options?.actions !== void 0 && options.actions.length > 0 ? { actions: options.actions } : { actions: [] },
       at: Date.now()
     };
@@ -647,7 +1137,11 @@ ${event.data.arguments}`;
       clearTimeout(state.pendingTimer);
       state.pendingTimer = void 0;
     }
-    await this.fire(sessionId, "manual:notification", true);
+    try {
+      await this.fire(sessionId, "manual:notification", true);
+    } catch (error) {
+      console.error(`[auto-continue] 手动续跑异常 ${sessionId}: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
   /** 本会话当前生效的冷却间隔(自适应退避)。 */
   cooldownFor(state) {
@@ -682,7 +1176,11 @@ ${event.data.arguments}`;
     const timer = setTimeout(() => {
       if (state.pendingTimer !== timer) return;
       state.pendingTimer = void 0;
-      void this.fire(sessionId, reason);
+      try {
+        void this.fire(sessionId, reason);
+      } catch (error) {
+        console.error(`[auto-continue] 定时发送异常 ${sessionId}: ${error instanceof Error ? error.message : String(error)}`);
+      }
     }, config.graceMs);
     state.pendingTimer = timer;
     const template = reason.startsWith("loop:") ? config.loopText : reason.includes("max-tokens") ? config.continueTextMaxTokens : config.continueText;
@@ -727,34 +1225,41 @@ ${event.data.arguments}`;
     }
     state.lastAttemptAt = Date.now();
     try {
-      agent.followup(
-        createUserMessage({
-          content: [{ type: "text", text }],
-          source: { kind: "user" }
-        })
-      );
+      const message = createUserMessage({
+        content: [{ type: "text", text }],
+        source: { kind: "user" }
+      });
+      trackPendingEcho(state, message.id);
+      try {
+        agent.followup(message);
+      } catch (error) {
+        forgetPendingEcho(state, message.id);
+        throw error;
+      }
       const now = Date.now();
       state.consecutive += 1;
-      state.lastAutoAt = now;
-      state.lastSentText = text;
       state.pendingRecoveryAt = now;
       this.bumpStat({ sent: 1, ...state.lastFailure !== void 0 ? { code: state.lastFailure.code } : {} });
       this.log(`已自动发送「${text}」到 ${sessionId}(${reason}), 第 ${state.consecutive} 次连续`);
       if (config.notify) {
+        const copy = NOTICE_COPY[config.locale];
         this.notify(
-          "dsh-auto-continue: 已自动继续",
-          `${sessionId}: 已发送「${text}」(第 ${state.consecutive} 次连续)`,
-          this.notifyOptions(sessionId)
+          sessionId,
+          copy.continuedTitle,
+          copy.continuedBody(sessionId, text, state.consecutive),
+          this.notifyOptions(sessionId, config.locale)
         );
       }
       if (state.consecutive >= config.maxConsecutive) {
         this.bumpStat({ gaveUp: 1 });
         this.log(`达到连续上限 ${config.maxConsecutive} 次, 停止自动继续 ${sessionId}`);
         if (config.notify) {
+          const copy = NOTICE_COPY[config.locale];
           this.notify(
-            "dsh-auto-continue: 已停止自动继续",
-            `${sessionId}: 连续失败 ${state.consecutive} 次, 需要人工介入`,
-            this.notifyOptions(sessionId)
+            sessionId,
+            copy.stoppedTitle,
+            copy.stoppedBody(sessionId, state.consecutive),
+            this.notifyOptions(sessionId, config.locale)
           );
         }
       }
@@ -772,7 +1277,7 @@ ${event.data.arguments}`;
   buildContinueText(config, state, template) {
     let text = fillTemplate(template, {
       facts: state.lastFailure,
-      tool: state.lastTool,
+      tool: state.tools.lastTool(),
       turn: state.lastTurn,
       errorCount: state.consecutive + 1,
       elapsedMs: state.lastFailureAt > 0 ? Date.now() - state.lastFailureAt : void 0
@@ -788,12 +1293,7 @@ ${event.data.arguments}`;
   }
   /** 上一步工具调用的护栏状态(实时路径, 由 mux 帧维护)。 */
   currentGuard(state) {
-    if (state.lastTool === void 0 || state.lastToolResult === void 0) return { kind: "none" };
-    if (state.lastToolResult === "pending") return { kind: "pending", tool: state.lastTool };
-    if (state.lastToolResult.ok) {
-      return { kind: "done", tool: state.lastTool, result: state.lastToolResult.excerpt };
-    }
-    return { kind: "failed", tool: state.lastTool };
+    return state.tools.guard();
   }
   async bootScanLoop() {
     await this.scanLoop(Infinity, 3e3);
@@ -826,8 +1326,21 @@ ${event.data.arguments}`;
     for (const agent of this.ctx.agents.list()) {
       const session = agent.session;
       if (session.header.origin === "subagent") continue;
-      candidates.push({ sessionId: session.id, events: session.events });
+      const events = snapshotSessionEvents(session);
+      const lastActivityAt = events.reduce(
+        (latest, event) => Math.max(latest, event.time),
+        Number.isFinite(session.header.createdAt) ? session.header.createdAt : 0
+      );
+      candidates.push({
+        sessionId: session.id,
+        events,
+        lastActivityAt,
+        listIndex: candidates.length
+      });
     }
+    candidates.sort(
+      (left, right) => right.lastActivityAt - left.lastActivityAt || left.listIndex - right.listIndex
+    );
     for (const candidate of candidates.slice(0, config.scanLimit)) {
       if (this.disposed) return true;
       const state = this.state(candidate.sessionId);
@@ -846,7 +1359,8 @@ ${event.data.arguments}`;
       }
       if (lastEnd === void 0) continue;
       const reason = lastEnd.data.reason;
-      if (!isNonHumanReason(reason.kind)) continue;
+      const reasonKind = readReasonKind(reason);
+      if (reasonKind === void 0 || !isNonHumanReason(reasonKind)) continue;
       if (lastEnd.time < now - config.freshMs) continue;
       let superseded = false;
       for (const event of events) {
@@ -857,46 +1371,46 @@ ${event.data.arguments}`;
       }
       if (superseded) continue;
       this.applyGuardFromEvents(state, events, lastEnd.seq);
-      this.log(`扫描发现中断 ${candidate.sessionId}(turn/end:${reason.kind}), 安排自动继续`);
-      this.schedule(candidate.sessionId, `scan:turn/end:${reason.kind}`);
+      const scanReason = `scan:turn/end:${reasonKind}`;
+      this.log(`扫描发现中断 ${candidate.sessionId}(turn/end:${reasonKind}), 交给恢复策略处理`);
+      if (reasonKind === "error") {
+        const failure = parseFailureFacts(reason.error);
+        if (failure === void 0) {
+          console.error(`[auto-continue] 忽略畸形扫描 turn/end ${candidate.sessionId}: error details 无法解释`);
+          continue;
+        }
+        state.lastFailure = failure;
+        state.lastTurn = lastEnd.data.turn;
+        state.lastFailureAt = lastEnd.time;
+        this.onTurnFailure(candidate.sessionId, scanReason, state.lastFailure);
+      } else {
+        this.schedule(candidate.sessionId, scanReason);
+      }
     }
     return true;
   }
   /** 从历史事件恢复上一步工具调用状态(扫描路径的幂等护栏)。 */
   applyGuardFromEvents(state, events, untilSeq) {
-    state.lastTool = void 0;
-    state.lastToolResult = void 0;
-    let call;
-    for (const event of events) {
-      if (event.seq >= untilSeq) continue;
-      if (event.type === "tool/call") call = event;
-    }
-    if (call === void 0) return;
-    state.lastTool = call.data.name;
-    state.lastToolResult = "pending";
-    for (const event of events) {
-      if (event.seq <= call.seq || event.seq >= untilSeq) continue;
-      if (event.type === "tool/result") {
-        state.lastToolResult = toolResultFacts(event.data);
-        break;
-      }
-    }
+    state.tools.restore(events, untilSeq);
   }
 };
 
 // src/index.ts
 var AUTO_CONTINUE_NS = "auto-continue";
+var SETTINGS_NS = AUTO_CONTINUE_NS;
 var AutoContinueSchema = z2.object({
+  /** Active browser/UI locale mirrored by the client. */
+  locale: z2.string().default("zh"),
   /** Text automatically sent after an interruption. */
-  continueText: z2.string().default("继续"),
+  continueText: z2.string().default(""),
   /** Text sent when the output token ceiling is reached (same placeholders as `continueText`). */
-  continueTextMaxTokens: z2.string().default("继续"),
+  continueTextMaxTokens: z2.string().default(""),
   /** Idempotency guard: inspect the last tool call before resuming and steer the model. */
   guardTools: z2.boolean().default(true),
   /** Guard text appended when the last tool call has no confirmed result (it may have partially executed). */
-  guardPendingText: z2.string().default("(上一步工具「{tool}」可能未完成, 先确认状态再继续, 不要重复执行)"),
+  guardPendingText: z2.string().default(""),
   /** Guard text appended when the last tool call completed successfully (don't rerun it). */
-  guardDoneText: z2.string().default("(上一步工具「{tool}」已完成, 结果: {result}; 不要重复执行, 直接继续)"),
+  guardDoneText: z2.string().default(""),
   /** Grace period after an interruption before auto-sending (ms). */
   graceMs: z2.natural().default(3e3),
   /** Minimum interval between two auto-continues per session (ms). */
@@ -913,6 +1427,8 @@ var AutoContinueSchema = z2.object({
   verbose: z2.boolean().default(true),
   /** Classify failures: auto-continue transient errors only; permanent ones are skipped and notified. */
   classify: z2.boolean().default(true),
+  /** Provider-specific message/code/status fragments that explicitly count as retryable, one literal per line. */
+  retryableErrorPatterns: z2.string().default(""),
   /** Cooldown multiplier per consecutive failure (adaptive backoff). */
   backoffFactor: z2.natural().min(1).default(2),
   /** Cap on the effective backoff interval (ms). */
@@ -929,24 +1445,27 @@ var AutoContinueSchema = z2.object({
   loopWindowMs: z2.natural().min(1e3).default(3e4),
   /** Consecutive short sentences trip the loop guard. */
   loopShortCount: z2.natural().min(2).default(12),
-  /** Consecutive identical short sentences trip the loop guard (strongest spinning signal). */
+  /** Consecutive identical assistant messages trip the loop guard (strongest signal; also used for streamed intra-message repetition). */
   loopRepeatText: z2.natural().min(2).default(4),
   /** Consecutive identical tool calls with identical arguments AND results trip the loop guard. */
   loopToolRepeat: z2.natural().min(2).default(5),
   /** Text sent after the loop guard cancels and restarts a turn (supports {tool}). */
-  loopText: z2.string().default("(检测到你可能陷入循环, 请停止重复刚才的动作, 换一种方式继续)")
+  loopText: z2.string().default("")
 });
 function apply(ctx) {
   ctx.inject(["settings"], (settingsCtx) => {
-    settingsCtx.settings.register(settingsNamespace(AUTO_CONTINUE_NS), AutoContinueSchema, {
+    settingsCtx.settings.register(SETTINGS_NS, AutoContinueSchema, {
       applies: "live"
     });
   });
+  let runnerRef;
   ctx.inject(["settings", "agents", "webServer"], (engineCtx) => {
+    if (runnerRef !== void 0) runnerRef.dispose();
     const runner = new AutoContinueRunner(
       engineCtx,
-      () => resolveConfig(engineCtx.settings.get(settingsNamespace(AUTO_CONTINUE_NS)))
+      () => resolveConfig(engineCtx.settings.get(SETTINGS_NS))
     );
+    runnerRef = runner;
     const sseClients = /* @__PURE__ */ new Set();
     const pushToAll = (data) => {
       for (const send of sseClients) {
@@ -1020,6 +1539,11 @@ function apply(ctx) {
         });
       }
     });
+  });
+  ctx.effect(() => () => {
+    const runner = runnerRef;
+    runnerRef = void 0;
+    if (runner !== void 0) runner.dispose();
   });
 }
 export {

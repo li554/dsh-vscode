@@ -39,11 +39,9 @@
  *    revoke under live children.
  * @module @deepseek-ai/dsh-sandbox-windows-acl
  */
-export { quoteArg } from './spawn.ts';
 export { AclWriteGrant } from './grant.ts';
 export { assertTempRootOutsideWorkspace } from './path-boundary.ts';
 export { tempWriteSid, workspaceWriteSid } from './workspace-sid.ts';
-export { Win32Error } from './errors.ts';
 /** Construction options: the workspace/temp allowlists and their distinct SID identities. */
 export interface AclSandboxOptions {
     /** Directories the confined child may write into (must exist and be caller-owned). */

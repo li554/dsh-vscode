@@ -21,7 +21,7 @@ export interface HostNotice {
     title: string;
     body: string;
     /** 会话 id(通知按钮「立即续跑 / 暂停该会话」作用于它)。 */
-    sessionId?: SessionId;
+    sessionId: SessionId;
     actions: NotifyAction[];
     /** 产生时间。 */
     at: number;
@@ -36,6 +36,7 @@ export declare class AutoContinueRunner {
     private readonly notices;
     private readonly noticeListeners;
     private readonly stateListeners;
+    private readonly disposeSessionEvents;
     private disposed;
     /**
      * @param ctx - host plugin context (agents registry, session events, settings).
@@ -68,13 +69,19 @@ export declare class AutoContinueRunner {
     private onHostEvent;
     /** 从 assistant/message 事件提取纯文本。 */
     private assistantText;
+    private assistantChunkText;
+    private normalizedSegment;
+    private isNearDuplicateSegment;
+    private withinEditDistance;
+    private noteStreamSegment;
+    private onAssistantChunk;
     private onAssistantMessage;
     /** 两个循环信号的公共检查; 命中且本回合未打断过则打断。 */
     private checkLoop;
     /**
      * 打断运行中的回合: cancel(带来源标记)+ 进冷却。
-     * 随后的 turn/end aborted 会因 loopCancelled 走「可恢复中断」路径,
-     * 用 loopText 重启回合——不会与用户手动停止混淆。
+     * 只有随后持久化的 turn/end 精确携带专属 hook cause 时,
+     * 才会用 loopText 重启回合——DSH 的 first-cause 语义保证用户 Stop 优先。
      */
     private interruptLoop;
     private onSessionEvent;

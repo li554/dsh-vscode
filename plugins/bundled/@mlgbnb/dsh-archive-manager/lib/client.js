@@ -222,43 +222,36 @@
         var a7 = useState(null); var openDropdown = a7[0], setOpenDropdown = a7[1];
         var a8 = useState(null); var openMenu = a8[0], setOpenMenu = a8[1];
         var a9 = useState(false); var busy = a9[0], setBusy = a9[1];
+        // Two-step delete confirm. Native confirm() is blocked in the VS Code
+        // webview sandbox (allow-modals is not set), so arm → click again.
+        var a11 = useState(null); var armedConfirm = a11[0], setArmedConfirm = a11[1];
+        var armTimerRef = useRef(null);
+
+        function armOrRun(key) {
+          if (armedConfirm !== key) {
+            setArmedConfirm(key);
+            if (armTimerRef.current) clearTimeout(armTimerRef.current);
+            armTimerRef.current = setTimeout(function () { setArmedConfirm(null); }, 4000);
+            showToast('success', fmt(t, 'confirmAgain'));
+            return false;
+          }
+          setArmedConfirm(null);
+          if (armTimerRef.current) { clearTimeout(armTimerRef.current); armTimerRef.current = null; }
+          return true;
+        }
 
         // Preview modal state: { open, sid, title, loading, data, error }
         var a10 = useState(null); var previewModal = a10[0], setPreviewModal = a10[1];
 
-        // Confirm modal state: { message, danger }. window.confirm is disabled
-        // inside the VS Code webview iframe (silently returns false), which made
-        // every delete button a no-op — hence this in-app dialog.
-        var a11 = useState(null); var confirmModal = a11[0], setConfirmModal = a11[1];
-        var confirmResolveRef = useRef(null);
-
         var pollRef = useRef(null);
         var toastRef = useRef(null);
         var composingRef = useRef(false);
-        // The search input stays uncontrolled: the 2s archive poll re-renders the
-        // card, and a controlled value would wipe in-flight IME composition.
-        var searchInputRef = useRef(null);
 
         function showToast(kind, msg) {
           if (toastRef.current) { clearTimeout(toastRef.current); toastRef.current = null; }
           if (kind === 'success') { setSuccess(msg); setError(null); }
           else { setError(msg); setSuccess(null); }
           toastRef.current = setTimeout(function () { setError(null); setSuccess(null); toastRef.current = null; }, 3500);
-        }
-
-        /** In-app replacement for window.confirm (blocked inside the webview). */
-        function askConfirm(message) {
-          return new Promise(function (resolve) {
-            if (confirmResolveRef.current) { try { confirmResolveRef.current(false); } catch (e) {} }
-            confirmResolveRef.current = resolve;
-            setConfirmModal({ message: message, danger: true });
-          });
-        }
-        function settleConfirm(ok) {
-          var resolve = confirmResolveRef.current;
-          confirmResolveRef.current = null;
-          setConfirmModal(null);
-          if (resolve) { try { resolve(ok); } catch (e) {} }
         }
 
         function load() {
@@ -317,61 +310,61 @@
 
         function del(sid, title) {
           if (busy) return;
-          askConfirm(fmt(t, 'confirmDelete', title || sid)).then(function (ok) {
-            if (!ok) return;
-            setBusy(true);
-            fetchJson(API_BASE + '/delete', {
-              method: 'POST', headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({ sessionId: sid })
-            }).then(function () {
-              setBusy(false);
-              if (previewModal && previewModal.sid === sid) setPreviewModal(null);
+          if (!armOrRun('del:' + sid)) return;
+          setBusy(true);
+          fetchJson(API_BASE + '/delete', {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ sessionId: sid })
+          }).then(function (r) {
+            setBusy(false);
+            if (previewModal && previewModal.sid === sid) setPreviewModal(null);
+            if (r && Array.isArray(r.errors) && r.errors.length) {
+              showToast('error', fmt(t, 'deleteFailed') + ': ' + r.errors.join('; '));
+            } else if (r && Array.isArray(r.removed) && r.removed.length === 0) {
+              showToast('error', fmt(t, 'deleteFailed') + ': not found');
+            } else {
               showToast('success', fmt(t, 'deleted'));
-              load();
-            }).catch(function (e) {
-              setBusy(false);
-              showToast('error', fmt(t, 'deleteFailed') + ': ' + (e.message || String(e)));
-            });
+            }
+            load();
+          }).catch(function (e) {
+            setBusy(false);
+            showToast('error', fmt(t, 'deleteFailed') + ': ' + (e.message || String(e)));
           });
         }
 
         function delWs(wsTitle, sids) {
           if (busy || !sids || sids.length === 0) return;
-          askConfirm(fmt(t, 'confirmDeleteWs', wsTitle, sids.length)).then(function (ok) {
-            if (!ok) return;
-            setBusy(true);
-            setOpenMenu(null);
-            fetchJson(API_BASE + '/delete', {
-              method: 'POST', headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({ sessionIds: sids })
-            }).then(function () {
-              setBusy(false);
-              showToast('success', fmt(t, 'deletedWsToast', wsTitle));
-              load();
-            }).catch(function (e) {
-              setBusy(false);
-              showToast('error', fmt(t, 'deleteWsFailed') + ': ' + (e.message || String(e)));
-            });
+          if (!armOrRun('delWs:' + wsTitle)) return;
+          setBusy(true);
+          setOpenMenu(null);
+          fetchJson(API_BASE + '/delete', {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ sessionIds: sids })
+          }).then(function () {
+            setBusy(false);
+            showToast('success', fmt(t, 'deletedWsToast', wsTitle));
+            load();
+          }).catch(function (e) {
+            setBusy(false);
+            showToast('error', fmt(t, 'deleteWsFailed') + ': ' + (e.message || String(e)));
           });
         }
 
         function delAll() {
           if (busy || archives.length === 0) return;
-          askConfirm(fmt(t, 'confirmDeleteAll', archives.length)).then(function (ok) {
-            if (!ok) return;
-            setBusy(true);
-            fetchJson(API_BASE + '/delete-all', {
-              method: 'POST', headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({})
-            }).then(function (r) {
-              setBusy(false);
-              var n = r && Array.isArray(r.removed) ? r.removed.length : archives.length;
-              showToast('success', fmt(t, 'deletedAllToast', n));
-              load();
-            }).catch(function (e) {
-              setBusy(false);
-              showToast('error', fmt(t, 'deleteAllFailed') + ': ' + (e.message || String(e)));
-            });
+          if (!armOrRun('delAll')) return;
+          setBusy(true);
+          fetchJson(API_BASE + '/delete-all', {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({})
+          }).then(function (r) {
+            setBusy(false);
+            var n = r && Array.isArray(r.removed) ? r.removed.length : archives.length;
+            showToast('success', fmt(t, 'deletedAllToast', n));
+            load();
+          }).catch(function (e) {
+            setBusy(false);
+            showToast('error', fmt(t, 'deleteAllFailed') + ': ' + (e.message || String(e)));
           });
         }
 
@@ -462,13 +455,12 @@
             h('span', { className: 'cdx-am-search-icon' }, IconSearch(14)),
             h('input', {
               type: 'text', className: 'cdx-am-search-input', placeholder: t('searchPlaceholder'),
-              ref: searchInputRef,
-              defaultValue: '',
+              value: query,
               onCompositionStart: function () { composingRef.current = true; },
               onCompositionEnd: function (e) { composingRef.current = false; setQuery(e.target.value); },
-              onChange: function (e) { setQuery(e.target.value); }
+              onChange: function (e) { if (!composingRef.current) setQuery(e.target.value); }
             }),
-            query ? h('button', { type: 'button', className: 'cdx-am-search-clear', title: t('clearSearch'), onClick: function () { setQuery(''); if (searchInputRef.current) searchInputRef.current.value = ''; } }, IconClose(14)) : null
+            query ? h('button', { type: 'button', className: 'cdx-am-search-clear', title: t('clearSearch'), onClick: function () { setQuery(''); } }, IconClose(14)) : null
           ),
           h('div', { className: 'cdx-am-filter-row' },
             h('div', { className: 'cdx-am-dropdown-container' },
@@ -521,7 +513,7 @@
               title: t('deleteAllTip'),
               disabled: busy || archives.length === 0,
               onClick: delAll
-            }, IconTrash(13), h('span', null, t('deleteAll')))
+            }, IconTrash(13), h('span', null, armedConfirm === 'delAll' ? fmt(t, 'confirmAgainShort') : t('deleteAll')))
           ),
           loading ? h('div', { className: 'cdx-am-loading' }, t('loading'))
           : archives.length === 0 ? h('div', { className: 'cdx-am-empty' }, t('empty'))
@@ -540,7 +532,7 @@
                       h('button', { type: 'button', className: 'cdx-am-btn-more', 'data-am-more-btn': gTitle, title: t('projectActions'), onClick: function (e) { e.stopPropagation(); setOpenMenu(menuOpen ? null : gTitle); setOpenDropdown(null); } }, IconMore(14)),
                       h('div', { className: 'cdx-am-menu-popover', 'data-open': menuOpen },
                         h('button', { type: 'button', className: 'cdx-am-menu-item', onClick: function (e) { e.stopPropagation(); delWs(gTitle, sids); } },
-                          IconTrash(14), h('span', null, t('deleteAllInProject'))
+                          IconTrash(14), h('span', null, armedConfirm === 'delWs:' + gTitle ? fmt(t, 'confirmAgainShort') : t('deleteAllInProject'))
                         )
                       )
                     )
@@ -572,7 +564,7 @@
                           type: 'button', className: 'cdx-am-btn-action cdx-am-btn-danger',
                           title: t('deleteArchive'),
                           onClick: function () { del(item.sessionId, item.title); }
-                        }, IconTrash(13), h('span', null, t('deletePermanently')))
+                        }, IconTrash(13), h('span', null, armedConfirm === 'del:' + item.sessionId ? fmt(t, 'confirmAgainShort') : t('deletePermanently')))
                       )
                     );
                   })
@@ -622,33 +614,7 @@
                 h('button', {
                   type: 'button', className: 'cdx-am-btn-action cdx-am-btn-danger',
                   onClick: function () { del(previewModal.sid, previewModal.title); }
-                }, IconTrash(13), h('span', null, t('deletePermanently')))
-              )
-            )
-          ) : null,
-
-          /* Confirm Modal (replaces window.confirm, blocked in webview) */
-          confirmModal ? h('div', {
-            className: 'cdx-am-modal-backdrop',
-            onClick: function (e) { if (e.target === e.currentTarget) settleConfirm(false); }
-          },
-            h('div', { className: 'cdx-am-modal', style: { maxWidth: '460px' } },
-              h('div', { className: 'cdx-am-modal-header' },
-                h('h3', { className: 'cdx-am-modal-title' }, t('confirmTitle'))
-              ),
-              h('div', { className: 'cdx-am-modal-body' },
-                h('div', { style: { whiteSpace: 'pre-line', fontSize: '13px', lineHeight: '1.6', color: 'var(--dsw-alias-label-primary, inherit)' } },
-                  confirmModal.message)
-              ),
-              h('div', { className: 'cdx-am-modal-footer' },
-                h('button', {
-                  type: 'button', className: 'cdx-am-btn-action cdx-am-btn-preview',
-                  onClick: function () { settleConfirm(false); }
-                }, t('confirmCancel')),
-                h('button', {
-                  type: 'button', className: 'cdx-am-btn-action cdx-am-btn-danger',
-                  onClick: function () { settleConfirm(true); }
-                }, t('confirmOk'))
+                }, IconTrash(13), h('span', null, armedConfirm === 'del:' + previewModal.sid ? fmt(t, 'confirmAgainShort') : t('deletePermanently')))
               )
             )
           ) : null
@@ -671,9 +637,10 @@
         loading: '加载已归档对话中…', empty: '暂无已归档的对话。', noMatch: '未找到匹配的归档对话。',
         deleted: '已从磁盘彻底删除会话', loadFailed: '加载失败', unarchiveFailed: '恢复失败',
         deleteFailed: '删除失败', deleteWsFailed: '删除项目归档失败',
+        confirmAgain: '再次点击确认删除（4 秒内有效）',
+        confirmAgainShort: '确认删除',
         confirmDelete: '确认从磁盘彻底物理删除会话「{0}」？\n此操作将删除 session.jsonl.zstd 文件并清理所有记录，无法恢复！',
         confirmDeleteWs: '确认彻底物理删除「{0}」项目下的全部 {1} 个归档会话？\n磁盘文件将全部移除，无法恢复！',
-        confirmTitle: '操作确认', confirmOk: '确认删除', confirmCancel: '取消',
         restoredToast: '已恢复会话「{0}」到侧边栏。', deletedWsToast: '已彻底删除「{0}」项目下的所有归档会话。'
       };
       var en = {
@@ -686,12 +653,13 @@
         deleteAll: 'Delete all', deleteAllTip: 'Permanently delete all archived sessions (including disk files)',
         deletedAllToast: 'Permanently deleted all {0} archived sessions.', deleteAllFailed: 'Failed to delete all archives',
         confirmDeleteAll: 'Permanently delete ALL {0} archived sessions?\nAll disk files and records will be removed and cannot be undone!',
-        confirmTitle: 'Confirm', confirmOk: 'Delete', confirmCancel: 'Cancel',
         deletePermanently: 'Delete', preview: 'View', viewDetail: 'View chat history',
         unarchive: 'Restore', unarchiveTip: 'Restore to sidebar', close: 'Close',
         loading: 'Loading archived chats...', empty: 'No archived conversations.', noMatch: 'No matching archived chats.',
         deleted: 'Session permanently deleted from disk', loadFailed: 'Load failed', unarchiveFailed: 'Restore failed',
         deleteFailed: 'Delete failed', deleteWsFailed: 'Failed to delete project archives',
+        confirmAgain: 'Click again to confirm delete (within 4s)',
+        confirmAgainShort: 'Confirm delete',
         confirmDelete: 'Permanently delete session \"{0}\" from disk?\nThis will remove session.jsonl.zstd and cannot be undone!',
         confirmDeleteWs: 'Permanently delete all {1} archived chats in \"{0}\"?\nAll disk files will be removed and cannot be undone!',
         restoredToast: 'Restored conversation \"{0}\" to sidebar.', deletedWsToast: 'Permanently deleted all archives in \"{0}\".'

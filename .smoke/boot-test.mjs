@@ -2,9 +2,12 @@
 // Replicates src/extension.js startHost(): forks the vendored dsh bin against a
 // fresh temp DSH_HOME, pre-writes the web profile with the baked bundles in the
 // manifest, transplants plugins/bundled into <profile>/node_modules, waits for
-// the bound-port line, then asserts `/` and a plugin `/plugins/<id>/client.js`
-// serve 200 (a platform-shadow or resolution failure surfaces as 400/404 or a
-// host-side crash). Requires: fetch (node>=18).
+// the bound-port line, then asserts `/` and every plugin's
+// `/plugins/<id>/client.js` serve 200 (a platform-shadow or resolution failure
+// surfaces as 400/404 or a host-side crash). Requires: fetch (node>=18).
+//
+// The entry list is READ OUT OF src/extension.js (BUNDLED_PLUGINS) rather than
+// duplicated here, so the harness cannot silently drift from what ships.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -19,38 +22,37 @@ const BUNDLED = path.join(PROJ, "plugins", "bundled");
 const HOME = fs.mkdtempSync(path.join(os.tmpdir(), "dsh-boot-"));
 const PROFILE = path.join(HOME, "profiles", "web");
 const MODULES = path.join(PROFILE, "node_modules");
-const MANIFEST = "dsh.profile.bundles";
+
+function readBundledPlugins() {
+  const src = fs.readFileSync(path.join(PROJ, "src", "extension.js"), "utf8");
+  const m = /const BUNDLED_PLUGINS = \[([\s\S]*?)\];/.exec(src);
+  if (!m) throw new Error("BUNDLED_PLUGINS not found in src/extension.js");
+  const names = [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]);
+  if (!names.length) throw new Error("BUNDLED_PLUGINS is empty");
+  return names;
+}
 
 // Self-contained entry plugins: only these package dirs ship; each resolves by
 // name from <profile>/node_modules so the DSH loader mounts exactly what we
-// deliver. We register every one INDIVIDUALLY as a bundle entry (never the
-// web-ui-all GROUP, whose full roster references plugins we do not ship).
-const entries = [
-  "@linxin666/dsh-chat-recovery",
-  "@linxin666/dsh-client-ui-aionui-panel",
-  "@linxin666/dsh-client-ui-community-plugins",
-  "@linxin666/dsh-client-ui-git-graph",
-  "@linxin666/dsh-client-ui-market",
-  "@linxin666/dsh-client-ui-plugin-manager",
-  "@linxin666/dsh-client-ui-skill-explorer",
-  "@linxin666/dsh-client-ui-task-board",
-  "@linxin666/dsh-client-ui-web-ui-settings",
-  "@linxin666/dsh-desktop-launcher",
-  "@linxin666/dsh-doctor",
-  "@linxin666/dsh-liangshen",
-  "@linxin666/dsh-pet",
-  "@linxin666/dsh-tool-describe-image",
-  "@mlgbnb/dsh-archive-manager",
-  "dsh-auto-compact",
-  "dsh-better-sidebar",
-  "dsh-client-auto-continue",
-  "dsh-file-review",
-  "dsh-memory-evolve",
-  "dsh-miraculous-standard",
-  "dsh-zh-kit",
-  "dsh-undo-plugin",
-  "@dsh-external/dsh-super-injector"
-];
+// deliver. Every one is registered INDIVIDUALLY (never an upstream GROUP whose
+// roster references plugins we do not ship).
+const entries = readBundledPlugins();
+console.log("baked plugin entries (" + entries.length + "): " + entries.join(", "));
+
+/** True when the entry declares a web client half, i.e. is expected to be
+ * advertised as a /plugins/ combo URL and injected as a graph row. A pure bundle
+ * layer (e.g. dsh-undo-plugin, whose cordis patch mounts its @dsh-undo/* members)
+ * has no dsh.client and therefore no client bundle of its own. */
+function isWebClientEntry(name) {
+  const pkgPath = path.join(BUNDLED, ...name.split("/"), "package.json");
+  try {
+    return JSON.parse(fs.readFileSync(pkgPath, "utf8"))?.dsh?.client?.platform === "web";
+  } catch {
+    return false;
+  }
+}
+const webEntries = entries.filter(isWebClientEntry);
+console.log("  of which web client entries: " + webEntries.length + " (" + webEntries.join(", ") + ")");
 
 // 1. transplant bundled entry packages + flatten _hostdeps into profile/node_modules.
 fs.mkdirSync(MODULES, { recursive: true });
@@ -90,16 +92,28 @@ let out = "", err = "";
 child.stdout.on("data", (d) => { out += d.toString(); });
 child.stderr.on("data", (d) => { err += d.toString(); });
 
-const PORT_RE = /dsh web: http:\/\/127\.0\.0\.1:(\d+)/;
+const PORT_RE = /dsh web: http:\/\/127\.0\.0\.1:(\d+)\/(?:\?token=([A-Za-z0-9_-]+))?/;
 
 function tail(text, n = 4000) { return text.length > n ? "…" + text.slice(-n) : text; }
 
+/** Node's fetch keeps no cookie jar, so mirror what the webview browser does:
+ * exchange the launch token for the auth cookie, then reuse it explicitly.
+ * @returns {Promise<string>} the Cookie header value, or "" when unauthenticated. */
+async function authCookie(base, token) {
+  if (!token) return "";
+  const res = await fetch(`${base}/?token=${encodeURIComponent(token)}`, { redirect: "manual", headers: { accept: "*/*" } });
+  const raw = typeof res.headers.getSetCookie === "function" ? res.headers.getSetCookie() : [res.headers.get("set-cookie")];
+  const jar = (raw || []).filter(Boolean).map((c) => String(c).split(";")[0]).join("; ");
+  console.log(`  auth: GET /?token=*** -> ${res.status} (location ${res.headers.get("location")}); cookie ${jar ? "minted" : "MISSING"}`);
+  return jar;
+}
+
 (async () => {
   const deadline = Date.now() + 120000;
-  let port = null;
+  let port = null, token = "";
   while (Date.now() < deadline) {
     const m = PORT_RE.exec(out);
-    if (m) { port = Number(m[1]); break; }
+    if (m) { port = Number(m[1]); token = m[2] ?? ""; break; }
     if (child.exitCode !== null) {
       console.log("HOST EXITED early code=" + child.exitCode);
       const fails = [...err.matchAll(/failed to import loader entry ([^(]+) \(([^)]+)\): (Cannot find (?:module|package) '[^']+')/g)]
@@ -118,33 +132,56 @@ function tail(text, n = 4000) { return text.length > n ? "…" + text.slice(-n) 
     child.kill();
     process.exit(3);
   }
-  console.log("HOST READY on 127.0.0.1:" + port);
+  console.log("HOST READY on 127.0.0.1:" + port + (token ? " (launch token present)" : " (no token: pre-0.1.5 host)"));
 
-  const checks = ["/", ...entries.map((n) => `/plugins/${n}/client.js`)];
-  let pass = 0;
-  for (const p of checks) {
+  const base = `http://127.0.0.1:${port}`;
+  const cookie = await authCookie(base, token);
+  const headers = { accept: "*/*", ...(cookie ? { cookie } : {}) };
+
+  // 0.1.5 does NOT serve the bare `/plugins/<id>/client.js` path: the module
+  // registry precomputes exactly the revisioned combo URLs it advertises
+  // (comboUrl() -> `/plugins/??<id>/client.js,...&rev=<hash>`) and 404s anything
+  // else. So discover the real URLs from the served shell instead of guessing.
+  let html = "";
+  let indexStatus = 0;
+  try {
+    const res = await fetch(base + "/", { headers, redirect: "manual" });
+    indexStatus = res.status;
+    html = await res.text();
+  } catch (e) {
+    console.log("  ERR  GET / -> " + String(e.message));
+  }
+  console.log(`  ${indexStatus === 200 ? "OK  " : "WARN"} GET / -> ${indexStatus}`);
+  const pluginUrls = [...new Set([...html.matchAll(/\/plugins\/[^"'\s<>\\)]+/g)].map((m) => m[0].replace(/&amp;/g, "&")))];
+
+  let pass = indexStatus === 200 ? 1 : 0;
+  const checks = 1 + webEntries.length;
+  for (const url of pluginUrls) {
     try {
-      const res = await fetch(`http://127.0.0.1:${port}${p}`, { headers: { accept: "*/*" } });
+      const res = await fetch(base + url, { headers, redirect: "manual" });
       const ok = res.status === 200;
-      console.log((ok ? "  OK  " : "  WARN") + ` GET ${p} -> ${res.status} (${res.headers.get("content-type") || ""})`);
-      if (ok) pass++;
+      console.log((ok ? "  OK  " : "  WARN") + ` GET ${url.length > 120 ? url.slice(0, 117) + "..." : url} -> ${res.status}`);
     } catch (e) {
-      console.log("  ERR  GET " + p + " -> " + String(e.message));
+      console.log("  ERR  GET " + url + " -> " + String(e.message));
     }
   }
-  console.log("RESULT: " + pass + "/" + checks.length + " routes served 200");
-  // dump injected @dsh-undo client modules to confirm bundle patch mounted its children
-  try {
-    const html = await (await fetch(`http://127.0.0.1:${port}/`, { headers: { accept: "*/*" } })).text();
-    const undo = html.match(/"id":"@dsh-undo\/[^"]+"/g) || [];
-    console.log("injected @dsh-undo client modules: " + undo.length);
-    undo.forEach((s) => console.log("  " + s));
-  } catch (e) { console.log("  inject-scan ERR " + String(e.message)); }
+  // Each baked WEB entry must be advertised in at least one served combo URL and
+  // appear as a graph row in the shell carrier. Bundle-only entries are mounted
+  // by their cordis patch instead and legitimately have neither.
+  for (const n of webEntries) {
+    const advertised = pluginUrls.some((u) => u.includes(`${n}/client.js`));
+    const graphRow = new RegExp(`"id":"${n.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")}"`).test(html);
+    const ok = advertised && graphRow;
+    if (ok) pass++;
+    console.log(`  ${ok ? "OK  " : "WARN"} entry ${n}: advertised=${advertised} graphRow=${graphRow}`);
+  }
+  console.log("RESULT: " + pass + "/" + checks + " checks passed");
+
   const errLines = err.split("\n").filter((l) => l.includes("Error") || l.includes("Cannot find") || l.includes("MODULE_NOT_FOUND") || l.includes("resolve"));
   if (errLines.length) {
     console.log("--- resolve/crash stderr lines ---");
     console.log(tail(errLines.join("\n"), 4000));
   }
   child.kill();
-  process.exit(pass === checks.length ? 0 : 4);
+  process.exit(pass === checks ? 0 : 4);
 })();

@@ -4,7 +4,8 @@
  * remote browser's memory-mode scope never answers and the acknowledgement
  * stays process-local here.
  */
-import type { SettingsScope, SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client';
+import { type SnapshotStore } from '@deepseek-ai/dsh-client-store';
+import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client';
 /** State rendered by the welcome step. */
 export interface WelcomeNoticeState {
     status: 'idle' | 'loading' | 'ready' | 'saving' | 'error';

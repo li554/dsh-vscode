@@ -12,11 +12,7 @@
  * Network reachability and authentication stay out of scope: binding policy
  * belongs to the webserver config, and this fence is not an auth layer.
  */
-import type { IncomingHttpHeaders } from 'node:http';
-/** The request facts the fence reads from either HTTP representation. */
-interface ApiTrustRequest {
-    headers: IncomingHttpHeaders | Headers;
-}
+import type { ConnectionTrustRequest } from './rpc.ts';
 /**
  * Assert one configured `trustedHosts` entry is a bare authority (`host` or
  * `host:port`) in canonical form: it must survive WHATWG parsing unchanged
@@ -38,6 +34,5 @@ export declare function assertTrustedAuthority(entry: string): void;
  * @param trustedHosts - non-loopback authorities this deployment serves: exact `host:port`, or port-less `host` matching any port.
  * @returns true when the Host is ours (loopback or trusted) and any attached browser markers are same-origin.
  */
-export declare function isTrustedApiRequest(request: ApiTrustRequest, trustedHosts: readonly string[]): boolean;
-export {};
+export declare function isTrustedApiRequest(request: ConnectionTrustRequest, trustedHosts: readonly string[]): boolean;
 //# sourceMappingURL=api-request-trust.d.ts.map

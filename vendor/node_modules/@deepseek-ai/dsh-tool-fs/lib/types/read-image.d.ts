@@ -1,5 +1,8 @@
 /**
- * The model-facing `read_image` tool commits a PNG/JPEG/WebP/GIF file.
+ * The model-facing `read_image` tool commits a PNG/JPEG/WebP/GIF file. A path
+ * without a file extension is identified from its file signature, while the
+ * attachment service's full decode stays authoritative. The mounted `ctx.fs`
+ * backend owns path resolution and read access; names only declare media type.
  *
  * The route gate is deliberately stricter than the host upload preflight. An
  * image-reading tool is useful only when the exact calling route can inspect
@@ -10,6 +13,12 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type { ImageAttachmentRef, ImageMediaType } from '@deepseek-ai/dsh-attachment';
 import type { ToolExecution } from '@deepseek-ai/dsh-tools';
+/**
+ * Identify the media type declared by a supported image file signature.
+ * @param data - file bytes read through the current filesystem backend.
+ * @returns the detected supported media type, or undefined for other bytes.
+ */
+export declare function sniffImageMediaType(data: Uint8Array): ImageMediaType | undefined;
 /** The structured outcome declared by the `read_image` output schema. */
 export interface ImageReadValue {
     path: string;

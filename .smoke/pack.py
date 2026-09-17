@@ -37,6 +37,28 @@ def add(zf, src, arc):
     if count % 2000 == 0:
         print(f"  {count} files, {time.time()-t0:.0f}s", flush=True)
 
+def verify_platform_patches(root):
+    """Refuse to package a vendored tree whose local patches are missing.
+
+    vendor/ is regenerated wholesale on a platform upgrade, which silently drops
+    every patch stored under .smoke/platform-patches/. Shipping that produces a
+    build whose old-session history cannot load, so this is a hard gate rather
+    than a warning."""
+    import importlib.util
+    module_path = os.path.join(root, ".smoke", "platform-patches.py")
+    spec = importlib.util.spec_from_file_location("platform_patches", module_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    if module.run("verify") != 0:
+        raise SystemExit(
+            "vendored platform patches are missing or drifted; "
+            "run `python .smoke/platform-patches.py apply` (and re-derive if it reports a version change)"
+        )
+
+# Verify BEFORE opening the output archive: raising inside the `with` would leave
+# a truncated dsh-vscode.vsix behind, which looks like a build artifact.
+verify_platform_patches(ROOT)
+
 with zipfile.ZipFile(OUT, "w", zipfile.ZIP_DEFLATED, compresslevel=1) as zf:
     ensure_ripgrep(ROOT)
     zf.write(os.path.join(ROOT, ".smoke", "meta", "[Content_Types].xml"), "[Content_Types].xml")
