@@ -1,9 +1,11 @@
-// Verifies the dsh.modlensFamilies -> `--patch` overlay path end to end.
+// Verifies the extension's `--patch` profile overlay end to end.
 //
 // Three things have to hold, and each has failed in some tool at some point:
-//   1. the extension materializes the setting into a valid overlay file;
-//   2. dsh actually COMPOSES that overlay onto the profile, reaching the modlens
-//      row's config (proved with --dump-config, not by assuming the flag works);
+//   1. the extension materializes the overlay (the standing directory-picker
+//      browse pin, plus the dsh.modlensFamilies section when configured) into a
+//      valid overlay file;
+//   2. dsh actually COMPOSES that overlay onto the profile (proved with
+//      --dump-config, not by assuming the flag works);
 //   3. the user's own <profile>/cordis.patch.yml is never rewritten.
 //
 // Usage: node .smoke/profile-overlay-test.mjs
@@ -105,9 +107,14 @@ const ext = require(path.join(ROOT, "src", "extension.js"));
   const deadline = Date.now() + 20000;
   while (Date.now() < deadline && !fs.existsSync(overlay)) await new Promise((r) => setTimeout(r, 200));
 
-  console.log("\n1. the extension materialized the setting");
+  console.log("\n1. the extension materialized the overlay");
   check("overlay file written", fs.existsSync(overlay), overlay);
   const text = fs.existsSync(overlay) ? fs.readFileSync(overlay, "utf8") : "";
+  // The standing body: the browse directory-picker pin (replaces the old
+  // SSH_CONNECTION fake-ssh hack, which also emptied /open-in-app/apps).
+  check("disables the adaptive directory-picker row", /^- id: directory-picker$[\s\S]*^  disabled: true$/m.test(text));
+  check("mounts the browse host backend", text.includes("@deepseek-ai/dsh-host-directory-picker-browse"));
+  check("mounts the browse client surface", text.includes("@deepseek-ai/dsh-client-ui-directory-picker-browse"));
   check("targets the modlens row", /^- id: modlens$/m.test(text), JSON.stringify(text.slice(0, 120)));
   check("declares a families list", /^\s{4}families:$/m.test(text));
   for (const family of EXPECTED_FAMILIES) {
@@ -138,7 +145,7 @@ const ext = require(path.join(ROOT, "src", "extension.js"));
   const dumpWith = (extra) => {
     const r = spawnSync(process.execPath, ["--expose-internals", BIN, "--profile", "web", ...extra, "--dump-config"], {
       cwd: ROOT,
-      env: { ...process.env, DSH_HOME: HOME, SSH_CONNECTION: "127.0.0.1 1 127.0.0.1 1" },
+      env: { ...process.env, DSH_HOME: HOME },
       encoding: "utf8",
       maxBuffer: 64 * 1024 * 1024
     });
@@ -152,18 +159,23 @@ const ext = require(path.join(ROOT, "src", "extension.js"));
     check(`composed config carries ${family}`, out.includes(family), "not found in --dump-config output");
   }
   check("modlens row still present", out.includes("modlens"));
+  // The standing picker pin must land in the composed config too.
+  check("directory-picker (auto) is disabled", /id: directory-picker\s+name: '@deepseek-ai\/dsh-host-directory-picker-auto'\s+disabled: true/.test(out));
+  check("browse host backend mounted", out.includes("@deepseek-ai/dsh-host-directory-picker-browse"));
+  check("browse client surface mounted", out.includes("@deepseek-ai/dsh-client-ui-directory-picker-browse"));
 
-  // The invariant that matters most and that this test originally missed: an
-  // overlay that names one row must not disturb any other. A patch list row with
-  // a bare `id` could have been read as a top-level entry and re-composed the tree,
-  // which would unmount every other bundled plugin while this test still passed.
+  // The overlay INTENTIONALLY adds exactly the browse pair and must not disturb
+  // any other row. A patch list row with a bare `id` could have been read as a
+  // top-level entry and re-composed the tree, which would unmount every other
+  // bundled plugin while this test still passed.
   const rowNames = (text) => new Set([...text.matchAll(/name:\s*'?([@a-z0-9._/-]+)'?/gi)].map((m) => m[1]));
   const withRows = rowNames(out);
   const withoutRows = rowNames(without.out);
-  check("the overlay adds no rows", withRows.size === withoutRows.size, `${withoutRows.size} -> ${withRows.size}`);
+  const added = [...withRows].filter((n) => !withoutRows.has(n));
+  check("the overlay adds only the browse pair", added.length === 2 && added.includes("@deepseek-ai/dsh-host-directory-picker-browse") && added.includes("@deepseek-ai/dsh-client-ui-directory-picker-browse"), "added: " + added.join(", "));
   const lost = [...withoutRows].filter((n) => !withRows.has(n));
   check("the overlay drops no rows", lost.length === 0, "missing: " + lost.slice(0, 8).join(", "));
-  for (const plugin of ["@canglongcl/dsh-web-review", "@liustack/modlens", "dsh-undo-plugin", "dsh-client-auto-continue"]) {
+  for (const plugin of ["@canglongcl/dsh-web-review", "@liustack/modlens", "dsh-rewind-plugin", "dsh-client-auto-continue"]) {
     check(`${plugin} still mounted`, out.includes(plugin));
   }
 

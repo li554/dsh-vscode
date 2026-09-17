@@ -8,7 +8,7 @@
 
 - **零依赖开箱即用**：宿主运行时、网页前端、生态插件全部打进扩展，一条 `.vsix` 完成安装。
 - **原生 DSH 体验**：完整渲染 Harness 网页界面（模型对话、工具调用、工作区、会话管理），无二次封装。
-- **内置插件（精简集）**：分层记忆、自动续写、PPT↔HTML 桥、网页预览四个插件随附启用。
+- **内置插件（精简集）**：分层记忆、自动续写、PPT↔HTML 桥、网页预览、SSH 远程、Git 管理、架构图、Web IDE 等插件随附启用。
 - **对 DSH 零改动**：利用本地回环端口映射（`WebviewPortMapping`）+ 信任边界机制接入，不修改 DSH 任何源码。
 - **多窗口隔离**：每个 VS Code 窗口独立宿主实例、独立端口，互不冲突。
 - **丰富操作命令**：打开面板、重启宿主、外部浏览器逃生、查看宿主日志。
@@ -40,13 +40,13 @@
 | `dsh.enableBakedPlugins` | 是否启用内置生态插件（默认 `true`） |
 | `dsh.modlensFamilies` | **追加**给 `@liustack/modlens` 的「纯文本、可桥接」**模型 id 前缀**列表。它自带默认 `deepseek`/`glm`/`mimo`；当你的 provider 用不透明别名（例如某网关把 DeepSeek/GLM 藏在 `code_instuct`、`code_think` 后面）时在这里补上。**你填的项会与内置三项合并，永远不会把它们挤掉**（modlens 内部是 `config.families \|\| [默认]`，只发你填的会替换掉默认）。留空 = 完全不覆盖。**改动会自动重启宿主**（插件 config 在装配时读取，必须重开宿主才生效） |
 
-> `dsh.modlensFamilies` 不是写进你的 `<profile>/cordis.patch.yml`，而是由扩展生成一个覆盖层文件 `<DSH_HOME>/.dsh-vscode-profile-patch.yml`，再用 `dsh --patch` 传进去。DSH 的合成顺序是「bundles → `cordis.patch.yml` → 各 `--patch`」，所以覆盖层叠在你自己的补丁之上，**永远不会改写你自己维护的那个文件**。留空则删除该文件、不传 `--patch`。
+> `dsh.modlensFamilies` 不是写进你的 `<profile>/cordis.patch.yml`，而是由扩展生成一个覆盖层文件 `<DSH_HOME>/.dsh-vscode-profile-patch.yml`，再用 `dsh --patch` 传进去。DSH 的合成顺序是「bundles → `cordis.patch.yml` → 各 `--patch`」，所以覆盖层叠在你自己的补丁之上，**永远不会改写你自己维护的那个文件**。该覆盖层**始终存在**：它还会把目录选择器固定到纯 JS 的 `browse` 后端（替代旧的 `SSH_CONNECTION` 假 SSH hack——那个 hack 同时会让聊天窗口右上角的「用已安装的应用打开工作目录」按钮消失）。`dsh.modlensFamilies` 那一节仅在你配置了值时才会追加，留空则只有固定选择器的那一节。
 >
 > 匹配规则（modlens 内部，大小写不敏感）：先去掉开头的 `~` 别名标记与 `vendor/` 命名空间，再按**前缀**匹配。所以 `deepseek-chat` 命中内置的 `deepseek`，而 `code_think` 什么都匹配不到——除非你把它加进来。**建议显式列出家族而不是写 `*`**：不在具名家族里时它还会额外要求模型目录声明 `text` 输入，而第三方目录通常不给这个元数据，结果 `*` 反而一个都不包。
 
 ## 🔌 内置插件
 
-> **探索分支说明**：本分支（`explore/dsh-0.1.5-rc2`）把内置平台升级到 `@deepseek-ai/dsh@0.1.5-rc.2`，并把内置插件从原先的整套生态**裁剪为下面 5 个**，其余全部移除（见 `src/extension.js` 的 `RETIRED_PLUGINS`，旧 `DSH_HOME` 里的残留插件会在下次启动时被清理）。
+> **探索分支说明**：本分支（`explore/dsh-0.1.5-rc2`）把内置平台升级到 `@deepseek-ai/dsh@0.1.5-rc.2`，并把内置插件从原先的整套生态**裁剪为精简集**（见下表），其余全部移除（见 `src/extension.js` 的 `RETIRED_PLUGINS`，旧 `DSH_HOME` 里的残留插件会在下次启动时被清理）。
 
 扩展在 `plugins/bundled` 下随附以下插件（各自保留原 LICENSE）：
 
@@ -58,6 +58,10 @@
 | `@dsh-vscode/p2h-bridge` | 本仓库自研 | PPT↔HTML 桥：`slides_import`/`slides_export` 宿主工具、`/html-slides` 静态预览路由、以及对话区的「PPT」标签页（导入 / 内联预览 / 导出 / 上传管理）。设计文档见 `docs/superpowers/specs/2026-08-29-dsh-ppt-html-review-workflow-design.md` |
 | `@liustack/modlens` | [liustack/modlens](https://github.com/liustack/modlens) | **视觉插件**：给纯文本模型（DeepSeek/GLM 等）加「看图」能力，粘贴图片返回结构化 JSON 证据（OCR + 版面 + 语义）。提供 `modlens_read_image` 工具、图片粘贴处理、`(modlens vision)` 模型变体与设置卡片。自带 `node_modules/{commander,undici}` 供它 spawn 的 CLI 使用，见下 |
 | `dsh-mnemon` | [omdsh-dev/dsh-mnemon](https://github.com/omdsh-dev/dsh-mnemon) `0.5.8` | **三层记忆**（Runtime / Documents / Memory Spaces）。Starter + 3 Source + Strategy + 9 Provider 作为 sibling 包 transplant；`zod`/`fflate`/`schemastery` 等在 `_hostdeps`。**Mnemon Native** 使用 vsix 内置的 `@mnemon-dev/mnemon@0.2.8` win32-x64 二进制，宿主启动时设 `MNEMON_CLI_PATH`，**无需联网、无需全局装 CLI**。 |
+| `@linxin666/dsh-ssh` | [linxin666/dsh-web](https://github.com/zhu1090093659/dsh-web) `0.3.23` | **SSH 远程（局域网/内网服务器）**：`ssh_list`/`ssh_exec`/`ssh_upload`/`ssh_download`/`ssh_tunnel`/`ssh_cluster` 模型工具 + 设置页主机配置 + Web 终端/SFTP。纯 JS（ssh2 + ws，无 native ABI）；`ssh2`/`asn1`/`bcrypt-pbkdf`/`tweetnacl`/`ws` 在 `_hostdeps`。**仅出站连接**（本地 spawn/ssh2 连远端），不暴露宿主端口。 |
+| `@duke-dsh-plugins/dsh-git-manager` | [MoonlitDropOfBlood/dsh-git-manager](https://github.com/MoonlitDropOfBlood/dsh-git-manager) `1.1.0` | **Git 工作区管理**：输入框「模式」选择器旁入口（仅 git 仓库显示），居中面板提供 status/diff、分支管理、合并冲突解决、commit/fetch/pull/push、worktree 管理（添加后自动注册为 DSH 工作区）、带分支线图形的提交历史。纯 JS（`zod` 在 `_hostdeps`），走平台 Typert 协议。 |
+| `dsh-archify` | [GongYuanCaiJi/dsh-archify](https://github.com/GongYuanCaiJi/dsh-archify) `0.1.0` | **架构图 Skill**（移植自 tt-a1i/archify）：用 JSON 规格生成可验证的架构图/流程图/时序图/数据流图/生命周期图。Skill-only bundle：零运行时依赖，`skills/` 目录由 `prepare` 脚本 staging（已内置），挂载平台 `@deepseek-ai/dsh-skill-filesystem` provider。 |
+| `dsh-code-ide` | [SakalioLabs/dsh-code-ide](https://github.com/SakalioLabs/dsh-code-ide) `0.1.0-alpha.1` | **Web IDE 工作台**：CodeMirror 编辑器 + xterm 终端 + 工作区文件/搜索/变更服务。宿主侧依赖 `node-pty`、`ffi-rs`（均为 NAPI prebuild，`_hostdeps`）与 `@vscode/ripgrep`（含 win32-x64 二进制，`_hostdeps`）。**client + host 各有一处 0.1.5-rc.2 兼容补丁**（见下）。 |
 | `_hostdeps/`（docgen-utils、fontkit、jszip、linkedom 及其闭包） | npm 包 | p2h-bridge 宿主侧所需的非平台依赖，内置以便离线解析 |
 
 > `dsh-undo-plugin` 只是 bundle 层，真正的插件是它 cordis patch 挂载的 7 个 `@dsh-undo/*` 成员包——所以它们不在 `BUNDLED_PLUGINS` 里，由 `.smoke/selfcontained-plugins.mjs` 按「被 patch 认领」校验。
@@ -68,6 +72,9 @@
 **本分支的本地改造（相对上游）**
 
 - `@deepseek-ai/dsh-client-ui-settings-models`（explore.24）：自定义模型「容量与能力」增加 **支持图像** / **推理模型** 开关。推理开关写入 `reasoningEfforts: {low,high,max}`；**对话框模型选择器**（`dsh-client-ui-model-selection`）对声明了 reasoning 的模型显示 **Default / Low / High / Max**，与官方模型同一套 UI，不在设置卡片里选档。
+- `dsh-code-ide` client（explore.71）：上游声明只测到 `0.1.2-alpha.1`/`0.1.1-rc.2`，在 `0.1.5-rc.2` 上 IDE 标签空白。根因：`conversation.view` slot 的运行时 props 从 0.1.5 起只含 `viewRequest/openView/completeViewRequest`（`SessionStandardProps` 为空），不再传 `sessionId`/`useWorkspaces`，且 workspace 快照不再有 `baselinesReady`（改 `state: idle|loading|error` + `phase: pending|ready`）。补丁（`dist/harness-client/client.js`）：注入 `workspaces` 服务，`slots.register` 用 `inject: (sessionId) => ({sessionId})` 接住 sessionId，`HarnessIdeView` 改为直接用 `useSyncExternalStore` 消费 `workspaces.list`（`{getSnapshot, subscribe}`），`workspaceTargetForSession` 的 `!baselinesReady` 改为 `state === "loading"`。
+- `dsh-code-ide` host（explore.72）：iframe 能加载后仍空白，浏览器报 `Refused to display ... because it set 'X-Frame-Options' to 'sameorigin'`。根因：插件的 `securityHeaders()`（`dist/host/host/static.js`）对 `/dsh-code-ide/*` 静态响应设了 `X-Frame-Options: SAMEORIGIN`，而 VS Code webview 的**嵌套** iframe 嵌入者 origin 是 `vscode-webview://`（与 `http://127.0.0.1:*` 不同源）→ 浏览器直接拒载（`chrome-error://chromewebdata/` + `Unsafe attempt to load URL ... Domains, protocols and ports must match`）。dsh-desktop（Electron BrowserWindow）里 iframe 与页面同源所以正常。补丁：移除该头（loopback 信任边界 + 既有 CSP 仍保留）。验证：`--dump-config`/启动后 curl `/dsh-code-ide/` 确认 `x-frame-options` 不再出现。
+- `dsh-code-ide` ffi-rs（explore.73）：加载后 IDE 顶部出现黄色提示 `Unsupported by this Host: file creation, folder creation, rename, delete.`。根因：之前按"native ABI 会崩"的旧结论**不打包 ffi-rs**，而插件 win32 的 mutation backend（`mutation-backend-windows.js`/`native-rename.js`）动态 `import('ffi-rs')` 失败后被 `createPlatformMutationBackend` catch 降级为 `unavailable` → 变更能力不可用。实测推翻旧结论：`ffi-rs@1.3.7` 是 @napi-rs 构建的 **NAPI** 模块（index.js 优先加载包内 `ffi-rs.win32-x64-msvc.node`，否则 fallback 平台包 `@yuuang/ffi-rs-win32-x64-msvc`），与 node-pty 同理跨 ABI 稳定，系统 Node 24 加载 OK。修法：把 npm 发布的 index.js 包 + 从平台包提取的 `ffi-rs.win32-x64-msvc.node` 一起放进 `_hostdeps/ffi-rs/`（本地 .node 优先，无需 @yuuang 平台包）。验证：启动后无 `mutation backend unavailable` warn，`POST /dsh-code-ide/api/workspace-mutations/v1` 返回 415（路由在、要求 JSON）。
 - `@dsh-vscode/p2h-bridge` 0.2.1 → 0.3.0：原本是挂在 `dsh-better-sidebar` 标签栏里的侧边栏标签页，现改为注册平台官方 slot `conversation.view`（`order: 15`），**紧邻「轨迹」标签页右侧**；同时移除对 `betterSidebar` 服务的全部探测与 web-review 预览标签页的外部驱动（web-review 0.6.0 已不再提供该公开 API），预览改为面板内联 iframe + 「新窗口」兜底。调研与 0.1.1→0.1.5 API 差异见 `docs/superpowers/specs/2026-09-01-p2h-bridge-conversation-view-tab-research.md`。
 - `@dsh-undo/rollback-fork`：上游 `@deepseek-ai/dsh-agent-presets` 在 0.1.1-rc.2 之后删掉了 `resolveSessionPreset` 导出，而 dsh-undo rc.8 正是 `import` 它——**这会让整个宿主启动失败**（cordis 报的是「加载插件失败」，看不出根因在平台）。已把 0.1.1 那个 8 行实现内联回来（0.1.5 仍在产生它依赖的 `agent-preset/selected` 事件与 `header.agentPreset` 字段）。用 `.smoke/platform-api-scan.mjs` 可一次性扫出这类断裂。
 - `@canglongcl/dsh-web-review` 的 `storeAnnotationSnapshot` + 客户端清除路径：**批注同步/清除不应因「无 live agent」或「宿主短暂不可达」报「注释上下文同步失败」**。上游把 pending 绑在 `agents.get(sessionId)` 上，取不到 live agent 就 **404 `session not found`**；且客户端只容忍「清除 + 404」，宿主重启/被 SIGTERM 时的网络错误或 502 会让 dock 卡在「正在清除注释 / 同步失败」。批注本质上只是「下一轮 user message 的历史上下文」：已改为 **pending 按 sessionId 存**（`agent.id` 就是 sessionId），空/非空草稿在无 agent 时都可写入；注入仍走 `agent/pre-step`；**不再**在 `agent/disposed` 时丢掉未注入草稿。客户端：**空草稿（清除）在任何 fetch 失败/非 2xx/非法回执时都视为成功**（浏览器已丢掉 picks，宿主 pending 本就随进程消失），非空路径的错误上报原样保留。已验证与扩展代理无关：同一请求直连宿主与经代理返回完全一致。

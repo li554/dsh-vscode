@@ -82,10 +82,23 @@ const manifest = {
 };
 fs.writeFileSync(path.join(PROFILE, "package.json"), JSON.stringify(manifest, null, 2) + "\n");
 
-// 3. fork host exactly like startHost()
-const child = spawn(process.execPath, ["--expose-internals", BIN, "--profile", "web", "--port", "0", "--no-open"], {
+// 3. fork host exactly like startHost() (the extension's profile overlay pins
+//    the browse directory picker — the old SSH_CONNECTION fake-ssh hack is gone,
+//    it also disabled open-in-app)
+const overlay = path.join(HOME, ".dsh-vscode-profile-patch.yml");
+fs.writeFileSync(overlay, [
+  "# dsh-vscode embedded host (boot-test mirror)",
+  "- id: directory-picker",
+  "  disabled: true",
+  "- insert:",
+  "    - id: directory-picker-browse",
+  "      name: '@deepseek-ai/dsh-host-directory-picker-browse'",
+  "    - id: ui-directory-picker-browse",
+  "      name: '@deepseek-ai/dsh-client-ui-directory-picker-browse'"
+].join("\n") + "\n");
+const child = spawn(process.execPath, ["--expose-internals", BIN, "--profile", "web", "--patch", overlay, "--port", "0", "--no-open"], {
   cwd: PROJ,
-  env: { ...process.env, DSH_HOME: HOME, SSH_CONNECTION: "127.0.0.1 1 127.0.0.1 1" },
+  env: { ...process.env, DSH_HOME: HOME },
   stdio: ["ignore", "pipe", "pipe"]
 });
 let out = "", err = "";
