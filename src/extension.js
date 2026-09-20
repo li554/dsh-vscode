@@ -310,6 +310,22 @@ function hostAuthUrl() {
   return hostToken ? `${base}?token=${encodeURIComponent(hostToken)}` : base;
 }
 
+/** True when `value` is an http(s) URL on the app authority — i.e. a browser
+ * marker that is SAME-origin with the proxy, which is exactly what the webview
+ * itself sends. Such markers are forwarded to the host (some bundled plugins,
+ * e.g. dsh-web-review's `/webview-preview-sessions`, verify the Origin before
+ * accepting a request); cross-origin ones are stripped by the loop below so
+ * DSH's Host/Origin fence keeps rejecting foreign browsers. */
+function sameOriginToApp(value) {
+  if (typeof value !== "string" || value === "") return false;
+  try {
+    const url = new URL(value);
+    return (url.protocol === "http:" || url.protocol === "https:") && url.host === appAuthority;
+  } catch {
+    return false;
+  }
+}
+
 /** Hop-by-hop headers plus the browser markers DSH's Host/Origin fence rejects
  * (`sec-fetch-site: cross-site` is a hard 403, and a cross-origin `Origin`/
  * `Referer` fails the same-origin check). Dropping them restores the clean
@@ -481,6 +497,11 @@ function forwardToHost(req, res, retrying) {
     headers[key] = value;
   }
   headers.host = appAuthority;
+  // Same-origin browser markers survive the strip so host-side plugins can
+  // verify them (dsh-web-review's preview-sessions handler 403s without a
+  // matching Origin); cross-origin ones stay dropped for the Host/Origin fence.
+  if (sameOriginToApp(req.headers.origin)) headers.origin = req.headers.origin;
+  if (sameOriginToApp(req.headers.referer)) headers.referer = req.headers.referer;
   // Only assert a credential we actually hold: an empty `Cookie` header would
   // read as a present-but-invalid cookie rather than an anonymous request.
   if (hostCookie) headers.cookie = hostCookie;
@@ -672,10 +693,33 @@ const BUNDLED_PLUGINS = [
   // Zero runtime deps; stages skills/ via its prepare script, ships already
   // staged. Mounts the vendored @deepseek-ai/dsh-skill-filesystem provider.
   "dsh-archify",
-  // Web IDE workbench (CodeMirror editor, xterm terminal, workspace search).
-  // Host needs node-pty + @vscode/ripgrep from _hostdeps; ffi-rs is NOT shipped
-  // (its absence degrades the native mutation backend instead of crashing).
-  "dsh-code-ide"
+  // Service-oriented sidebar workbench (file explorer / CodeMirror editor /
+  // xterm terminal / git view / embedded browser / subagent+job task page),
+  // mounted into DSH's NATIVE right sidebar (0.1.5's sidebar-right service) and
+  // exposing ctx.betterSidebar for other plugins.
+  //
+  // Replaces dsh-code-ide (retired in explore.84): better-sidebar covers the
+  // same surface — editor, terminal, explorer, workspace search — and the two
+  // would otherwise compete for the same right column. It also drops the
+  // CodeMirror/xterm duplication dsh-code-ide carried into the vsix.
+  //
+  // Dependency accounting — why this needs nothing added to _hostdeps:
+  //  - the client half is fully self-contained: lib/client.js and the three
+  //    lazy chunks (client-terminal/editor/mermaid.js) carry ZERO bare imports
+  //    (mermaid, dompurify, @codemirror/*, react-icons, rxjs, clsx are already
+  //    inlined by its own build), so no front-end dep has to be shipped;
+  //  - the host half (lib/index.js) imports exactly seven bare specifiers:
+  //    ws, schemastery and @deepseek-ai/dsh-{session,settings,tools,llm,
+  //    subagent}. schemastery + ws are already in _hostdeps (dsh-mnemon
+  //    likewise resolves the BARE schemastery name, which 0.1.5 renamed to the
+  //    scoped @deepseek-ai/schemastery inside the vendored tree), and the five
+  //    @deepseek-ai/* packages come from the vendored platform closure at the
+  //    SAME versions the running host uses — never hoist them here.
+  //
+  // Version floor: the native-sidebar integration landed in v0.19.0 and the
+  // published v0.19.1 declares peerDependencies on ^0.1.5-rc.1 (verified by
+  // upstream on 0.1.5-rc.2, which is exactly this build's vendored runtime).
+  "dsh-better-sidebar"
 ];
 /** Plugins that older vsix releases bundled but this build does not. A DSH_HOME
  * that previously ran with them enabled still carries their names in the profile
@@ -717,7 +761,16 @@ const RETIRED_PLUGINS = [
   "@huanlin/dsh-plugin-better-sidebar-plugin-office",
   "@dsh-external/dsh-super-injector",
   "dsh-auto-compact",
-  "dsh-better-sidebar",
+  // NOTE: dsh-better-sidebar was retired by an earlier build and is bundled
+  // again as explore.82 — it must NOT stay in RETIRED_PLUGINS. Leaving it here
+  // is not harmless: syncBakedPlugins prunes every RETIRED name from the
+  // profile bundles AND deletes its transplanted tree first, and only the
+  // later "append every BUNDLED_PLUGINS name" step puts it back, so the
+  // directory is destroyed and re-copied on every single boot.
+  // retired by dsh-vscode explore.84: superseded by dsh-better-sidebar, whose
+  // native right-sidebar covers the same editor/terminal/explorer surface (and
+  // drops the duplicated CodeMirror/xterm payload from the vsix).
+  "dsh-code-ide",
   "dsh-file-review",
   "dsh-free-search",
   "dsh-miraculous-standard",
@@ -1233,17 +1286,91 @@ function hasBundledLink(modules) {
   }
   return false;
 }
+/**
+ * Cheap content fingerprint of one bundled package: every file's relative path plus
+ * size and mtime, folded into a 32-bit FNV-1a hash.
+ * @param {string} dir absolute package directory
+ * @returns {string} 8-hex-digit digest
+ */
+function packageDigest(dir) {
+  let hash = 0x811c9dc5;
+  const walk = (current, prefix) => {
+    let entries;
+    try { entries = fs.readdirSync(current, { withFileTypes: true }); } catch { return; }
+    entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    for (const entry of entries) {
+      const rel = prefix + entry.name;
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) { walk(full, rel + "/"); continue; }
+      let st;
+      try { st = fs.statSync(full); } catch { continue; }
+      const token = rel + ":" + st.size + ":" + Math.round(st.mtimeMs);
+      for (let i = 0; i < token.length; i++) hash = Math.imul(hash ^ token.charCodeAt(i), 0x01000193) >>> 0;
+    }
+  };
+  walk(dir, "");
+  return hash.toString(16).padStart(8, "0");
+}
+/**
+ * Names of bundled plugins whose package dir is absent from the profile's
+ * node_modules. A MISSING package is fatal, not cosmetic: `syncBakedPlugins`
+ * writes the name into `dsh.profile.bundles` regardless, and the host boot then
+ * dies with
+ *
+ *   cannot resolve profile bundle "dsh-better-sidebar" ... (exit 1)
+ *
+ * so the panel never paints at all.
+ *
+ * This state is reachable because each copy below is guarded by a bare
+ * `catch {}` while the marker is written unconditionally: one transient copy
+ * failure (a pnpm/vendor write still holding the tree, AV scanning a freshly
+ * written 14 MB package, ...) is folded into an apparently-successful
+ * transplant, and from then on the fast path — which compares only version and
+ * package DIGESTS — skips the copy forever, leaving the profile permanently
+ * unable to boot. Checking existence here is what breaks that loop.
+ * @param {string} bundled the extension's plugins/bundled dir
+ * @param {string} modules the profile's node_modules dir
+ * @returns {string[]} missing package names (empty when complete)
+ */
+function missingBundledPackages(bundled, modules) {
+  const missing = [];
+  let entries;
+  try { entries = fs.readdirSync(bundled); } catch { return missing; }
+  for (const entry of entries) {
+    if (entry === "_hostdeps" || entry.startsWith(".")) continue;
+    let src;
+    try { src = fs.statSync(path.join(bundled, entry)); } catch { continue; }
+    if (!src.isDirectory()) continue;
+    if (entry.startsWith("@")) {
+      let subs;
+      try { subs = fs.readdirSync(path.join(bundled, entry)); } catch { continue; }
+      for (const sub of subs) {
+        if (!fs.existsSync(path.join(modules, entry, sub))) missing.push(entry + "/" + sub);
+      }
+    } else if (!fs.existsSync(path.join(modules, entry))) {
+      missing.push(entry);
+    }
+  }
+  return missing;
+}
 function transplantBundledPlugins(profileDir) {
   const bundled = path.join(__dirname, "..", "plugins", "bundled");
   if (!fs.existsSync(bundled)) return;
   const modules = path.join(profileDir, "node_modules");
-  // Fast path: when the extension version AND every bundled package version
-  // are unchanged since the last transplant, skip the copy. Re-copying the
-  // whole self-contained tree (~64 MB, ~2100 files) on every boot was the
-  // single largest startup cost and the reason the panel needed several tab
-  // switches before first paint. Any version change (vsix upgrade or a
-  // plugin's package.json inside plugins/bundled) invalidates the marker and
-  // the force-overwrite below still propagates it, exactly as before.
+  // Fast path: when the extension version AND every bundled package's CONTENT are
+  // unchanged since the last transplant, skip the copy. Re-copying the whole
+  // self-contained tree (~64 MB, ~2100 files) on every boot was the single largest
+  // startup cost and the reason the panel needed several tab switches before first
+  // paint.
+  //
+  // The fingerprint must include content, not just versions: this dev loop repacks
+  // the same `0.3.0-explore.NN` repeatedly and every bundled plugin keeps its own
+  // version (e.g. p2h-bridge 0.3.0, web-review 0.6.0). With version-only markers a
+  // code-only fix left the marker valid, the transplant was skipped, and the profile
+  // kept running the previous bundle — "I fixed it several times and nothing changed",
+  // with the proof sitting in this log as "transplant skipped". Any rebuilt file
+  // (new size/mtime, or a new package version) now invalidates the marker, and the
+  // force-overwrite below still propagates it.
   const markerPath = path.join(modules, ".dsh-baked-marker.json");
   const fingerprint = {};
   const collect = (dir, prefix) => {
@@ -1254,29 +1381,41 @@ function transplantBundledPlugins(profileDir) {
       if (prefix === "" && entry === "_hostdeps") { collect(src, "_hostdeps/"); continue; }
       let v = "0";
       try { v = String(JSON.parse(fs.readFileSync(path.join(src, "package.json"), "utf8")).version ?? "0"); } catch { /* unversioned dir */ }
-      fingerprint[prefix + entry] = v;
+      fingerprint[prefix + entry] = v + "+" + packageDigest(src);
     }
   };
   collect(bundled, "");
   const extVersion = String(extensionContext?.extension?.packageJSON?.version ?? "unknown");
   let previous = null;
   try { previous = JSON.parse(fs.readFileSync(markerPath, "utf8")); } catch { /* first boot or wiped profile */ }
-  if (previous && previous.extVersion === extVersion && JSON.stringify(previous.packages) === JSON.stringify(fingerprint) && !hasBundledLink(modules)) {
+  // Version/digest equality is NOT sufficient to skip: the marker attests that a
+  // transplant RAN, never that every copy SUCCEEDED (each one swallows its error,
+  // and the marker is written unconditionally). Without this existence check a
+  // single transient copy failure leaves the profile advertising a bundle whose
+  // package is absent — which aborts the whole host boot — and the marker then
+  // suppresses every future retry.
+  const missing = missingBundledPackages(bundled, modules);
+  if (previous && previous.extVersion === extVersion && JSON.stringify(previous.packages) === JSON.stringify(fingerprint) && !hasBundledLink(modules) && missing.length === 0) {
     log("baked-in ecosystem plugins unchanged since last boot — transplant skipped (" + Object.keys(fingerprint).length + " packages)");
     return;
   }
+  if (missing.length) {
+    log("baked-in transplant re-running: " + missing.length + " bundled package dir(s) missing from the profile node_modules (" + missing.slice(0, 6).join(", ") + (missing.length > 6 ? ", …" : "") + ")");
+  }
   fs.mkdirSync(modules, { recursive: true });
   let copied = 0;
+  /** entry labels whose copy threw — reported below instead of being swallowed. */
+  const failed = [];
   for (const entry of fs.readdirSync(bundled)) {
     const src = path.join(bundled, entry);
     if (!fs.statSync(src).isDirectory() || entry === "_hostdeps") continue;
     if (entry.startsWith("@")) {
       const scope = path.join(bundled, entry);
       for (const sub of fs.readdirSync(scope)) {
-        try { copyReal(path.join(scope, sub), path.join(modules, entry, sub)); copied++; } catch { /* skip */ }
+        try { copyReal(path.join(scope, sub), path.join(modules, entry, sub)); copied++; } catch (error) { failed.push(entry + "/" + sub + " (" + String(error?.code ?? error?.message ?? error) + ")"); }
       }
     } else {
-      try { copyReal(src, path.join(modules, entry)); copied++; } catch { /* skip */ }
+      try { copyReal(src, path.join(modules, entry)); copied++; } catch (error) { failed.push(entry + " (" + String(error?.code ?? error?.message ?? error) + ")"); }
     }
   }
   // flatten _hostdeps/* so each dep is resolvable at <profile>/node_modules/<dep>
@@ -1285,11 +1424,19 @@ function transplantBundledPlugins(profileDir) {
     for (const entry of fs.readdirSync(hostdeps)) {
       const src = path.join(hostdeps, entry);
       if (!fs.statSync(src).isDirectory()) continue;
-      try { copyReal(src, path.join(modules, entry)); copied++; } catch { /* skip */ }
+      try { copyReal(src, path.join(modules, entry)); copied++; } catch (error) { failed.push(entry + " (" + String(error?.code ?? error?.message ?? error) + ")"); }
     }
   }
   try { fs.writeFileSync(markerPath, JSON.stringify({ extVersion, packages: fingerprint }, null, 2) + "\n"); } catch { /* best effort */ }
   log("baked-in ecosystem plugins enabled into profile " + profileDir + " (" + copied + " self-contained entry packages)");
+  // Never silent: a failed entry copy used to be indistinguishable from success,
+  // and the next boot's fast path (version+digest only) then skipped the retry,
+  // leaving a bundle in the manifest with no package behind it and no way back.
+  // The existence check in the fast path now retries automatically; this line is
+  // what makes the cause visible in the Host Logs instead of a faceless exit 1.
+  if (failed.length) {
+    log("baked-in transplant INCOMPLETE: " + failed.length + " entr(y/ies) failed to copy — will retry on the next boot: " + failed.slice(0, 6).join(", ") + (failed.length > 6 ? ", …" : ""));
+  }
 }
 
 /**
@@ -1355,6 +1502,11 @@ function startHost(requestedPort = 0) {
       // also collide mid-write; keeping doctor state under DSH_HOME is writable
       // and private to this deployment.
       DSH_DOCTOR_HOME: path.join(home, "doctor"),
+      // dsh-vscode: the webview's portMapping only reaches the proxy's fixed
+      // port (hostPortFor), never the host's OS-assigned ephemeral one. Bundled
+      // plugins that build preview URLs must point at the proxy port — inject it
+      // explicitly (p2h-bridge reads DSH_PROXY_PORT to build deck previewUrls).
+      DSH_PROXY_PORT: String(hostPortFor()),
       // The directory-picker seam is pinned to the pure-JS `browse` pair by the
       // profile overlay (writeProfileOverlay), NOT by faking SSH_CONNECTION.
       // The adaptive resolver would otherwise pick the koffi NATIVE backend on
