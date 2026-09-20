@@ -23,7 +23,7 @@ fs.writeFileSync(path.join(PROFILE, "package.json"), JSON.stringify(manifest, nu
 
 const child = spawn(process.execPath, ["--expose-internals", BIN, "--profile", "web", "--port", "0", "--no-open"], {
   cwd: PROJ,
-  env: { ...process.env, DSH_HOME: HOME, SSH_CONNECTION: "127.0.0.1 1 127.0.0.1 1" },
+  env: { ...process.env, DSH_HOME: HOME },
   stdio: ["ignore", "pipe", "pipe"]
 });
 let out = "", err = "";
