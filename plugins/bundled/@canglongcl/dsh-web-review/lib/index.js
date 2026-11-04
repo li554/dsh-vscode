@@ -11330,12 +11330,53 @@ function requestHeaders(req) {
 function sessionOrigin(id, port) {
 	return `http://${id}.localhost:${String(port)}`;
 }
+// dsh-vscode: a session whose TARGET lives on the app's own public port (the
+// extension proxy, or the desktop host port) cannot use a per-session `*.localhost`
+// origin. The VS Code webview runs with LocalNetworkAccessChecks and a portMapping
+// fused to the webview at creation, so that one port is the only thing it can reach
+// and the isolated listener's ephemeral port is not it. Address such sessions by
+// PATH under the public origin instead: the isolated wrapper — and therefore the
+// whole annotation bridge (element picking, markers, hover cards) — is preserved,
+// which is exactly what a DIRECT descriptor throws away.
+const PREVIEW_FRAME_ROUTE = "/.dsh-web-review-frame";
+/** Path prefix carrying the session id for routed sessions ("" for upstream ones). */
+function sessionRoutePrefix(session) {
+	return session.viaRoute === true ? `${PREVIEW_FRAME_ROUTE}/${session.id}` : "";
+}
+/** Origin the frame is actually served from. */
+function sessionPublicOrigin(session, port) {
+	return session.viaRoute === true ? `http://127.0.0.1:${String(port)}` : sessionOrigin(session.id, port);
+}
+/**
+ * dsh-vscode: `frame-ancestors` can only be asserted for a genuinely isolated
+ * per-session origin (`<id>.localhost`). A ROUTED frame is served under the app's
+ * own origin, and inside a VS Code webview its ancestor chain always contains the
+ * `vscode-webview://…` document — and frame-ancestors checks EVERY ancestor, so any
+ * allowlist that omits that scheme blocks the frame outright:
+ *
+ *   Framing '<origin>/' violates the following Content Security Policy directive:
+ *   "frame-ancestors <origin>". The request has been blocked.
+ *
+ * which surfaces as a blank preview tab and 「页面无法通过隔离预览加载」. Routed frames
+ * carry an unguessable 128-bit session id and serve the app's own content, so they
+ * simply carry no frame-ancestors directive instead.
+ */
+function frameAncestorsHeaders(session) {
+	return session.viaRoute === true ? {} : { "content-security-policy": `frame-ancestors ${session.parentOrigin}` };
+}
+/** Same rule for the host-generated handoff/navigate documents (they need script-src). */
+function handoffCspHeaders(session) {
+	const base = "default-src 'none'; script-src 'unsafe-inline'";
+	return session.viaRoute === true
+		? { "content-security-policy": base }
+		: { "content-security-policy": `${base}; frame-ancestors ${session.parentOrigin}` };
+}
 function descriptorOf(session, port) {
-	const frameOrigin = sessionOrigin(session.id, port);
+	const frameOrigin = sessionPublicOrigin(session, port);
 	return {
 		sessionId: session.id,
 		frameOrigin,
-		frameUrl: `${frameOrigin}${PREVIEW_ENTRY_PREFIX}${encodeTarget(session.initialTarget)}`,
+		frameUrl: `${frameOrigin}${sessionRoutePrefix(session)}${PREVIEW_ENTRY_PREFIX}${encodeTarget(session.initialTarget)}`,
 		targetOrigin: session.targetOrigin,
 		channel: session.channel
 	};
@@ -11475,14 +11516,45 @@ function noStoreHeaders(extra = {}) {
 	};
 }
 /** Start the independent loopback listener after the bridge artifact is built. */
-async function startIsolatedPreviewServer(bridgeSource) {
+async function startIsolatedPreviewServer(bridgeSource, publicPortOf) {
 	const sessions = /* @__PURE__ */ new Map();
 	const sockets = /* @__PURE__ */ new Set();
 	let port = 0;
+	// The public port is resolved lazily: the webServer's own port may not be bound
+	// yet when the plugin applies, and the proxy port is fixed for the whole session.
+	let routedPort = 0;
+	const publicPortNow = () => {
+		const next = Number(publicPortOf?.() ?? 0);
+		if (Number.isFinite(next) && next > 0) routedPort = next;
+		return routedPort;
+	};
 	const createSession = (target, parentOrigin, handoffDepth = 0) => {
 		if (!isPreviewableUrl(target)) throw new Error("invalid preview target");
 		const normalizedParent = parentOriginOf(parentOrigin);
 		if (normalizedParent === void 0) throw new Error("invalid parent origin");
+		// dsh-vscode: loopback targets are NOT wrapped in a per-session `*.localhost`
+		// origin any more — that URL is unreachable from the VS Code webview (see
+		// PREVIEW_FRAME_ROUTE). Two cases remain:
+		//   * target served by the app's own public port (p2h deck previews, the
+		//     static routes) → normal isolated session, addressed by path on that
+		//     port, so the annotation bridge runs;
+		//   * any other loopback target (a dev server on its own port) → keep the
+		//     DIRECT descriptor: putting a foreign local service on the shared public
+		//     origin would hand it the DSH surface's origin and cookies.
+		const targetUrl = new URL(target);
+		const loopback = targetUrl.hostname === "127.0.0.1" || targetUrl.hostname === "localhost";
+		const targetPort = Number(targetUrl.port || (targetUrl.protocol === "https:" ? "443" : "80"));
+		const routedPortNow = publicPortNow();
+		const viaRoute = loopback && routedPortNow > 0 && targetPort === routedPortNow;
+		if (loopback && !viaRoute) {
+			return {
+				sessionId: opaqueId(),
+				frameUrl: targetUrl.href,
+				frameOrigin: targetUrl.origin,
+				targetOrigin: targetUrl.origin,
+				channel: opaqueId()
+			};
+		}
 		if (sessions.size >= MAX_SESSIONS) {
 			const oldest = [...sessions.values()].sort((left, right) => left.touchedAt - right.touchedAt)[0];
 			if (oldest !== void 0) sessions.delete(oldest.id);
@@ -11496,12 +11568,27 @@ async function startIsolatedPreviewServer(bridgeSource) {
 			initialTarget: new URL(target).href,
 			touchedAt: Date.now(),
 			handoffs: 0,
-			handoffDepth
+			handoffDepth,
+			viaRoute
 		};
 		sessions.set(id, session);
-		return descriptorOf(session, port);
+		return descriptorOf(session, viaRoute ? routedPortNow : port);
 	};
 	const sessionFor = (req) => {
+		// dsh-vscode: routed sessions arrive on the public port through the host
+		// webServer, so the id is in the path. The Host header carries the public
+		// authority there and identifies nothing.
+		const requestPath = req.url ?? "/";
+		if (requestPath.startsWith(`${PREVIEW_FRAME_ROUTE}/`)) {
+			const rest = requestPath.slice(PREVIEW_FRAME_ROUTE.length + 1);
+			const slash = rest.indexOf("/");
+			const id = slash === -1 ? rest : rest.slice(0, slash);
+			if (!/^[a-f\d]{32}$/u.test(id)) return void 0;
+			const routed = sessions.get(id);
+			if (routed === void 0 || routed.viaRoute !== true) return void 0;
+			routed.touchedAt = Date.now();
+			return routed;
+		}
 		const host = req.headers.host;
 		if (host === void 0) return void 0;
 		try {
@@ -11523,15 +11610,24 @@ async function startIsolatedPreviewServer(bridgeSource) {
 			res.end("preview session not found");
 			return;
 		}
+		// dsh-vscode: routed sessions carry the session id in the path, so every
+		// reserved route and every URL this handler hands to the page is prefixed.
+		// Upstream sessions keep the empty prefix and behave exactly as before.
+		const routePrefix = sessionRoutePrefix(session);
+		const bridgePath = `${routePrefix}${PREVIEW_BRIDGE_PATH}`;
+		const entryPrefix = `${routePrefix}${PREVIEW_ENTRY_PREFIX}`;
+		const proxyPrefix = `${routePrefix}${PREVIEW_PROXY_PREFIX}`;
+		const navigatePrefix = `${routePrefix}${PREVIEW_NAVIGATE_PREFIX}`;
+		const reservedPrefix = `${routePrefix}${PREVIEW_RESERVED_PREFIX}/`;
 		let requestUrl;
 		try {
-			requestUrl = new URL(req.url ?? "/", sessionOrigin(session.id, port));
+			requestUrl = new URL(req.url ?? "/", sessionPublicOrigin(session, session.viaRoute === true ? routedPort : port));
 		} catch {
 			res.writeHead(400, noStoreHeaders());
 			res.end("bad request");
 			return;
 		}
-		if (requestUrl.pathname === PREVIEW_BRIDGE_PATH) {
+		if (requestUrl.pathname === bridgePath) {
 			if (req.method !== "GET" && req.method !== "HEAD") {
 				res.writeHead(405, noStoreHeaders({ allow: "GET, HEAD" }));
 				res.end();
@@ -11545,7 +11641,7 @@ async function startIsolatedPreviewServer(bridgeSource) {
 			res.end(req.method === "HEAD" ? void 0 : bridgeSource);
 			return;
 		}
-		let navigateTarget = targetFromEncoded(requestUrl.pathname, PREVIEW_NAVIGATE_PREFIX);
+		let navigateTarget = targetFromEncoded(requestUrl.pathname, navigatePrefix);
 		if (navigateTarget !== void 0) {
 			if (req.method !== "GET" || session.handoffs >= MAX_HANDOFFS_PER_SESSION || session.handoffDepth >= MAX_HANDOFFS_PER_SESSION) {
 				res.writeHead(req.method === "GET" ? 429 : 405, noStoreHeaders({ allow: "GET" }));
@@ -11561,7 +11657,7 @@ async function startIsolatedPreviewServer(bridgeSource) {
 			const next = createSession(navigateTarget, session.parentOrigin, session.handoffDepth + 1);
 			res.writeHead(200, noStoreHeaders({
 				"content-type": "text/html; charset=utf-8",
-				"content-security-policy": `default-src 'none'; script-src 'unsafe-inline'; frame-ancestors ${session.parentOrigin}`,
+				...handoffCspHeaders(session),
 				"x-content-type-options": "nosniff"
 			}));
 			res.end(handoffDocument(session, next));
@@ -11573,9 +11669,9 @@ async function startIsolatedPreviewServer(bridgeSource) {
 			res.end();
 			return;
 		}
-		const encodedTarget = targetFromEncoded(requestUrl.pathname, PREVIEW_ENTRY_PREFIX) ?? targetFromEncoded(requestUrl.pathname, PREVIEW_PROXY_PREFIX);
+		const encodedTarget = targetFromEncoded(requestUrl.pathname, entryPrefix) ?? targetFromEncoded(requestUrl.pathname, proxyPrefix);
 		let target = encodedTarget;
-		if (target === void 0 && !requestUrl.pathname.startsWith("/.dsh-web-review/")) target = new URL(`${requestUrl.pathname}${requestUrl.search}`, `${session.targetOrigin}/`).href;
+		if (target === void 0 && !requestUrl.pathname.startsWith(reservedPrefix)) target = new URL(`${requestUrl.pathname}${requestUrl.search}`, `${session.targetOrigin}/`).href;
 		if (target === void 0 || new URL(target).origin !== session.targetOrigin) {
 			res.writeHead(400, noStoreHeaders());
 			res.end("target outside preview session origin");
@@ -11617,7 +11713,7 @@ async function startIsolatedPreviewServer(bridgeSource) {
 				const next = createSession(result.handoff, session.parentOrigin, session.handoffDepth + 1);
 				res.writeHead(200, noStoreHeaders({
 					"content-type": "text/html; charset=utf-8",
-					"content-security-policy": `default-src 'none'; script-src 'unsafe-inline'; frame-ancestors ${session.parentOrigin}`,
+					...handoffCspHeaders(session),
 					"x-content-type-options": "nosniff"
 				}));
 				res.end(handoffDocument(session, next));
@@ -11632,26 +11728,26 @@ async function startIsolatedPreviewServer(bridgeSource) {
 				res.writeHead(upstream.status, noStoreHeaders({
 					...headers,
 					...html ? {
-						"content-security-policy": `frame-ancestors ${session.parentOrigin}`,
+						...frameAncestorsHeaders(session),
 						"x-content-type-options": "nosniff"
 					} : {}
 				}));
 				res.end();
 				return;
 			}
-			const payload = await readResponseBytes(upstream, 10485760);
+			const payload = await readResponseBytes(upstream, session.viaRoute === true ? 67108864 : 10485760);
 			res.writeHead(upstream.status, noStoreHeaders({
 				...headers,
 				...html ? {
 					"content-type": "text/html; charset=utf-8",
-					"content-security-policy": `frame-ancestors ${session.parentOrigin}`,
+					...frameAncestorsHeaders(session),
 					"x-content-type-options": "nosniff"
 				} : {}
 			}));
 			res.end(html ? rewriteIsolatedHtml(decodeHtml(payload, contentType), result.target, {
-				proxyPrefix: PREVIEW_PROXY_PREFIX,
-				navigatePrefix: PREVIEW_NAVIGATE_PREFIX,
-				bridgePath: PREVIEW_BRIDGE_PATH,
+				proxyPrefix,
+				navigatePrefix,
+				bridgePath,
 				channel: session.channel,
 				parentOrigin: session.parentOrigin
 			}) : payload);
@@ -11697,6 +11793,11 @@ async function startIsolatedPreviewServer(bridgeSource) {
 	return {
 		port,
 		createSession,
+		// dsh-vscode: the same handler, for the host webServer route that serves
+		// routed sessions on the public port (see PREVIEW_FRAME_ROUTE).
+		handle(req, res) {
+			return handler(req, res);
+		},
 		releaseSessions(ids) {
 			ids.forEach((id) => {
 				sessions.delete(id);
@@ -12610,8 +12711,19 @@ async function apply(ctx, config) {
 	const annotations = /* @__PURE__ */ new Map();
 	registerUiSkillProvider(ctx, config);
 	let previewServer;
+	// dsh-vscode: the port preview frames must be addressed on. In the VS Code
+	// extension that is the mediating proxy (DSH_PROXY_PORT — the only port the
+	// webview's portMapping can reach); in dsh-desktop it is the host's own
+	// webServer port, which the Electron window loads directly. 0 => no routing,
+	// exactly upstream behaviour (per-session `*.localhost` origins).
+	const publicFramePortOf = () => {
+		const proxy = Number(process.env.DSH_PROXY_PORT ?? "");
+		if (Number.isFinite(proxy) && proxy > 0) return proxy;
+		const own = Number(ctx.webServer?.port ?? "");
+		return Number.isFinite(own) && own > 0 ? own : 0;
+	};
 	await ctx.effect(async () => {
-		previewServer = await startIsolatedPreviewServer(await readBridgeSource());
+		previewServer = await startIsolatedPreviewServer(await readBridgeSource(), publicFramePortOf);
 		ctx.logger.info(`isolated preview server listening on 127.0.0.1:${String(previewServer.port)}`);
 		return async () => {
 			await previewServer?.close();
@@ -12624,6 +12736,17 @@ async function apply(ctx, config) {
 		text: PREVIEW_GUIDANCE
 	});
 	const livePreviewServer = previewServer;
+	// dsh-vscode: routed preview frames — loopback targets that live on the public
+	// port, i.e. the p2h deck previews — are served here, on the port the webview
+	// can actually reach, so the isolated wrapper (and with it the annotation
+	// bridge: element picking, markers, hover cards) works inside the webview.
+	// Registered unconditionally: the route answers 404 until such a session exists,
+	// and the public port is only known once the webServer is bound.
+	ctx.effect(() => ctx.webServer.register({
+		kind: "prefix",
+		path: PREVIEW_FRAME_ROUTE,
+		handler: (req, res) => livePreviewServer.handle(req, res)
+	}), "dsh-web-review: routed preview frames");
 	ctx.effect(() => ctx.webServer.register({
 		kind: "exact",
 		path: PREVIEW_SESSIONS_PATH,

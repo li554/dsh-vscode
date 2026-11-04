@@ -7,7 +7,8 @@
 // 0.1.5 exploration build ships a small hand-picked set, and several are not
 // npm packages at all —
 //
-//   @dsh-vscode/p2h-bridge       hand-written in this repo
+//   @dsh-vscode/p2h-bridge       hand-written in this repo (REMOVED — retired;
+//                                 replaced by dsh-ppt-master + dsh-live-compact)
 //   dsh-client-auto-continue     npm  (pinned in plugins-rc2 provenance below)
 //   @canglongcl/dsh-web-review   npm
 //
@@ -34,7 +35,9 @@ const BUNDLED = path.join(PROJ, "plugins", "bundled");
 /** Where each bundled entry came from. npm-sourced versions must equal the
  * `version` inside the bundled package.json. */
 const PROVENANCE = {
-  "@dsh-vscode/p2h-bridge": "local (this repo) — hand-written client bundle, no build step",
+  "dsh-ppt-master": "npm dsh-ppt-master@1.0.8 (preset installed via plugins/presets/ppt-master; cordis insert rewritten for the 0.1.5 plural dsh-agent-presets)",
+  "dsh-live-compact": "github MerkyorLynn/dsh-live-compact@1.0.1 (spine compaction engine, zero runtime deps)",
+  "dsh-mcp": "github ArvinQi/dsh-mcp@1.14.4 (MCP manager; @modelcontextprotocol/client@2.0.0 + core closure and js-yaml in _hostdeps)",
   "dsh-client-auto-continue": "npm dsh-client-auto-continue@0.11.5",
   "@canglongcl/dsh-web-review": "npm @canglongcl/dsh-web-review@0.6.0 (one local patch: clearing annotations no longer demands a live agent)",
   "@liustack/modlens": "npm @liustack/modlens@3.26.1 (carries its own node_modules/{commander,undici} for the CLI it spawns)",

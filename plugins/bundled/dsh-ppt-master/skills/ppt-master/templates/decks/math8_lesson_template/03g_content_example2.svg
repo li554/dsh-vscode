@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <g id="p08-bg">
+    <rect x="0" y="0" width="1280" height="720" fill="#FFFFFF" />
+  </g>
+
+  <g id="p08-header">
+    <path fill="#1B4F9C" d="M64,54 H64 A4,4 0 0 1 68,58 V106 A4,4 0 0 1 64,110 H64 A4,4 0 0 1 60,106 V58 A4,4 0 0 1 64,54 Z" />
+    <text x="88" y="110" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="56" font-weight="bold" fill="#1B4F9C">例题精讲 2</text>
+    <g transform="translate(404, 70) scale(1.66667)" fill="none" stroke="#4A90D9" stroke-width="2">
+      <path d="M21 17h-8l-3.5 -5h-6.5" />
+      <path d="M21 7h-8l-3.495 5" />
+      <path d="M18 10l3 -3l-3 -3" />
+      <path d="M18 20l3 -3l-3 -3" />
+    </g>
+    <text x="88" y="158" font-family="'Microsoft YaHei', sans-serif" font-size="36" fill="#1F2937">换一个条件，方法还成立吗？<tspan fill="#1B4F9C" font-weight="bold">会做一道，就要会做一类</tspan>。</text>
+  </g>
+
+  <g id="p08-change-band">
+    <path fill="#FDF1E3" d="M76,176 H1204 A16,16 0 0 1 1220,192 V268 A16,16 0 0 1 1204,284 H76 A16,16 0 0 1 60,268 V192 A16,16 0 0 1 76,176 Z" />
+    <text x="92" y="216" font-family="'Microsoft YaHei', sans-serif" font-size="30" fill="#1F2937"><tspan font-family="SimHei, 'Microsoft YaHei', sans-serif" font-weight="bold" fill="#F08A24">变了什么　</tspan>条件：{{ORIGINAL_CONDITION}} → {{NEW_CONDITION}}</text>
+    <text x="92" y="258" font-family="'Microsoft YaHei', sans-serif" font-size="30" fill="#1F2937">所求：{{ORIGINAL_GOAL}} → {{NEW_GOAL}}</text>
+  </g>
+
+  <g id="p08-variant">
+    <text x="60" y="336" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="36" font-weight="bold" fill="#1B4F9C">变式题目</text>
+    <text x="60" y="382" font-family="'Microsoft YaHei', sans-serif" font-size="32" fill="#1F2937">{{VARIANT_PROBLEM}}</text>
+    <text x="60" y="418" font-family="'Microsoft YaHei', sans-serif" font-size="24" fill="#5B6472">读题时先圈出与上一题不同之处。</text>
+  </g>
+
+  <g id="p08-solution">
+    <line x1="60" y1="436" x2="900" y2="436" stroke="#EAF0F8" stroke-width="3" />
+    <text x="60" y="482" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="36" font-weight="bold" fill="#1B4F9C">完整解答</text>
+    <text x="60" y="528" font-family="'Microsoft YaHei', sans-serif" font-size="32" fill="#1F2937">{{VARIANT_SOLUTION}}</text>
+    <text x="60" y="570" font-family="'Microsoft YaHei', sans-serif" font-size="32" fill="#1F2937">{{VARIANT_STEP2}}</text>
+    <text x="60" y="604" font-family="'Microsoft YaHei', sans-serif" font-size="24" fill="#5B6472">答：{{VARIANT_ANSWER}}</text>
+  </g>
+
+  <g id="p08-hint-card">
+    <path fill="#F2F6FC" stroke="#DCE4F0" stroke-width="1" d="M936,306 H1204 A16,16 0 0 1 1220,322 V616 A16,16 0 0 1 1204,632 H936 A16,16 0 0 1 920,616 V322 A16,16 0 0 1 936,306 Z" />
+    <path fill="#1B4F9C" d="M923,306 H1217 A3,3 0 0 1 1220,309 V309 A3,3 0 0 1 1217,312 H923 A3,3 0 0 1 920,309 V309 A3,3 0 0 1 923,306 Z" />
+    <g transform="translate(944, 332) scale(1.33333)" fill="none" stroke="#1B4F9C" stroke-width="2">
+      <path d="M3 12h1m8 -9v1m8 8h1m-15.4 -6.4l.7 .7m12.1 -.7l-.7 .7" />
+      <path d="M9 16a5 5 0 1 1 6 0a3.5 3.5 0 0 0 -1 3a2 2 0 0 1 -4 0a3.5 3.5 0 0 0 -1 -3" />
+      <path d="M9.7 17l4.6 0" />
+    </g>
+    <text x="988" y="358" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="36" font-weight="bold" fill="#1B4F9C">思路迁移</text>
+    <line x1="944" y1="392" x2="1196" y2="392" stroke="#DCE4F0" stroke-width="2" />
+    <text font-size="28" fill="#1F2937" font-family="'Microsoft YaHei', sans-serif" x="944" y="444">模型没变，</text>
+    <text font-size="28" fill="#1F2937" font-family="'Microsoft YaHei', sans-serif" x="944" y="484">仍然用</text>
+    <text font-size="28" fill="#1F2937" font-family="'Microsoft YaHei', sans-serif" x="944" y="524">{{SAME_FORMULA}}</text>
+    <line x1="944" y1="552" x2="1196" y2="552" stroke="#DCE4F0" stroke-width="2" />
+    <text font-size="24" fill="#5B6472" font-family="'Microsoft YaHei', sans-serif" x="944" y="586">变的只是代进去的</text>
+    <text font-size="24" fill="#5B6472" font-family="'Microsoft YaHei', sans-serif" x="944" y="614">量和最后一步。</text>
+  </g>
+
+  <g id="p08-takeaway">
+    <text x="60" y="640" font-family="'Microsoft YaHei', sans-serif" font-size="20" fill="#8A93A3">识别“模型不变、条件在变”，是这类题的关键。</text>
+    <text x="1220" y="640" text-anchor="end" font-family="'Microsoft YaHei', sans-serif" font-size="20" fill="#8A93A3">08</text>
+  </g></svg>

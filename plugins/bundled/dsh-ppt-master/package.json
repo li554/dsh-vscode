@@ -1,0 +1,49 @@
+{
+  "name": "dsh-ppt-master",
+  "version": "1.0.8",
+  "description": "PPT Master for DeepSeek Harness — agent preset 形式提供全套 ppt_* 工具（源文档→逐页手写 SVG→质检→导出可编辑 PPTX），只在选中该预设的会话里生效，不占用其他会话的上下文。",
+  "keywords": [
+    "dsh",
+    "dsh-bundle",
+    "dsh-plugin",
+    "dsh-preset",
+    "deepseek-harness",
+    "ppt-master",
+    "ppt",
+    "pptx",
+    "presentation",
+    "svg",
+    "powerpoint",
+    "dshapp-plugin",
+    "dshapp-plugin-featured"
+  ],
+  "license": "MIT",
+  "author": "jiuling",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "skills",
+    "cordis.patch.yml",
+    "verify.mjs",
+    "probe-load.mjs",
+    "README.md",
+    "LICENSE",
+    "LICENSE.ppt-master"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "prepack": "node -e \"const fs=require('fs'),path=require('path');let n=0;const walk=d=>{for(const e of fs.readdirSync(d,{withFileTypes:true})){const f=path.join(d,e.name);if(e.isDirectory()){if(e.name==='__pycache__'){fs.rmSync(f,{recursive:true,force:true});n++;}else walk(f);}else if(/\\.py[co]$/.test(e.name)){fs.unlinkSync(f);n++;}}};walk('skills');if(n)console.log('[prepack] 清掉 '+n+' 个 Python 字节码产物');\""
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

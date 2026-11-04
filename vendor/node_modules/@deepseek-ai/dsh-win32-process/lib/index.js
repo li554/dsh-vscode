@@ -9,6 +9,21 @@ const JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 8192;
 // slowness was later isolated to a dirty DSH_HOME (old sessions/checkpoints),
 // not this flag — safe to keep the target silent.
 const CREATE_NO_WINDOW = 0x08000000;
+/**
+ * LOCAL PATCH for dsh-vscode: the RESTRICTED-token creations below used to pass no
+ * console flag at all (only CREATE_SUSPENDED), relying on INHERITING the creator's
+ * console. That breaks in this deployment: the VS Code host is Electron/Code.exe, a
+ * GUI-subsystem binary for which CREATE_NO_WINDOW/windowsHide is ignored, so the
+ * sandbox runner owns NO console — and Windows then allocates a fresh VISIBLE one for
+ * the restricted child, i.e. a terminal window for the lifetime of every sandboxed
+ * command. Verified from the runtime trace of ONE
+ * `powershell -NoProfile -Command "echo hi"` (mode=windows-job → sandbox runner →
+ * CreateProcessAsUserW flags=4 as the last creation), and fixed exactly like the
+ * ordinary Job path was fixed earlier: pass CREATE_NO_WINDOW. Measured afterwards with
+ * a real workspace-write sandbox run: exit 0, stdout intact, no console window. The
+ * package's "CREATE_NO_WINDOW children die with STATUS_DLL_INIT_FAILED under the
+ * restriction" note does not reproduce here (Windows 11, this token construction).
+ */
 /** CREATE_UNICODE_ENVIRONMENT | CREATE_SUSPENDED | CREATE_NO_WINDOW */
 const CURRENT_TOKEN_JOB_CREATION_FLAGS = 0x400 | 0x4 | CREATE_NO_WINDOW;
 //#endregion
@@ -397,7 +412,8 @@ function spawnPipedProcess(api, options) {
 		startupInfo = allocStartupInfo();
 		encodeStartupInfo(startupInfo, {
 			cb: 104,
-			dwFlags: 256,
+			dwFlags: 257,
+			wShowWindow: 0,
 			hStdInput: stdIn.read,
 			hStdOutput: stdOut.write,
 			hStdError: stdErr.write
@@ -541,7 +557,7 @@ function spawnJobProcess(api, options, resolveStdio, createName, create) {
 		startupInfo = allocStartupInfo();
 		encodeStartupInfo(startupInfo, {
 			cb: 104,
-			dwFlags: 256,
+			dwFlags: 257,
 			wShowWindow: 0,
 			hStdInput: stdio.stdin,
 			hStdOutput: stdio.stdout,

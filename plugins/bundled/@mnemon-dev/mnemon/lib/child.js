@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 
 export async function runChild(command, args, options = {}) {
-  const child = spawn(command, args, { stdio: "inherit", ...options });
+  const child = spawn(command, args, { stdio: "inherit", windowsHide: true, ...options });
   const forward = (signal) => {
     if (!child.killed) {
       try {

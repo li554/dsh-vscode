@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <g id="p04-bg">
+    <rect x="0" y="0" width="1280" height="720" fill="#FFFFFF" />
+  </g>
+
+  <g id="p04-header">
+    <path fill="#1B4F9C" d="M64,54 H64 A4,4 0 0 1 68,58 V106 A4,4 0 0 1 64,110 H64 A4,4 0 0 1 60,106 V58 A4,4 0 0 1 64,54 Z" />
+    <text x="88" y="110" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="56" font-weight="bold" fill="#1B4F9C">知识回顾</text>
+    <g transform="translate(340, 70) scale(1.66667)" fill="none" stroke="#4A90D9" stroke-width="2">
+      <path d="M12 8l0 4l2 2" />
+      <path d="M3.05 11a9 9 0 1 1 .5 4m-.5 5v-5h5" />
+    </g>
+    <text x="88" y="158" font-family="'Microsoft YaHei', sans-serif" font-size="36" fill="#1F2937">先复习三条<tspan fill="#1B4F9C" font-weight="bold">旧知识</tspan>，待会儿解新题都要用到。</text>
+  </g>
+
+  <g id="recall-1">
+    <path fill="#F2F6FC" stroke="#DCE4F0" stroke-width="1" d="M76,186 H606 A16,16 0 0 1 622,202 V360 A16,16 0 0 1 606,376 H76 A16,16 0 0 1 60,360 V202 A16,16 0 0 1 76,186 Z" />
+    <path fill="#E7EFFA" d="M108,218 H140 A16,16 0 0 1 156,234 V266 A16,16 0 0 1 140,282 H108 A16,16 0 0 1 92,266 V234 A16,16 0 0 1 108,218 Z" />
+    <g transform="translate(112, 238)" fill="none" stroke="#1B4F9C" stroke-width="2">
+      <path d="M3 19a9 9 0 0 1 9 0a9 9 0 0 1 9 0" />
+      <path d="M3 6a9 9 0 0 1 9 0a9 9 0 0 1 9 0" />
+      <path d="M3 6l0 13" />
+      <path d="M12 6l0 13" />
+      <path d="M21 6l0 13" />
+    </g>
+    <text x="180" y="254" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="36" font-weight="bold" fill="#1F2937">定义 / 性质</text>
+    <text x="92" y="310" font-family="'Microsoft YaHei', sans-serif" font-size="32" fill="#1F2937">{{PRIOR_1}}</text>
+    <text x="92" y="356" font-family="'Microsoft YaHei', sans-serif" font-size="24" fill="#5B6472">自检：能说出它的含义和适用范围吗？</text>
+  </g>
+
+  <g id="recall-2">
+    <path fill="#F2F6FC" stroke="#DCE4F0" stroke-width="1" d="M674,186 H1204 A16,16 0 0 1 1220,202 V360 A16,16 0 0 1 1204,376 H674 A16,16 0 0 1 658,360 V202 A16,16 0 0 1 674,186 Z" />
+    <path fill="#E7EFFA" d="M706,218 H738 A16,16 0 0 1 754,234 V266 A16,16 0 0 1 738,282 H706 A16,16 0 0 1 690,266 V234 A16,16 0 0 1 706,218 Z" />
+    <g transform="translate(710, 238)" fill="none" stroke="#1B4F9C" stroke-width="2">
+      <path d="M5 4h14a1 1 0 0 1 1 1v5a1 1 0 0 1 -1 1h-7a1 1 0 0 0 -1 1v7a1 1 0 0 1 -1 1h-5a1 1 0 0 1 -1 -1v-14a1 1 0 0 1 1 -1" />
+      <path d="M4 8l2 0" />
+      <path d="M4 12l3 0" />
+      <path d="M4 16l2 0" />
+      <path d="M8 4l0 2" />
+      <path d="M12 4l0 3" />
+      <path d="M16 4l0 2" />
+    </g>
+    <text x="778" y="254" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="36" font-weight="bold" fill="#1F2937">图形 / 度量</text>
+    <text x="690" y="310" font-family="'Microsoft YaHei', sans-serif" font-size="32" fill="#1F2937">{{PRIOR_2}}</text>
+    <text x="690" y="356" font-family="'Microsoft YaHei', sans-serif" font-size="24" fill="#5B6472">自检：能说出相关的图形特征吗？</text>
+  </g>
+
+  <g id="recall-3">
+    <path fill="#F2F6FC" stroke="#DCE4F0" stroke-width="1" d="M76,400 H606 A16,16 0 0 1 622,416 V574 A16,16 0 0 1 606,590 H76 A16,16 0 0 1 60,574 V416 A16,16 0 0 1 76,400 Z" />
+    <path fill="#E7EFFA" d="M108,432 H140 A16,16 0 0 1 156,448 V480 A16,16 0 0 1 140,496 H108 A16,16 0 0 1 92,480 V448 A16,16 0 0 1 108,432 Z" />
+    <g transform="translate(112, 452)" fill="none" stroke="#1B4F9C" stroke-width="2">
+      <path d="M3 12l18 0" />
+      <path d="M12 3l0 18" />
+      <path d="M16.5 4.5l3 3" />
+      <path d="M19.5 4.5l-3 3" />
+      <path d="M6 4l0 4" />
+      <path d="M4 6l4 0" />
+      <path d="M18 16l.01 0" />
+      <path d="M18 20l.01 0" />
+      <path d="M4 18l4 0" />
+    </g>
+    <text x="180" y="468" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="36" font-weight="bold" fill="#1F2937">公式 / 法则</text>
+    <text x="92" y="524" font-family="'Microsoft YaHei', sans-serif" font-size="32" fill="#1F2937">{{PRIOR_3}}</text>
+    <text x="92" y="570" font-family="'Microsoft YaHei', sans-serif" font-size="24" fill="#5B6472">自检：能写出这个关系式吗？</text>
+  </g>
+
+  <g id="recall-4">
+    <path fill="#FDF1E3" stroke="#F5D5AE" stroke-width="1" d="M674,400 H1204 A16,16 0 0 1 1220,416 V574 A16,16 0 0 1 1204,590 H674 A16,16 0 0 1 658,574 V416 A16,16 0 0 1 674,400 Z" />
+    <path fill="#FFFFFF" d="M706,432 H738 A16,16 0 0 1 754,448 V480 A16,16 0 0 1 738,496 H706 A16,16 0 0 1 690,480 V448 A16,16 0 0 1 706,432 Z" />
+    <g transform="translate(710, 452)" fill="none" stroke="#F08A24" stroke-width="2">
+      <path d="M12 9v4" />
+      <path d="M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0" />
+      <path d="M12 16h.01" />
+    </g>
+    <text x="778" y="468" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="36" font-weight="bold" fill="#1F2937">易忘点</text>
+    <text x="690" y="524" font-family="'Microsoft YaHei', sans-serif" font-size="32" fill="#1F2937">{{PRIOR_PITFALL}}</text>
+    <text x="690" y="570" font-family="'Microsoft YaHei', sans-serif" font-size="24" fill="#B4690E">提醒：这一条最容易记错，注意区分。</text>
+  </g>
+
+  <g id="p04-footer">
+    <line x1="60" y1="612" x2="1220" y2="612" stroke="#EAF0F8" stroke-width="2" />
+    <text x="60" y="636" font-family="'Microsoft YaHei', sans-serif" font-size="20" fill="#8A93A3">数学 · 八年级上册 · {{TITLE}}</text>
+    <text x="1220" y="636" text-anchor="end" font-family="'Microsoft YaHei', sans-serif" font-size="20" fill="#8A93A3">04</text>
+  </g>
+</svg>

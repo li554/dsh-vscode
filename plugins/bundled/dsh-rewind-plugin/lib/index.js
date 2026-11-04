@@ -190,12 +190,32 @@ function planRewind(events, surface, target) {
       `session event at seq ${targetSeq} is not a human user message (${targetEvent.type})`
     );
   }
-  const targetIndex = surface.indexOf(targetSeq);
+  let targetIndex = surface.indexOf(targetSeq);
   if (targetIndex === -1) {
-    throw new RewindError(
-      "not-on-surface",
-      `user message at seq ${targetSeq} is no longer in the model context (shadowed by compaction)`
-    );
+    // dsh-vscode: the target was folded out of the model-visible surface by
+    // compaction (its summary node replaced the span containing it). Rewinding
+    // it is still meaningful: drop the shadowing node and everything after it,
+    // exactly as if the target itself were the first dropped node. SurfaceOp
+    // 'replace' guarantees the summary's sourceEventSeqs cites every node it
+    // shadowed, so the covering node is always findable when the target really
+    // is in the log. Walk backwards to the newest covering node.
+    targetIndex = -1;
+    const bySeq = /* @__PURE__ */ new Map();
+    for (const event of events) bySeq.set(event.seq, event);
+    for (let i = surface.length - 1; i >= 0; i--) {
+      const node = bySeq.get(surface[i]);
+      if (node === void 0 || !Array.isArray(node.sourceEventSeqs)) continue;
+      if (node.sourceEventSeqs.indexOf(targetSeq) !== -1) {
+        targetIndex = i;
+        break;
+      }
+    }
+    if (targetIndex === -1) {
+      throw new RewindError(
+        "not-on-surface",
+        `user message at seq ${targetSeq} is no longer in the model context and its shadowing node was not found`
+      );
+    }
   }
   const shadowedSeqs = surface.slice(targetIndex);
   return {

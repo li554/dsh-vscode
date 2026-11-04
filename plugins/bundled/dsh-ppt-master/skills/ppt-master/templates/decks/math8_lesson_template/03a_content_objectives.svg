@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <g id="p02-bg">
+    <rect x="0" y="0" width="1280" height="720" fill="#FFFFFF" />
+  </g>
+
+  <g id="p02-header">
+    <path fill="#1B4F9C" d="M64,54 H64 A4,4 0 0 1 68,58 V106 A4,4 0 0 1 64,110 H64 A4,4 0 0 1 60,106 V58 A4,4 0 0 1 64,54 Z" />
+    <text x="88" y="110" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="56" font-weight="bold" fill="#1B4F9C">学习目标</text>
+    <g transform="translate(344, 70) scale(1.66667)" fill="none" stroke="#4A90D9" stroke-width="2">
+      <path d="M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
+      <path d="M7 12a5 5 0 1 0 10 0a5 5 0 1 0 -10 0" />
+      <path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" />
+    </g>
+    <text x="88" y="158" font-family="'Microsoft YaHei', sans-serif" font-size="36" fill="#1F2937">这节课要做到三件事——<tspan fill="#1B4F9C" font-weight="bold">懂概念、会运算、能应用</tspan>。</text>
+  </g>
+
+  <g id="goal-1">
+    <path fill="#F2F6FC" stroke="#DCE4F0" stroke-width="1" d="M76,186 H1204 A16,16 0 0 1 1220,202 V295 A16,16 0 0 1 1204,311 H76 A16,16 0 0 1 60,295 V202 A16,16 0 0 1 76,186 Z" />
+    <circle cx="140" cy="248" r="32" fill="#1B4F9C" />
+    <text x="140" y="260" text-anchor="middle" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="32" font-weight="bold" fill="#FFFFFF">01</text>
+    <text x="210" y="248" font-family="'Microsoft YaHei', sans-serif" font-size="32" fill="#1F2937"><tspan font-family="SimHei, 'Microsoft YaHei', sans-serif" font-weight="bold" fill="#1B4F9C">理解　</tspan>知道{{OBJECTIVE_CONCEPT}}的内容，能说出条件与结论。</text>
+    <text x="210" y="290" font-family="'Microsoft YaHei', sans-serif" font-size="24" fill="#5B6472">自检：合上书能复述，并举一个例子。</text>
+  </g>
+
+  <g id="goal-2">
+    <path fill="#F2F6FC" stroke="#DCE4F0" stroke-width="1" d="M76,331 H1204 A16,16 0 0 1 1220,347 V440 A16,16 0 0 1 1204,456 H76 A16,16 0 0 1 60,440 V347 A16,16 0 0 1 76,331 Z" />
+    <circle cx="140" cy="393" r="32" fill="#1B4F9C" />
+    <text x="140" y="405" text-anchor="middle" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="32" font-weight="bold" fill="#FFFFFF">02</text>
+    <text x="210" y="393" font-family="'Microsoft YaHei', sans-serif" font-size="32" fill="#1F2937"><tspan font-family="SimHei, 'Microsoft YaHei', sans-serif" font-weight="bold" fill="#1B4F9C">会用　</tspan>能按规范步骤用{{OBJECTIVE_METHOD}}完成运算与推理。</text>
+    <text x="210" y="435" font-family="'Microsoft YaHei', sans-serif" font-size="24" fill="#5B6472">自检：步骤写完整，不跳步。</text>
+  </g>
+
+  <g id="goal-3">
+    <path fill="#F2F6FC" stroke="#DCE4F0" stroke-width="1" d="M76,476 H1204 A16,16 0 0 1 1220,492 V585 A16,16 0 0 1 1204,601 H76 A16,16 0 0 1 60,585 V492 A16,16 0 0 1 76,476 Z" />
+    <circle cx="140" cy="538" r="32" fill="#F08A24" />
+    <text x="140" y="550" text-anchor="middle" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="32" font-weight="bold" fill="#FFFFFF">03</text>
+    <text x="210" y="538" font-family="'Microsoft YaHei', sans-serif" font-size="32" fill="#1F2937"><tspan font-family="SimHei, 'Microsoft YaHei', sans-serif" font-weight="bold" fill="#F08A24">能迁移　</tspan>能在{{OBJECTIVE_TRANSFER}}中认出模型并解决实际问题。</text>
+    <text x="210" y="580" font-family="'Microsoft YaHei', sans-serif" font-size="24" fill="#5B6472">自检：能说清为什么想到用它。</text>
+  </g>
+
+  <g id="p02-footer">
+    <line x1="60" y1="612" x2="1220" y2="612" stroke="#EAF0F8" stroke-width="2" />
+    <text x="60" y="636" font-family="'Microsoft YaHei', sans-serif" font-size="20" fill="#8A93A3">数学 · 八年级上册 · {{TITLE}}</text>
+    <text x="1220" y="636" text-anchor="end" font-family="'Microsoft YaHei', sans-serif" font-size="20" fill="#8A93A3">02</text>
+  </g>
+</svg>

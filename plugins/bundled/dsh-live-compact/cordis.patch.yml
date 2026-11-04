@@ -1,0 +1,16 @@
+# Replaces the stock compaction engine. A context loads one ctx.compaction.
+#
+# 0.1.5 adaptation: upstream ships `headroomTokens: 65536` here, but
+# compaction-basic on this platform runs strict validateKeys (BASIC_COMPACT_CONFIG_KEYS
+# = auto/thresholdRatio/retainTokens/... — headroomTokens is a dsh >= 0.2 key) and
+# the Spine engine itself never reads it, so the key is dropped to keep boot green.
+- id: compaction-basic
+  disabled: true
+- insert:
+    - id: compaction-spine
+      name: dsh-live-compact
+      config:
+        auto: true
+        thresholdRatio: 0.8
+        retainTokens: 8192
+        compactionRetries: 0

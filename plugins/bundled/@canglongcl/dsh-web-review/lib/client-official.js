@@ -169,6 +169,9 @@ window.__ModuleLoader__.load({
 		const PREVIEW_CLIENT_HEADER = "x-dsh-web-review-client";
 		const PREVIEW_BRIDGE_PROTOCOL = "dsh-web-review/bridge";
 		const PREVIEW_ENTRY_PREFIX = `/.dsh-web-review/entry/`;
+		// dsh-vscode: path prefix the host uses for preview frames it has to serve on
+		// the app's own public port (the only origin the VS Code webview can reach).
+		const PREVIEW_FRAME_ROUTE = "/.dsh-web-review-frame";
 		function recordOf$1(value) {
 			return typeof value === "object" && value !== null && !Array.isArray(value) ? value : void 0;
 		}
@@ -237,6 +240,36 @@ window.__ModuleLoader__.load({
 			if (sessionId === void 0 || channel === void 0 || frameUrl === void 0 || frameOrigin === void 0 || targetOrigin === void 0) return void 0;
 			try {
 				const url = new URL(frameUrl);
+				// dsh-vscode: the host returns DIRECT descriptors for loopback
+				// targets that are NOT on the app's own public port (a dev server on
+				// its own port) whose frameUrl IS the target — the webview can reach
+				// it without the isolated wrapper. Accept those verbatim.
+				if (url.protocol === "http:" && (url.hostname === "127.0.0.1" || url.hostname === "localhost") && url.origin === frameOrigin && url.origin === targetOrigin && url.username === "" && url.password === "") {
+					return {
+						sessionId,
+						frameUrl,
+						frameOrigin,
+						targetOrigin,
+						channel
+					};
+				}
+				// dsh-vscode: ROUTED descriptors — a loopback target on the app's public
+				// port (p2h deck previews) is isolated as usual but addressed by path
+				// under that one reachable origin, because the webview's portMapping
+				// cannot reach the isolated listener's ephemeral port. These frames DO
+				// carry the bridge, so element picking and annotations work.
+				const routedEntryPrefix = `${PREVIEW_FRAME_ROUTE}/${sessionId}${PREVIEW_ENTRY_PREFIX}`;
+				if (url.protocol === "http:" && url.origin === frameOrigin && url.pathname.startsWith(routedEntryPrefix) && url.username === "" && url.password === "") {
+					const routedTarget = new URL(decodeTarget(url.pathname.slice(routedEntryPrefix.length)));
+					if (!isPreviewableUrl(routedTarget.href) || routedTarget.origin !== targetOrigin || new URL(targetOrigin).origin !== targetOrigin) return void 0;
+					return {
+						sessionId,
+						frameUrl,
+						frameOrigin,
+						targetOrigin,
+						channel
+					};
+				}
 				const target = new URL(decodeTarget(url.pathname.slice(PREVIEW_ENTRY_PREFIX.length)));
 				if (url.protocol !== "http:" || url.origin !== frameOrigin || url.hostname !== `${sessionId}.localhost` || !url.pathname.startsWith(PREVIEW_ENTRY_PREFIX) || url.username !== "" || url.password !== "" || !isPreviewableUrl(target.href) || target.origin !== targetOrigin || new URL(targetOrigin).origin !== targetOrigin) return void 0;
 			} catch {
@@ -908,6 +941,37 @@ window.__ModuleLoader__.load({
 					}
 				}
 			});
+		}
+		/**
+		* dsh-vscode: the per-session engine axis over one apply-time handle.
+		* `handle.create(sessionId)` is the ONLY public way to obtain an engine
+		* before anything renders, which is exactly what the cross-plugin preview
+		* opener needs: it must seed a URL into a session whose「网页预览」tab has
+		* never been opened (and therefore never resolved a store).
+		*/
+		function createWebviewStoreRegistry(handle) {
+			const instances = new Map();
+			const prune = (sessionId) => {
+				const engine = instances.get(sessionId);
+				if (engine === void 0) return;
+				instances.delete(sessionId);
+				engine.clearPersisted();
+			};
+			return {
+				instanceFor(sessionId) {
+					let engine = instances.get(sessionId);
+					if (engine === void 0) {
+						engine = handle.create(sessionId);
+						instances.set(sessionId, engine);
+					}
+					return engine;
+				},
+				prune,
+				pruneAbsent(liveIds) {
+					const live = new Set(liveIds);
+					for (const id of [...instances.keys()]) if (!live.has(id)) prune(id);
+				}
+			};
 		}
 		//#endregion
 		//#region ../../node_modules/.pnpm/clsx@2.1.1/node_modules/clsx/dist/clsx.mjs
@@ -4591,7 +4655,7 @@ window.__ModuleLoader__.load({
 		* Presentation follows the dsh web design system: shared atoms (Input) and
 		* the ic_ds_* icon set from @deepseek-ai/dsh-client-ui-primitives, plus the
 		* --dsw-alias-* token vocabulary for everything custom. State arrives via
-		* useStore/actions; no ctx, no contexts.
+		* useWebviewStore/actions (the plugin-owned engine share); no ctx, no contexts.
 		*/
 		function loadPreferredEditorSize() {
 			try {
@@ -4611,8 +4675,8 @@ window.__ModuleLoader__.load({
 			return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 		}
 		/** The preview tab view (see module doc). */
-		function WebviewView({ useStore, useSession, useInput, inputActions, actions, sendAnnotationsWithoutDraft, returnToChat, createPreviewSession, releasePreviewSessions, t }) {
-			const state = useStore((s) => s);
+		function WebviewView({ useWebviewStore, useSession, useInput, inputActions, actions, sendAnnotationsWithoutDraft, returnToChat, createPreviewSession, releasePreviewSessions, t }) {
+			const state = useWebviewStore((s) => s);
 			const input = useInput((s) => s);
 			const promptError = useSession((session) => session.promptError);
 			const stateRef = (0, react.useRef)(state);
@@ -4778,6 +4842,21 @@ window.__ModuleLoader__.load({
 			(0, react.useEffect)(() => {
 				const frame = frameRef.current;
 				if (descriptor === null || frame === null) return;
+				// dsh-vscode: only a LEGACY direct descriptor — the target itself, with
+				// no isolated entry path — carries no bridge (a loopback target that is
+				// not on the app's public port). Skip the handshake for those alone;
+				// routed loopback frames ARE wrapped and must run the bridge, otherwise
+				// pickerReady never turns true and element picking / annotations stay
+				// disabled (the tab would show the deck but refuse to annotate it).
+				const directUrl = new URL(descriptor.frameUrl);
+				const bridged = directUrl.pathname.startsWith(PREVIEW_FRAME_ROUTE) || directUrl.pathname.startsWith(PREVIEW_ENTRY_PREFIX);
+				if (!bridged && (directUrl.hostname === "127.0.0.1" || directUrl.hostname === "localhost")) {
+					frame.src = descriptor.frameUrl;
+					setPickerReady(false);
+					return () => {
+						release([descriptor.sessionId]);
+					};
+				}
 				const bridge = new PreviewBridgeClient(frame, descriptor, {
 					onReady: (ready) => {
 						setPickerReady(true);
@@ -5333,8 +5412,8 @@ window.__ModuleLoader__.load({
 			}
 		}
 		/** Annotation composer capsule and hover/focus detail card. */
-		function DraftOverlayBar({ useStore, useChat, actions, syncAnnotations, openPreview, t }) {
-			const state = useStore((s) => s);
+		function DraftOverlayBar({ useWebviewStore, useChat, actions, syncAnnotations, openPreview, t }) {
+			const state = useWebviewStore((s) => s);
 			const latestAnnotationContextId = useChat((chat) => latestAnnotationContextIdOf(chat));
 			const [open, setOpen] = (0, react.useState)(false);
 			const [retry, setRetry] = (0, react.useState)(0);
@@ -5730,7 +5809,27 @@ window.__ModuleLoader__.load({
 				en
 			}), "dsh-web-review: dictionaries");
 			const t = ctx.locale.bind(NS);
-			const webviewStore = createWebviewStore();
+			// dsh-vscode: ONE engine per session, owned by this plugin rather than
+			// by the renderer's store axis. Registering the handle through `store:`
+			// would give the renderer a SECOND, private instance axis, so the
+			// registration inject faces hand out this registry's engine instead
+			// (`hooks: { webviewStore }` + `actions`). That keeps the tab, the dock
+			// and the cross-plugin opener on the same pick list and URL, and lets
+			// the opener seed an engine for a session whose tab has never rendered.
+			const webviewStores = createWebviewStoreRegistry(createWebviewStore());
+			const sessions = ctx.sessions;
+			ctx.effect(() => sessions.list.subscribe(() => {
+				webviewStores.pruneAbsent(sessions.list.getSnapshot().ids);
+			}), "dsh-web-review: webview engine pruning");
+			/** Session-bound injected face shared by the two registrations. */
+			const buildViewFace = (sessionId) => ({
+				sendAnnotationsWithoutDraft: () => scopedConversation(ctx, sessionId).send(t("panel.pick.defaultPrompt")),
+				returnToChat: () => {
+					activateConversationTab(document, t("view.chat"));
+				},
+				createPreviewSession,
+				releasePreviewSessions
+			});
 			ctx.inject(["commandUi"], (scope) => {
 				scope.effect(() => scope.commandUi.register({
 					name: "skills",
@@ -5765,36 +5864,65 @@ window.__ModuleLoader__.load({
 				order: 20,
 				label: () => t("view.tab"),
 				locale: NS,
-				store: webviewStore,
-				inject: (sessionId) => ({
-					sendAnnotationsWithoutDraft: () => scopedConversation(ctx, sessionId).send(t("panel.pick.defaultPrompt")),
-					returnToChat: () => {
-						activateConversationTab(document, t("view.chat"));
-					},
-					createPreviewSession,
-					releasePreviewSessions
-				})
+				inject: (sessionId) => {
+					const engine = webviewStores.instanceFor(sessionId);
+					return {
+						hooks: { webviewStore: engine },
+						actions: engine.actions,
+						...buildViewFace(sessionId)
+					};
+				}
 			}, WebviewView));
 			ctx.slots.inject("conversation.input.dock", () => ctx.slots.register({
 				name: "conversation.input.dock",
 				id: "webview-annotations",
 				order: 15,
 				locale: NS,
-				store: webviewStore,
-				inject: (sessionId, actions) => ({
-					syncAnnotations: makeSyncAnnotations(sessionId),
-					openPreview: (url) => {
-						const normalized = normalizePreviewUrl(url);
-						if (normalized === void 0) return;
-						actions.setError(null);
-						actions.setUrl(normalized);
-						actions.setTitle("");
-						actions.clearPicks();
-						ctx.layout.closeDetails();
-						activateConversationTab(document, t("view.tab"));
-					}
-				})
+				inject: (sessionId) => {
+					const engine = webviewStores.instanceFor(sessionId);
+					return {
+						hooks: { webviewStore: engine },
+						actions: engine.actions,
+						syncAnnotations: makeSyncAnnotations(sessionId),
+						openPreview: (url) => {
+							const normalized = normalizePreviewUrl(url);
+							if (normalized === void 0) return;
+							engine.actions.setError(null);
+							engine.actions.setUrl(normalized);
+							engine.actions.setTitle("");
+							engine.actions.clearPicks();
+							ctx.layout.closeDetails();
+							activateConversationTab(document, t("view.tab"));
+						}
+					};
+				}
 			}, DraftOverlayBar));
+			// dsh-vscode: expose a global preview opener so OTHER client bundles
+			// (e.g. p2h-bridge's「打开预览」) can drive this tab: activate「网页预览」
+			// and open the given URL in it. The slot's own `openPreview` above is
+			// scoped to the annotation dock, which cannot be reached from another
+			// plugin — this is the same setUrl + activateTab path, minus the
+			// dock-local wiring.
+			//
+			// The engine comes from the plugin-owned registry, NOT from a captured
+			// renderer action: a capture only exists after the dock has rendered,
+			// and on a session that never opened the preview tab no dock/view
+			// inject has run at all, so the opener would have nothing to write
+			// into. `instanceFor` mints the engine on demand for the CURRENT
+			// session, which is the one the user is looking at.
+			window.__dshWebReviewOpenPreview__ = (url) => {
+				const normalized = normalizePreviewUrl(url);
+				if (normalized === void 0) return false;
+				const sessionId = sessions.list.getSnapshot().current;
+				if (sessionId === void 0) return false;
+				const actions = webviewStores.instanceFor(sessionId).actions;
+				actions.setError(null);
+				actions.setUrl(normalized);
+				actions.setTitle("");
+				actions.clearPicks();
+				try { ctx.layout.closeDetails(); } catch { /* layout already closed */ }
+				return activateConversationTab(document, t("view.tab"));
+			};
 		}
 		//#endregion
 		exports.NS = NS;

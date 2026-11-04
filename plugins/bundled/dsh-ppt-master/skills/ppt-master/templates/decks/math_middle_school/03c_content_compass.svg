@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <g id="bg-grid">
+    <rect width="1280" height="720" fill="#FCFCF9"/>
+    <path d="M0 40H1280M0 80H1280M0 120H1280M0 160H1280M0 200H1280M0 240H1280M0 280H1280M0 320H1280M0 360H1280M0 400H1280M0 440H1280M0 480H1280M0 520H1280M0 560H1280M0 600H1280M0 640H1280M0 680H1280" fill="none" stroke="#E9EDF2" stroke-width="1"/>
+    <path d="M40 0V720M80 0V720M120 0V720M160 0V720M200 0V720M240 0V720M280 0V720M320 0V720M360 0V720M400 0V720M440 0V720M480 0V720M520 0V720M560 0V720M600 0V720M640 0V720M680 0V720M720 0V720M760 0V720M800 0V720M840 0V720M880 0V720M920 0V720M960 0V720M1000 0V720M1040 0V720M1080 0V720M1120 0V720M1160 0V720M1200 0V720M1240 0V720" fill="none" stroke="#E9EDF2" stroke-width="1"/>
+    <path d="M0 200H1280M0 400H1280M0 600H1280" fill="none" stroke="#DCE3EB" stroke-width="1"/>
+    <path d="M200 0V720M400 0V720M600 0V720M800 0V720M1000 0V720M1200 0V720" fill="none" stroke="#DCE3EB" stroke-width="1"/>
+  </g>
+
+  <g id="page-header">
+    <rect x="0" y="0" width="1280" height="8" fill="#1F4E79"/>
+    <rect x="0" y="8" width="1280" height="4" fill="#E08A2E"/>
+    <text x="88" y="78" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="48" font-weight="bold" fill="#1F2937">{{PAGE_TITLE}}</text>
+    <path d="M88 100H232" fill="none" stroke="#E08A2E" stroke-width="6" stroke-linecap="round"/>
+    <g id="header-anchor">
+      <line x1="1150" y1="46" x2="1150" y2="74" stroke="#8B95A3" stroke-width="1.5"/>
+      <line x1="1134" y1="60" x2="1166" y2="60" stroke="#8B95A3" stroke-width="1.5"/>
+      <circle cx="1150" cy="60" r="5" fill="#1F4E79"/>
+      <text x="1126" y="67" text-anchor="end" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="18" fill="#8B95A3">{{SECTION_NAME}}</text>
+    </g>
+  </g>
+
+  <g id="compass-figure">
+    <rect x="88" y="132" width="660" height="500" rx="12" fill="#FFFFFF" stroke="#D8E0E8" stroke-width="1.5"/>
+    <rect x="88" y="132" width="660" height="5" rx="2.5" fill="#1F4E79"/>
+    <text x="120" y="176" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="19" font-weight="bold" fill="#8B95A3">作法</text>
+
+    <line x1="210" y1="570" x2="620" y2="570" stroke="#1F4E79" stroke-width="2.5"/>
+    <polygon points="620,570 604,564 604,576" fill="#1F4E79"/>
+    <line x1="210" y1="570" x2="486.9" y2="440.5" stroke="#1F4E79" stroke-width="2.5"/>
+    <line x1="210" y1="570" x2="599.7" y2="388.3" stroke="#E08A2E" stroke-width="2.5" stroke-dasharray="9,6"/>
+
+    <path d="M400 570A190 190 0 0 0 332.1 424.5" fill="none" stroke="#8B95A3" stroke-width="2" stroke-dasharray="6,5"/>
+    <path d="M427.3 321.5A250 250 0 0 1 580.6 397.2" fill="none" stroke="#2E7D5B" stroke-width="2" stroke-dasharray="6,5"/>
+    <path d="M540 563.3A250 250 0 0 0 580.6 397.2" fill="none" stroke="#2E7D5B" stroke-width="2" stroke-dasharray="6,5"/>
+
+    <line x1="400" y1="570" x2="580.6" y2="397.2" stroke="#C9D2DC" stroke-width="1.5" stroke-dasharray="5,5"/>
+    <line x1="332.1" y1="424.5" x2="580.6" y2="397.2" stroke="#C9D2DC" stroke-width="1.5" stroke-dasharray="5,5"/>
+
+    <circle cx="210" cy="570" r="6" fill="#1F4E79"/>
+    <circle cx="400" cy="570" r="6" fill="#1F4E79"/>
+    <circle cx="332.1" cy="424.5" r="6" fill="#1F4E79"/>
+    <circle cx="580.6" cy="397.2" r="6" fill="#E08A2E"/>
+
+    <text x="188" y="594" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="20" font-style="italic" fill="#1F4E79">O</text>
+    <text x="626" y="594" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="20" font-style="italic" fill="#1F4E79">A</text>
+    <text x="492" y="434" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="20" font-style="italic" fill="#1F4E79">B</text>
+    <text x="404" y="594" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="20" font-style="italic" fill="#1F4E79">M</text>
+    <text x="312" y="418" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="20" font-style="italic" fill="#1F4E79">N</text>
+    <text x="592" y="392" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="20" font-style="italic" fill="#E08A2E">C</text>
+
+    <text x="352" y="512" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="17" fill="#8B95A3">①</text>
+    <text x="470" y="356" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="17" fill="#2E7D5B">②</text>
+  </g>
+
+  <g id="compass-steps">
+    <rect x="780" y="132" width="412" height="248" rx="12" fill="#FFFFFF" stroke="#D8E0E8" stroke-width="1.5"/>
+    <rect x="780" y="132" width="412" height="5" rx="2.5" fill="#E08A2E"/>
+    <text x="812" y="176" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="19" font-weight="bold" fill="#E08A2E">步骤</text>
+    <text x="812" y="218" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="18" fill="#1F2937"><tspan x="812" dy="0">① 以 O 为圆心，适当长为半径作弧，</tspan><tspan x="812" dy="28">　 交 OA 于 M，交 OB 于 N；</tspan></text>
+    <text x="812" y="294" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="18" fill="#1F2937"><tspan x="812" dy="0">② 分别以 M、N 为圆心，大于 ½MN 的</tspan><tspan x="812" dy="28">　 长为半径作弧，两弧在角的内部交于点 C；</tspan></text>
+    <text x="812" y="370" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="18" fill="#1F2937">③ 作射线 OC，OC 就是 ∠AOB 的平分线。</text>
+  </g>
+
+  <g id="compass-why">
+    <rect x="780" y="400" width="412" height="248" rx="12" fill="#EDF2F7" stroke="#D8E0E8" stroke-width="1.5"/>
+    <text x="812" y="440" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="19" font-weight="bold" fill="#1F4E79">想一想</text>
+    <text x="812" y="480" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="19" fill="#1F2937">半径为什么要大于 ½MN？</text>
+    <text x="812" y="510" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="17" fill="#55606E">小于或等于时，两弧不相交，找不到点 C。</text>
+    <line x1="812" y1="536" x2="1160" y2="536" stroke="#D8E0E8" stroke-width="1.5"/>
+    <text x="812" y="570" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="19" fill="#1F2937">凭什么说 OC 就是平分线？</text>
+    <text x="812" y="602" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="16" fill="#2E7D5B">OM=ON，CM=CN，OC=OC</text>
+    <text x="812" y="628" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="16" fill="#2E7D5B">⟹ △OMC ≌ △ONC（SSS）</text>
+  </g>
+
+  <g id="page-footer">
+    <line x1="88" y1="660" x2="1192" y2="660" stroke="#D8E0E8" stroke-width="1"/>
+    <text x="88" y="692" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="16" fill="#8B95A3">{{SECTION_NAME}}</text>
+    <text x="1192" y="692" text-anchor="end" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="16" fill="#8B95A3">{{PAGE_NUM}}</text>
+  </g>
+</svg>

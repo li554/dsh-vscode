@@ -675,7 +675,6 @@ function hostCwd() {
  */
 const BUNDLED_PLUGINS = [
   "@canglongcl/dsh-web-review",
-  "@dsh-vscode/p2h-bridge",
   "@liustack/modlens",
   "dsh-client-auto-continue",
   "dsh-rewind-plugin",
@@ -719,7 +718,24 @@ const BUNDLED_PLUGINS = [
   // Version floor: the native-sidebar integration landed in v0.19.0 and the
   // published v0.19.1 declares peerDependencies on ^0.1.5-rc.1 (verified by
   // upstream on 0.1.5-rc.2, which is exactly this build's vendored runtime).
-  "dsh-better-sidebar"
+  "dsh-better-sidebar",
+  // PPT maker (zero runtime deps; only node: builtins). Its preset lives in
+  // plugins/presets/ppt-master/ — the package's own cordis.patch targeted the
+  // singular dsh-agent-preset (dsh >= 0.1.7) and is emptied for 0.1.5.
+  "dsh-ppt-master",
+  // Spine compaction engine (extends compaction-basic; zero runtime deps,
+  // peer @deepseek-ai/* resolved from the vendored closure). Its patch mounts
+  // compaction-spine at profile level.
+  "dsh-live-compact",
+  // MCP manager (Settings → MCP page + per-server mounts/OAuth/probes; its own
+  // cordis.patch inserts the single dsh-mcp row at profile level). Host deps in
+  // _hostdeps: @modelcontextprotocol/client@2.0.0 + core and its closure
+  // (cross-spawn/eventsource/eventsource-parser/isexe/jose/path-key/
+  // pkce-challenge/shebang-*/which) plus js-yaml; zod was already there.
+  // Platform peers (@deepseek-ai/*) resolve from the vendored closure, never
+  // hoisted. Targets dsh 0.2.0-rc.2 but keeps only defaulted config keys
+  // (probeTimeoutMs/allowBrowserOnMount), which 0.1.5's schema accepts.
+  "dsh-mcp"
 ];
 /** Plugins that older vsix releases bundled but this build does not. A DSH_HOME
  * that previously ran with them enabled still carries their names in the profile
@@ -771,6 +787,9 @@ const RETIRED_PLUGINS = [
   // native right-sidebar covers the same editor/terminal/explorer surface (and
   // drops the duplicated CodeMirror/xterm payload from the vsix).
   "dsh-code-ide",
+  // retired by dsh-vscode: p2h-bridge removed from the baked set (replaced by
+  // dsh-ppt-master + dsh-live-compact); prune stale profile copies on boot.
+  "@dsh-vscode/p2h-bridge",
   "dsh-file-review",
   "dsh-free-search",
   "dsh-miraculous-standard",
@@ -876,7 +895,7 @@ function syncBakedPresets(home) {
   if (!fs.existsSync(srcRoot)) return;
   const agentRoot = path.join(home, ".agent-presets");
   fs.mkdirSync(agentRoot, { recursive: true });
-  for (const name of ["router-standard", "router-spec"]) {
+  for (const name of ["router-standard", "router-spec", "ppt-master"]) {
     const src = path.join(srcRoot, name);
     if (!fs.statSync(src).isDirectory()) continue;
     const dst = path.join(agentRoot, name);
@@ -1268,7 +1287,7 @@ function pruneRetiredArtifacts(home) {
  * removed first: fs.cpSync(force) copies THROUGH the link into its target, and
  * even a successful copy leaves the plugin resolving against plugins/bundled —
  * where _hostdeps is NOT a node_modules dir — so bare-specifier deps (e.g.
- * @dsh-vscode/p2h-bridge -> docgen-utils) fail with ERR_MODULE_NOT_FOUND.
+ * a bundled plugin -> _hostdeps package) fail with ERR_MODULE_NOT_FOUND.
  */
 function copyReal(src, dest) {
   try { if (fs.lstatSync(dest).isSymbolicLink()) fs.rmSync(dest, { recursive: true, force: true }); } catch { /* not present */ }
@@ -1365,7 +1384,7 @@ function transplantBundledPlugins(profileDir) {
   //
   // The fingerprint must include content, not just versions: this dev loop repacks
   // the same `0.3.0-explore.NN` repeatedly and every bundled plugin keeps its own
-  // version (e.g. p2h-bridge 0.3.0, web-review 0.6.0). With version-only markers a
+  // version (e.g. dsh-ppt-master 1.0.8, web-review 0.6.0). With version-only markers a
   // code-only fix left the marker valid, the transplant was skipped, and the profile
   // kept running the previous bundle — "I fixed it several times and nothing changed",
   // with the proof sitting in this log as "transplant skipped". Any rebuilt file
@@ -1505,7 +1524,7 @@ function startHost(requestedPort = 0) {
       // dsh-vscode: the webview's portMapping only reaches the proxy's fixed
       // port (hostPortFor), never the host's OS-assigned ephemeral one. Bundled
       // plugins that build preview URLs must point at the proxy port — inject it
-      // explicitly (p2h-bridge reads DSH_PROXY_PORT to build deck previewUrls).
+      // explicitly (e.g. dsh-web-review reads DSH_PROXY_PORT for preview URLs).
       DSH_PROXY_PORT: String(hostPortFor()),
       // The directory-picker seam is pinned to the pure-JS `browse` pair by the
       // profile overlay (writeProfileOverlay), NOT by faking SSH_CONNECTION.

@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <g id="p12-bg">
+    <rect x="0" y="0" width="1280" height="720" fill="#FFFFFF" />
+  </g>
+
+  <g id="p12-header">
+    <path fill="#1B4F9C" d="M64,54 H64 A4,4 0 0 1 68,58 V106 A4,4 0 0 1 64,110 H64 A4,4 0 0 1 60,106 V58 A4,4 0 0 1 64,54 Z" />
+    <text x="88" y="110" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="56" font-weight="bold" fill="#1B4F9C">方法归纳</text>
+    <g transform="translate(340, 70) scale(1.66667)" fill="none" stroke="#4A90D9" stroke-width="2">
+      <path d="M8 16l2 -6l6 -2l-2 6l-6 2" />
+      <path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" />
+      <path d="M12 3l0 2" />
+      <path d="M12 19l0 2" />
+      <path d="M3 12l2 0" />
+      <path d="M19 12l2 0" />
+    </g>
+    <text x="88" y="158" font-family="'Microsoft YaHei', sans-serif" font-size="36" fill="#1F2937">把今天用到的思路，固定成一条<tspan fill="#1B4F9C" font-weight="bold">下次还能用</tspan>的步骤链。</text>
+  </g>
+
+  <g id="p12-chevrons">
+    <polygon points="60,186 348,186 388,248 348,310 60,310 100,248" fill="#1B4F9C" />
+    <text x="118" y="234" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="24" font-weight="bold" fill="#FFFFFF" fill-opacity="0.75">第 1 步</text>
+    <text x="118" y="284" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="36" font-weight="bold" fill="#FFFFFF">读题找条件</text>
+    <polygon points="352,186 640,186 680,248 640,310 352,310 392,248" fill="#2A62B0" />
+    <text x="410" y="234" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="24" font-weight="bold" fill="#FFFFFF" fill-opacity="0.75">第 2 步</text>
+    <text x="410" y="284" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="36" font-weight="bold" fill="#FFFFFF">对应结论</text>
+    <polygon points="644,186 932,186 972,248 932,310 644,310 684,248" fill="#4A90D9" />
+    <text x="702" y="234" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="24" font-weight="bold" fill="#FFFFFF" fill-opacity="0.8">第 3 步</text>
+    <text x="702" y="284" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="36" font-weight="bold" fill="#FFFFFF">规范书写</text>
+    <polygon points="936,186 1224,186 1264,248 1224,310 936,310 976,248" fill="#F08A24" />
+    <text x="994" y="234" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="24" font-weight="bold" fill="#FFFFFF" fill-opacity="0.85">第 4 步</text>
+    <text x="994" y="284" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="36" font-weight="bold" fill="#FFFFFF">检验作答</text>
+  </g>
+
+  <g id="p12-detail-1">
+    <path fill="#F2F6FC" stroke="#DCE4F0" stroke-width="1" d="M76,340 H316 A16,16 0 0 1 332,356 V520 A16,16 0 0 1 316,536 H76 A16,16 0 0 1 60,520 V356 A16,16 0 0 1 76,340 Z" />
+    <text font-size="30" fill="#1F2937" font-family="'Microsoft YaHei', sans-serif" x="88" y="392">圈出已知，</text>
+    <text font-size="30" fill="#1F2937" font-family="'Microsoft YaHei', sans-serif" x="88" y="434">标出所求。</text>
+    <line x1="88" y1="464" x2="304" y2="464" stroke="#DCE4F0" stroke-width="2" />
+    <text x="88" y="502" font-family="'Microsoft YaHei', sans-serif" font-size="22" fill="#5B6472">自检：条件找全了吗？</text>
+  </g>
+
+  <g id="p12-detail-2">
+    <path fill="#F2F6FC" stroke="#DCE4F0" stroke-width="1" d="M372,340 H612 A16,16 0 0 1 628,356 V520 A16,16 0 0 1 612,536 H372 A16,16 0 0 1 356,520 V356 A16,16 0 0 1 372,340 Z" />
+    <text font-size="30" fill="#1F2937" font-family="'Microsoft YaHei', sans-serif" x="384" y="392">判断模型，</text>
+    <text font-size="30" fill="#1F2937" font-family="'Microsoft YaHei', sans-serif" x="384" y="434">选定公式。</text>
+    <line x1="384" y1="464" x2="600" y2="464" stroke="#DCE4F0" stroke-width="2" />
+    <text x="384" y="502" font-family="'Microsoft YaHei', sans-serif" font-size="22" fill="#5B6472">自检：条件满足吗？</text>
+  </g>
+
+  <g id="p12-detail-3">
+    <path fill="#F2F6FC" stroke="#DCE4F0" stroke-width="1" d="M668,340 H908 A16,16 0 0 1 924,356 V520 A16,16 0 0 1 908,536 H668 A16,16 0 0 1 652,520 V356 A16,16 0 0 1 668,340 Z" />
+    <text font-size="30" fill="#1F2937" font-family="'Microsoft YaHei', sans-serif" x="680" y="392">按“因为…所以”</text>
+    <text font-size="30" fill="#1F2937" font-family="'Microsoft YaHei', sans-serif" x="680" y="434">写全，不跳步。</text>
+    <line x1="680" y1="464" x2="896" y2="464" stroke="#DCE4F0" stroke-width="2" />
+    <text x="680" y="502" font-family="'Microsoft YaHei', sans-serif" font-size="22" fill="#5B6472">自检：每步有依据吗？</text>
+  </g>
+
+  <g id="p12-detail-4">
+    <path fill="#FDF1E3" stroke="#F5D5AE" stroke-width="1" d="M964,340 H1204 A16,16 0 0 1 1220,356 V520 A16,16 0 0 1 1204,536 H964 A16,16 0 0 1 948,520 V356 A16,16 0 0 1 964,340 Z" />
+    <text font-size="30" fill="#1F2937" font-family="'Microsoft YaHei', sans-serif" x="976" y="392">回代验算，</text>
+    <text font-size="30" fill="#1F2937" font-family="'Microsoft YaHei', sans-serif" x="976" y="434">写出答句。</text>
+    <line x1="976" y1="464" x2="1192" y2="464" stroke="#F5D5AE" stroke-width="2" />
+    <text x="976" y="502" font-family="'Microsoft YaHei', sans-serif" font-size="22" fill="#B4690E">自检：单位查过了吗？</text>
+  </g>
+
+  <g id="p12-summary">
+    <line x1="60" y1="558" x2="1220" y2="558" stroke="#EAF0F8" stroke-width="3" />
+    <g transform="translate(60, 586) scale(1.16667)" fill="none" stroke="#1B4F9C" stroke-width="2">
+      <path d="M5 5a5 5 0 0 1 7 0a5 5 0 0 0 7 0v9a5 5 0 0 1 -7 0a5 5 0 0 0 -7 0v-9" />
+      <path d="M5 21v-7" />
+    </g>
+    <text x="100" y="612" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="36" font-weight="bold" fill="#1B4F9C">模型选对，步骤写全，答案验过——这类题就稳了。</text>
+    <text x="1220" y="612" text-anchor="end" font-family="'Microsoft YaHei', sans-serif" font-size="20" fill="#8A93A3">12</text>
+  </g>
+</svg>

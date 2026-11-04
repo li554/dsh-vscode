@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <g id="bg-grid">
+    <rect width="1280" height="720" fill="#FCFCF9"/>
+    <path d="M0 40H1280M0 80H1280M0 120H1280M0 160H1280M0 200H1280M0 240H1280M0 280H1280M0 320H1280M0 360H1280M0 400H1280M0 440H1280M0 480H1280M0 520H1280M0 560H1280M0 600H1280M0 640H1280M0 680H1280" fill="none" stroke="#E9EDF2" stroke-width="1"/>
+    <path d="M40 0V720M80 0V720M120 0V720M160 0V720M200 0V720M240 0V720M280 0V720M320 0V720M360 0V720M400 0V720M440 0V720M480 0V720M520 0V720M560 0V720M600 0V720M640 0V720M680 0V720M720 0V720M760 0V720M800 0V720M840 0V720M880 0V720M920 0V720M960 0V720M1000 0V720M1040 0V720M1080 0V720M1120 0V720M1160 0V720M1200 0V720M1240 0V720" fill="none" stroke="#E9EDF2" stroke-width="1"/>
+    <path d="M0 200H1280M0 400H1280M0 600H1280" fill="none" stroke="#DCE3EB" stroke-width="1"/>
+    <path d="M200 0V720M400 0V720M600 0V720M800 0V720M1000 0V720M1200 0V720" fill="none" stroke="#DCE3EB" stroke-width="1"/>
+  </g>
+
+  <g id="page-header">
+    <rect x="0" y="0" width="1280" height="8" fill="#1F4E79"/>
+    <rect x="0" y="8" width="1280" height="4" fill="#E08A2E"/>
+    <text x="88" y="78" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="48" font-weight="bold" fill="#1F2937">{{PAGE_TITLE}}</text>
+    <path d="M88 100H232" fill="none" stroke="#E08A2E" stroke-width="6" stroke-linecap="round"/>
+    <g id="header-anchor">
+      <line x1="1150" y1="46" x2="1150" y2="74" stroke="#8B95A3" stroke-width="1.5"/>
+      <line x1="1134" y1="60" x2="1166" y2="60" stroke="#8B95A3" stroke-width="1.5"/>
+      <circle cx="1150" cy="60" r="5" fill="#1F4E79"/>
+      <text x="1126" y="67" text-anchor="end" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="18" fill="#8B95A3">{{SECTION_NAME}}</text>
+    </g>
+  </g>
+
+  <g id="lead-line">
+    <text x="88" y="152" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="24" fill="#55606E">{{KEY_MESSAGE}}</text>
+  </g>
+
+  <g id="homework-1">
+    <rect x="88" y="200" width="352" height="336" rx="12" fill="#FFFFFF" stroke="#D8E0E8" stroke-width="1.5"/>
+    <rect x="88" y="200" width="352" height="5" rx="2.5" fill="#1F4E79"/>
+    <rect x="116" y="234" width="132" height="40" rx="8" fill="#EDF2F7"/>
+    <text x="182" y="261" text-anchor="middle" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="19" font-weight="bold" fill="#1F4E79">{{HW_1_TAG}}</text>
+    <text x="116" y="318" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="21" fill="#1F2937">{{HW_1_TEXT}}</text>
+    <line x1="116" y1="474" x2="412" y2="474" stroke="#E4E9EF" stroke-width="1.5"/>
+    <text x="116" y="508" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="17" fill="#8B95A3">{{HW_1_NOTE}}</text>
+  </g>
+
+  <g id="homework-2">
+    <rect x="464" y="200" width="352" height="336" rx="12" fill="#FFFFFF" stroke="#D8E0E8" stroke-width="1.5"/>
+    <rect x="464" y="200" width="352" height="5" rx="2.5" fill="#2E7D5B"/>
+    <rect x="492" y="234" width="132" height="40" rx="8" fill="#EDF7F1"/>
+    <text x="558" y="261" text-anchor="middle" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="19" font-weight="bold" fill="#2E7D5B">{{HW_2_TAG}}</text>
+    <text x="492" y="318" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="21" fill="#1F2937">{{HW_2_TEXT}}</text>
+    <line x1="492" y1="474" x2="788" y2="474" stroke="#E4E9EF" stroke-width="1.5"/>
+    <text x="492" y="508" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="17" fill="#8B95A3">{{HW_2_NOTE}}</text>
+  </g>
+
+  <g id="homework-3">
+    <rect x="840" y="200" width="352" height="336" rx="12" fill="#FFFFFF" stroke="#D8E0E8" stroke-width="1.5"/>
+    <rect x="840" y="200" width="352" height="5" rx="2.5" fill="#E08A2E"/>
+    <rect x="868" y="234" width="132" height="40" rx="8" fill="#FDF3E6"/>
+    <text x="934" y="261" text-anchor="middle" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="19" font-weight="bold" fill="#E08A2E">{{HW_3_TAG}}</text>
+    <text x="868" y="318" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="21" fill="#1F2937">{{HW_3_TEXT}}</text>
+    <line x1="868" y1="474" x2="1164" y2="474" stroke="#E4E9EF" stroke-width="1.5"/>
+    <text x="868" y="508" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="17" fill="#8B95A3">{{HW_3_NOTE}}</text>
+  </g>
+
+  <g id="homework-preview">
+    <rect x="88" y="564" width="1104" height="72" rx="12" fill="#1F4E79"/>
+    <rect x="88" y="564" width="6" height="72" rx="3" fill="#E08A2E"/>
+    <text x="124" y="596" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="17" font-weight="bold" fill="#B8C6D6">下节预告</text>
+    <text x="124" y="622" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="22" fill="#FFFFFF">{{CLOSING_MESSAGE}}</text>
+  </g>
+
+  <g id="page-footer">
+    <line x1="88" y1="660" x2="1192" y2="660" stroke="#D8E0E8" stroke-width="1"/>
+    <text x="88" y="692" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="16" fill="#8B95A3">{{SECTION_NAME}}</text>
+    <text x="1192" y="692" text-anchor="end" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="16" fill="#8B95A3">{{PAGE_NUM}}</text>
+  </g>
+</svg>

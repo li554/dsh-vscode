@@ -46,6 +46,11 @@ function resolveGitBranch(cwd) {
 		], {
 			encoding: "utf8",
 			timeout: GIT_BRANCH_TIMEOUT_MS,
+			// LOCAL PATCH for dsh-vscode: without this, Windows gives `git` its own
+			// console, and on a host whose process tree owns no windowless console that
+			// console is VISIBLE — a terminal window flashes whenever the memory source
+			// resolves a workspace branch. Every other spawn in the bundled set passes it.
+			windowsHide: true,
 			stdio: [
 				"ignore",
 				"pipe",

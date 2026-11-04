@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <g id="p05-bg">
+    <rect x="0" y="0" width="1280" height="720" fill="#FFFFFF" />
+  </g>
+
+  <g id="p05-header">
+    <path fill="#1B4F9C" d="M64,54 H64 A4,4 0 0 1 68,58 V106 A4,4 0 0 1 64,110 H64 A4,4 0 0 1 60,106 V58 A4,4 0 0 1 64,54 Z" />
+    <text x="88" y="110" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="56" font-weight="bold" fill="#1B4F9C">探究新知</text>
+    <g transform="translate(340, 70) scale(1.66667)" fill="none" stroke="#4A90D9" stroke-width="2">
+      <path d="M4 7h3a1 1 0 0 0 1 -1v-1a2 2 0 0 1 4 0v1a1 1 0 0 0 1 1h3a1 1 0 0 1 1 1v3a1 1 0 0 0 1 1h1a2 2 0 0 1 0 4h-1a1 1 0 0 0 -1 1v3a1 1 0 0 1 -1 1h-3a1 1 0 0 1 -1 -1v-1a2 2 0 0 0 -4 0v1a1 1 0 0 1 -1 1h-3a1 1 0 0 1 -1 -1v-3a1 1 0 0 1 1 -1h1a2 2 0 0 0 0 -4h-1a1 1 0 0 1 -1 -1v-3a1 1 0 0 1 1 -1" />
+    </g>
+    <text x="88" y="158" font-family="'Microsoft YaHei', sans-serif" font-size="36" fill="#1F2937">动手操作、观察比较，<tspan fill="#1B4F9C" font-weight="bold">自己把规律找出来</tspan>，而不是等老师告诉结论。</text>
+  </g>
+
+  <g id="p05-baseline">
+    <line x1="88" y1="278" x2="1192" y2="278" stroke="#EAF0F8" stroke-width="3" stroke-linecap="round" />
+  </g>
+
+  <g id="step-1">
+    <circle cx="196" cy="278" r="38" fill="#1B4F9C" />
+    <text x="196" y="291" text-anchor="middle" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="36" font-weight="bold" fill="#FFFFFF">1</text>
+    <path fill="#F2F6FC" stroke="#DCE4F0" stroke-width="1" d="M76,328 H316 A16,16 0 0 1 332,344 V596 A16,16 0 0 1 316,612 H76 A16,16 0 0 1 60,596 V344 A16,16 0 0 1 76,328 Z" />
+    <text x="88" y="390" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="36" font-weight="bold" fill="#1B4F9C">动手做</text>
+    <text font-size="26" fill="#1F2937" font-family="'Microsoft YaHei', sans-serif" x="88" y="446">{{EXPLORE_TASK}}</text>
+    <text font-size="30" fill="#1F2937" font-family="'Microsoft YaHei', sans-serif" x="88" y="494">画图并测量，</text>
+    <text font-size="30" fill="#1F2937" font-family="'Microsoft YaHei', sans-serif" x="88" y="542">至少记三组。</text>
+  </g>
+
+  <g id="step-2">
+    <circle cx="492" cy="278" r="38" fill="#1B4F9C" />
+    <text x="492" y="291" text-anchor="middle" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="36" font-weight="bold" fill="#FFFFFF">2</text>
+    <path fill="#F2F6FC" stroke="#DCE4F0" stroke-width="1" d="M372,328 H612 A16,16 0 0 1 628,344 V596 A16,16 0 0 1 612,612 H372 A16,16 0 0 1 356,596 V344 A16,16 0 0 1 372,328 Z" />
+    <text x="384" y="390" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="36" font-weight="bold" fill="#1B4F9C">记下来</text>
+    <text font-size="30" fill="#1F2937" font-family="'Microsoft YaHei', sans-serif" x="384" y="446">把结果填进</text>
+    <text font-size="30" fill="#1F2937" font-family="'Microsoft YaHei', sans-serif" x="384" y="494">表格，格式</text>
+    <text font-size="30" fill="#1F2937" font-family="'Microsoft YaHei', sans-serif" x="384" y="542">保持一致。</text>
+  </g>
+
+  <g id="step-3">
+    <circle cx="788" cy="278" r="38" fill="#4A90D9" />
+    <text x="788" y="291" text-anchor="middle" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="36" font-weight="bold" fill="#FFFFFF">3</text>
+    <path fill="#F2F6FC" stroke="#DCE4F0" stroke-width="1" d="M668,328 H908 A16,16 0 0 1 924,344 V596 A16,16 0 0 1 908,612 H668 A16,16 0 0 1 652,596 V344 A16,16 0 0 1 668,328 Z" />
+    <text x="680" y="390" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="36" font-weight="bold" fill="#1B4F9C">比一比</text>
+    <text font-size="30" fill="#1F2937" font-family="'Microsoft YaHei', sans-serif" x="680" y="446">比较各组：</text>
+    <text font-size="30" fill="#1F2937" font-family="'Microsoft YaHei', sans-serif" x="680" y="494">哪些量在变，</text>
+    <text font-size="30" fill="#1F2937" font-family="'Microsoft YaHei', sans-serif" x="680" y="542"><tspan>哪些量<tspan fill="#F08A24" font-weight="bold">不变</tspan>？</tspan></text>
+  </g>
+
+  <g id="step-4">
+    <circle cx="1084" cy="278" r="38" fill="#F08A24" />
+    <text x="1084" y="291" text-anchor="middle" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="36" font-weight="bold" fill="#FFFFFF">4</text>
+    <path fill="#FDF1E3" stroke="#F5D5AE" stroke-width="1" d="M964,328 H1204 A16,16 0 0 1 1220,344 V596 A16,16 0 0 1 1204,612 H964 A16,16 0 0 1 948,596 V344 A16,16 0 0 1 964,328 Z" />
+    <text x="976" y="390" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="36" font-weight="bold" fill="#F08A24">猜一猜</text>
+    <text font-size="30" fill="#1F2937" font-family="'Microsoft YaHei', sans-serif" x="976" y="446">用一句话写出</text>
+    <text font-size="30" fill="#1F2937" font-family="'Microsoft YaHei', sans-serif" x="976" y="494">猜想，它就是</text>
+    <text font-size="30" fill="#1F2937" font-family="'Microsoft YaHei', sans-serif" x="976" y="542">要证的结论。</text>
+  </g>
+
+  <g id="p05-footer">
+    <line x1="60" y1="612" x2="1220" y2="612" stroke="#EAF0F8" stroke-width="2" />
+    <text x="60" y="636" font-family="'Microsoft YaHei', sans-serif" font-size="20" fill="#8A93A3">数学 · 八年级上册 · {{TITLE}}</text>
+    <text x="1220" y="636" text-anchor="end" font-family="'Microsoft YaHei', sans-serif" font-size="20" fill="#8A93A3">05</text>
+  </g>
+</svg>

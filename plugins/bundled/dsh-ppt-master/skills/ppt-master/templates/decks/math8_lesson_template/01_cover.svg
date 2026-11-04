@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <defs>
+    <linearGradient id="coverPrimary" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1B4F9C" />
+      <stop offset="100%" stop-color="#4A90D9" />
+    </linearGradient>
+    <linearGradient id="coverRule" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#1B4F9C" />
+      <stop offset="100%" stop-color="#4A90D9" stop-opacity="0.15" />
+    </linearGradient>
+  </defs>
+
+  <g id="cover-bg">
+    <rect x="0" y="0" width="1280" height="720" fill="#FFFFFF" />
+    <rect x="0" y="0" width="1280" height="8" fill="#1B4F9C" />
+  </g>
+
+  <g id="cover-visual">
+    <circle cx="1050" cy="425" r="150" fill="url(#coverPrimary)" />
+    <polygon points="1050,275 1179.9,500 920.1,500" fill="none" stroke="#FFFFFF" stroke-width="4" stroke-linejoin="round" stroke-opacity="0.9" />
+    <path d="M 938.9,425 A 111,111 0 0 1 1105.6,328.8" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-opacity="0.55" />
+    <line x1="920" y1="500" x2="1200" y2="500" stroke="#FFFFFF" stroke-width="1.6" stroke-opacity="0.45" />
+    <line x1="967" y1="496" x2="967" y2="504" stroke="#FFFFFF" stroke-width="1.6" stroke-opacity="0.45" />
+    <line x1="1011" y1="496" x2="1011" y2="504" stroke="#FFFFFF" stroke-width="1.6" stroke-opacity="0.45" />
+    <line x1="1056" y1="496" x2="1056" y2="504" stroke="#FFFFFF" stroke-width="1.6" stroke-opacity="0.45" />
+    <line x1="1100" y1="496" x2="1100" y2="504" stroke="#FFFFFF" stroke-width="1.6" stroke-opacity="0.45" />
+    <line x1="1144" y1="496" x2="1144" y2="504" stroke="#FFFFFF" stroke-width="1.6" stroke-opacity="0.45" />
+    <circle cx="1050" cy="275" r="9" fill="#F08A24" />
+    <path d="M 1164,461 L 1164,481 L 1145,481" fill="none" stroke="#F08A24" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M 1050,364 A 61,61 0 0 0 997,456" fill="none" stroke="#F08A24" stroke-width="2.5" stroke-linecap="round" stroke-opacity="0.9" />
+  </g>
+
+  <g id="cover-title-block">
+    <path fill="#E7EFFA" d="M104,130 H448 A24,24 0 0 1 472,154 V154 A24,24 0 0 1 448,178 H104 A24,24 0 0 1 80,154 V154 A24,24 0 0 1 104,130 Z" />
+    <g transform="translate(100, 142)" fill="none" stroke="#1B4F9C" stroke-width="2">
+      <path d="M22 9l-10 -4l-10 4l10 4l10 -4v6" />
+      <path d="M6 10.6v5.4a6 3 0 0 0 12 0v-5.4" />
+    </g>
+    <text x="136" y="162" font-family="'Microsoft YaHei', sans-serif" font-size="24" fill="#1B4F9C">人教版 · 数学 · 八年级上册</text>
+
+    <text x="80" y="290" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="80" font-weight="bold" fill="#1B4F9C">{{TITLE}}</text>
+
+    <path fill="url(#coverRule)" d="M83,326 H637 A3,3 0 0 1 640,329 V329 A3,3 0 0 1 637,332 H83 A3,3 0 0 1 80,329 V329 A3,3 0 0 1 83,326 Z" />
+
+    <text x="80" y="386" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="42" fill="#1F2937">第{{CHAPTER_NUM}}章　第{{SECTION_NUM}}节</text>
+  </g>
+
+  <g id="cover-meta">
+    <text x="80" y="442" font-family="'Microsoft YaHei', sans-serif" font-size="24" fill="#5B6472">授课人：{{AUTHOR}}　　班级：{{CLASS_NAME}}</text>
+    <text x="80" y="482" font-family="'Microsoft YaHei', sans-serif" font-size="24" fill="#5B6472">日期：{{DATE}}</text>
+  </g>
+
+  <g id="cover-footer">
+    <rect x="0" y="584" width="1280" height="64" fill="#1B4F9C" />
+    <text x="80" y="622" font-family="'Microsoft YaHei', sans-serif" font-size="20" fill="#FFFFFF" fill-opacity="0.92">数学 · 八年级上册 · {{TITLE}}</text>
+    <text x="1200" y="622" text-anchor="end" font-family="'Microsoft YaHei', sans-serif" font-size="20" fill="#FFFFFF" fill-opacity="0.72">01</text>
+  </g>
+</svg>

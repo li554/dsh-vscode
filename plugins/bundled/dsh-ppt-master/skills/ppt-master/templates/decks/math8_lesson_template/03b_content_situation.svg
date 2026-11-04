@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <defs>
+    <linearGradient id="imgScrim" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1B4F9C" stop-opacity="0" />
+      <stop offset="45%" stop-color="#1B4F9C" stop-opacity="0.45" />
+      <stop offset="100%" stop-color="#1B4F9C" stop-opacity="0.94" />
+    </linearGradient>
+  </defs>
+
+  <g id="p03-bg">
+    <image href="situation_intro.jpg" x="0" y="0" width="1280" height="720" preserveAspectRatio="xMidYMid slice"/>
+    <rect x="0" y="300" width="1280" height="420" fill="url(#imgScrim)" />
+  </g>
+
+  <g id="p03-tag">
+    <path fill="#FFFFFF" fill-opacity="0.94" d="M88,54 H260 A28,28 0 0 1 288,82 V82 A28,28 0 0 1 260,110 H88 A28,28 0 0 1 60,82 V82 A28,28 0 0 1 88,54 Z" />
+    <g transform="translate(82, 70)" fill="none" stroke="#1B4F9C" stroke-width="2">
+      <path d="M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0" />
+      <path d="M21 21l-6 -6" />
+    </g>
+    <text x="118" y="92" font-family="'Microsoft YaHei', sans-serif" font-size="24" fill="#1B4F9C">情境导入</text>
+  </g>
+
+  <g id="p03-title">
+    <text x="60" y="430" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="56" font-weight="bold" fill="#FFFFFF">从生活问题，到数学问题</text>
+    <line x1="60" y1="460" x2="300" y2="460" stroke="#F08A24" stroke-width="5" stroke-linecap="round" />
+  </g>
+
+  <g id="p03-questions">
+    <text x="60" y="520" font-family="'Microsoft YaHei', sans-serif" font-size="32" fill="#FFFFFF" fill-opacity="0.96">看图想一想：他们遇到了什么问题？要算出答案，需要知道哪些量？</text>
+    <text x="60" y="570" font-family="'Microsoft YaHei', sans-serif" font-size="32" fill="#FFFFFF" fill-opacity="0.96">这个问题，和我们刚复习的{{PRIOR_KNOWLEDGE}}有什么关系？</text>
+    <text x="60" y="620" font-family="'Microsoft YaHei', sans-serif" font-size="32" fill="#FFFFFF" fill-opacity="0.96">把你想到的问题写下来——<tspan fill="#F08A24" font-weight="bold">它就是我们今天要研究的内容</tspan>。</text>
+  </g>
+
+  <g id="p03-footer">
+    <text x="1220" y="636" text-anchor="end" font-family="'Microsoft YaHei', sans-serif" font-size="20" fill="#FFFFFF" fill-opacity="0.6">03</text>
+  </g>
+</svg>

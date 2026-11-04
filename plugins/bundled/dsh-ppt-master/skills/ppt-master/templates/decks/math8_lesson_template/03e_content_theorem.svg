@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <g id="p06-bg">
+    <rect x="0" y="0" width="1280" height="720" fill="#FFFFFF" />
+  </g>
+
+  <g id="p06-header">
+    <path fill="#1B4F9C" d="M64,54 H64 A4,4 0 0 1 68,58 V106 A4,4 0 0 1 64,110 H64 A4,4 0 0 1 60,106 V58 A4,4 0 0 1 64,54 Z" />
+    <text x="88" y="110" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="56" font-weight="bold" fill="#1B4F9C">概念 / 定理 / 公式</text>
+    <text x="88" y="158" font-family="'Microsoft YaHei', sans-serif" font-size="36" fill="#1F2937">把刚才的猜想，写成<tspan fill="#1B4F9C" font-weight="bold">准确、能用</tspan>的数学结论。</text>
+  </g>
+
+  <g id="p06-hero-formula">
+    <path fill="#F2F6FC" d="M200,186 H1080 A20,20 0 0 1 1100,206 V336 A20,20 0 0 1 1080,356 H200 A20,20 0 0 1 180,336 V206 A20,20 0 0 1 200,186 Z" />
+    <g transform="translate(216, 210)" fill="none" stroke="#1B4F9C" stroke-width="2">
+      <path d="M4 6.667a2.667 2.667 0 0 1 2.667 -2.667h10.666a2.667 2.667 0 0 1 2.667 2.667v10.666a2.667 2.667 0 0 1 -2.667 2.667h-10.666a2.667 2.667 0 0 1 -2.667 -2.667l0 -10.666" />
+      <path d="M9 15.5v.25c0 .69 .56 1.25 1.25 1.25c.71 0 1.304 -.538 1.374 -1.244l.752 -7.512a1.381 1.381 0 0 1 1.374 -1.244c.69 0 1.25 .56 1.25 1.25v.25" />
+      <path d="M9 12h6" />
+    </g>
+    <text x="252" y="230" font-family="'Microsoft YaHei', sans-serif" font-size="24" fill="#5B6472">核心公式</text>
+    <image href="formula_001.png" x="230" y="248" width="820" height="96.87" preserveAspectRatio="xMidYMid meet"/>
+  </g>
+
+  <g id="p06-statement">
+    <line x1="180" y1="386" x2="1100" y2="386" stroke="#EAF0F8" stroke-width="3" />
+    <text x="180" y="440" font-family="'Microsoft YaHei', sans-serif" font-size="32" fill="#1F2937">文字表述：两个数的<tspan fill="#1B4F9C" font-weight="bold">和</tspan>与<tspan fill="#1B4F9C" font-weight="bold">差</tspan>的积，等于这两个数的<tspan fill="#F08A24" font-weight="bold">平方差</tspan>。</text>
+    <text x="180" y="484" font-family="'Microsoft YaHei', sans-serif" font-size="24" fill="#5B6472">成立条件：{{CONDITION}}　·　符号语言：{{SYMBOL_STATEMENT}}</text>
+    <text x="180" y="522" font-family="'Microsoft YaHei', sans-serif" font-size="24" fill="#5B6472">使用提醒：先确认条件满足，再代入计算。</text>
+  </g>
+
+  <g id="p06-secondary-formula">
+    <path fill="#FDF1E3" stroke="#F5D5AE" stroke-width="1" d="M716,546 H1204 A16,16 0 0 1 1220,562 V618 A16,16 0 0 1 1204,634 H716 A16,16 0 0 1 700,618 V562 A16,16 0 0 1 716,546 Z" />
+    <text x="728" y="580" font-family="'Microsoft YaHei', sans-serif" font-size="24" fill="#B4690E">相关公式</text>
+    <image href="formula_002.png" x="900" y="562" width="300" height="34.4" preserveAspectRatio="xMidYMid meet"/>
+    <text x="728" y="614" font-family="'Microsoft YaHei', sans-serif" font-size="20" fill="#B4690E">注意两个公式的结构差异，不要混用。</text>
+  </g>
+
+  <g id="p06-footer">
+    <text x="60" y="642" font-family="'Microsoft YaHei', sans-serif" font-size="20" fill="#8A93A3">数学 · 八年级上册 · {{TITLE}}</text>
+    <text x="1220" y="642" text-anchor="end" font-family="'Microsoft YaHei', sans-serif" font-size="20" fill="#8A93A3">06</text>
+  </g>
+</svg>

@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <g id="bg-grid">
+    <rect width="1280" height="720" fill="#FCFCF9"/>
+    <path d="M0 40H1280M0 80H1280M0 120H1280M0 160H1280M0 200H1280M0 240H1280M0 280H1280M0 320H1280M0 360H1280M0 400H1280M0 440H1280M0 480H1280M0 520H1280M0 560H1280M0 600H1280M0 640H1280M0 680H1280" fill="none" stroke="#E9EDF2" stroke-width="1"/>
+    <path d="M40 0V720M80 0V720M120 0V720M160 0V720M200 0V720M240 0V720M280 0V720M320 0V720M360 0V720M400 0V720M440 0V720M480 0V720M520 0V720M560 0V720M600 0V720M640 0V720M680 0V720M720 0V720M760 0V720M800 0V720M840 0V720M880 0V720M920 0V720M960 0V720M1000 0V720M1040 0V720M1080 0V720M1120 0V720M1160 0V720M1200 0V720M1240 0V720" fill="none" stroke="#E9EDF2" stroke-width="1"/>
+    <path d="M0 200H1280M0 400H1280M0 600H1280" fill="none" stroke="#DCE3EB" stroke-width="1"/>
+    <path d="M200 0V720M400 0V720M600 0V720M800 0V720M1000 0V720M1200 0V720" fill="none" stroke="#DCE3EB" stroke-width="1"/>
+  </g>
+
+  <g id="ending-chrome">
+    <rect x="0" y="0" width="1280" height="8" fill="#1F4E79"/>
+    <rect x="0" y="8" width="1280" height="4" fill="#E08A2E"/>
+  </g>
+
+  <g id="ending-figure">
+    <circle cx="1058" cy="256" r="78" fill="none" stroke="#1F4E79" stroke-width="3"/>
+    <line x1="1058" y1="256" x2="1114" y2="200" stroke="#1F4E79" stroke-width="2.5"/>
+    <line x1="1058" y1="256" x2="996" y2="212" stroke="#1F4E79" stroke-width="2.5"/>
+    <path d="M1094 220A56 56 0 0 0 1014 224" fill="none" stroke="#E08A2E" stroke-width="3"/>
+    <circle cx="1058" cy="256" r="6" fill="#1F4E79"/>
+    <circle cx="1114" cy="200" r="5" fill="#2E7D5B"/>
+    <circle cx="996" cy="212" r="5" fill="#2E7D5B"/>
+    <text x="1030" y="290" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="20" font-style="italic" fill="#1F4E79">O</text>
+  </g>
+
+  <g id="ending-message">
+    <text x="88" y="252" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="72" font-weight="bold" fill="#1F4E79">{{THANK_YOU}}</text>
+    <path d="M88 284H376" fill="none" stroke="#E08A2E" stroke-width="7" stroke-linecap="round"/>
+    <text x="88" y="336" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="28" fill="#55606E">{{ENDING_SUBTITLE}}</text>
+  </g>
+
+  <g id="ending-next-card">
+    <rect x="88" y="404" width="1104" height="196" rx="14" fill="#1F4E79"/>
+    <rect x="88" y="404" width="6" height="196" rx="3" fill="#E08A2E"/>
+    <text x="128" y="456" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="20" font-weight="bold" fill="#B8C6D6">下节预告</text>
+    <text x="128" y="514" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="28" fill="#FFFFFF">{{CLOSING_MESSAGE}}</text>
+    <line x1="128" y1="546" x2="1152" y2="546" stroke="#3A6B96" stroke-width="1.5"/>
+    <text x="128" y="580" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="18" fill="#B8C6D6">{{CONTACT_INFO}}</text>
+  </g>
+
+  <g id="ending-footer">
+    <text x="88" y="652" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="16" fill="#8B95A3">{{COPYRIGHT}}</text>
+    <text x="1192" y="652" text-anchor="end" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="16" fill="#8B95A3">{{SECTION_NAME}}　{{PAGE_NUM}}</text>
+  </g>
+</svg>

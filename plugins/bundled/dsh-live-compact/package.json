@@ -1,0 +1,53 @@
+{
+  "name": "dsh-live-compact",
+  "version": "1.0.1",
+  "description": "In-place newest-turn compaction for DeepSeek Harness. Compress while the task runs and keep the prefix.",
+  "license": "MIT",
+  "type": "module",
+  "main": "index.js",
+  "bin": {
+    "dsh-live-compact": "./bin/dsh-live-compact.js"
+  },
+  "files": [
+    "index.js",
+    "plan.js",
+    "thunder.js",
+    "bin",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "dsh",
+    "compaction"
+  ],
+  "engines": {
+    "node": "^22.19 || >=24",
+    "dsh": ">=0.2.0-rc.2 <0.3.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-compaction": ">=0.2.0-rc.2 <0.3.0",
+    "@deepseek-ai/dsh-compaction-basic": ">=0.2.0-rc.2 <0.3.0",
+    "@deepseek-ai/dsh-llm": ">=0.2.0-rc.2 <0.3.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-compaction": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-compaction-basic": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-llm": "0.2.0-rc.2"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MerkyorLynn/dsh-live-compact.git"
+  },
+  "homepage": "https://github.com/MerkyorLynn/dsh-live-compact#readme",
+  "bugs": {
+    "url": "https://github.com/MerkyorLynn/dsh-live-compact/issues"
+  }
+}

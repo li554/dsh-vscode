@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <g id="bg-grid">
+    <rect width="1280" height="720" fill="#FCFCF9"/>
+    <path d="M0 40H1280M0 80H1280M0 120H1280M0 160H1280M0 200H1280M0 240H1280M0 280H1280M0 320H1280M0 360H1280M0 400H1280M0 440H1280M0 480H1280M0 520H1280M0 560H1280M0 600H1280M0 640H1280M0 680H1280" fill="none" stroke="#E9EDF2" stroke-width="1"/>
+    <path d="M40 0V720M80 0V720M120 0V720M160 0V720M200 0V720M240 0V720M280 0V720M320 0V720M360 0V720M400 0V720M440 0V720M480 0V720M520 0V720M560 0V720M600 0V720M640 0V720M680 0V720M720 0V720M760 0V720M800 0V720M840 0V720M880 0V720M920 0V720M960 0V720M1000 0V720M1040 0V720M1080 0V720M1120 0V720M1160 0V720M1200 0V720M1240 0V720" fill="none" stroke="#E9EDF2" stroke-width="1"/>
+    <path d="M0 200H1280M0 400H1280M0 600H1280" fill="none" stroke="#DCE3EB" stroke-width="1"/>
+    <path d="M200 0V720M400 0V720M600 0V720M800 0V720M1000 0V720M1200 0V720" fill="none" stroke="#DCE3EB" stroke-width="1"/>
+  </g>
+
+  <g id="page-header">
+    <rect x="0" y="0" width="1280" height="8" fill="#1F4E79"/>
+    <rect x="0" y="8" width="1280" height="4" fill="#E08A2E"/>
+    <text x="88" y="78" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="48" font-weight="bold" fill="#1F2937">{{PAGE_TITLE}}</text>
+    <path d="M88 100H232" fill="none" stroke="#E08A2E" stroke-width="6" stroke-linecap="round"/>
+    <g id="header-anchor">
+      <line x1="1150" y1="46" x2="1150" y2="74" stroke="#8B95A3" stroke-width="1.5"/>
+      <line x1="1134" y1="60" x2="1166" y2="60" stroke="#8B95A3" stroke-width="1.5"/>
+      <circle cx="1150" cy="60" r="5" fill="#1F4E79"/>
+      <text x="1126" y="67" text-anchor="end" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="18" fill="#8B95A3">{{SECTION_NAME}}</text>
+    </g>
+  </g>
+
+  <g id="lead-band">
+    <rect x="88" y="124" width="1104" height="56" rx="10" fill="#EDF2F7"/>
+    <rect x="88" y="124" width="6" height="56" rx="3" fill="#E08A2E"/>
+    <text x="118" y="161" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="24" fill="#1F2937">{{KEY_MESSAGE}}</text>
+  </g>
+
+  <g id="drill-1">
+    <rect x="88" y="200" width="544" height="432" rx="12" fill="#FFFFFF" stroke="#D8E0E8" stroke-width="1.5"/>
+    <rect x="88" y="200" width="544" height="5" rx="2.5" fill="#1F4E79"/>
+    <rect x="112" y="228" width="112" height="36" rx="8" fill="#EDF2F7"/>
+    <text x="168" y="253" text-anchor="middle" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="18" font-weight="bold" fill="#1F4E79">{{DRILL_1_TAG}}</text>
+    <text x="112" y="296" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="20" fill="#1F2937">{{DRILL_1_TEXT}}</text>
+
+    <line x1="110" y1="505" x2="556" y2="505" stroke="#8B95A3" stroke-width="2"/>
+    <text x="564" y="511" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="19" font-style="italic" fill="#8B95A3">N</text>
+    <text x="94" y="511" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="19" font-style="italic" fill="#8B95A3">M</text>
+
+    <line x1="150" y1="590" x2="450" y2="590" stroke="#1F4E79" stroke-width="2.5"/>
+    <polygon points="450,590 434,584 434,596" fill="#1F4E79"/>
+    <line x1="150" y1="590" x2="245.4" y2="437.4" stroke="#1F4E79" stroke-width="2.5"/>
+    <polygon points="245.4,437.4 241.2,453.0 251.5,446.1" fill="#1F4E79"/>
+    <path d="M194 590A44 44 0 0 0 188.5 568.7" fill="none" stroke="#2E7D5B" stroke-width="2.5"/>
+    <path d="M188.5 568.7A44 44 0 0 0 173.3 552.7" fill="none" stroke="#2E7D5B" stroke-width="2.5"/>
+    <circle cx="150" cy="590" r="6" fill="#1F4E79"/>
+    <text x="128" y="612" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="19" font-style="italic" fill="#1F4E79">O</text>
+    <text x="456" y="612" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="19" font-style="italic" fill="#1F4E79">A</text>
+    <text x="236" y="430" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="19" font-style="italic" fill="#1F4E79">B</text>
+  </g>
+
+  <g id="drill-2">
+    <rect x="656" y="200" width="536" height="432" rx="12" fill="#FFFFFF" stroke="#D8E0E8" stroke-width="1.5"/>
+    <rect x="656" y="200" width="536" height="5" rx="2.5" fill="#2E7D5B"/>
+    <rect x="680" y="228" width="112" height="36" rx="8" fill="#EDF7F1"/>
+    <text x="736" y="253" text-anchor="middle" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="18" font-weight="bold" fill="#2E7D5B">{{DRILL_2_TAG}}</text>
+    <text x="680" y="296" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="20" fill="#1F2937">{{DRILL_2_TEXT}}</text>
+
+    <line x1="690" y1="600" x2="1070" y2="600" stroke="#1F4E79" stroke-width="2.5"/>
+    <polygon points="1070,600 1054,594 1054,606" fill="#1F4E79"/>
+    <line x1="690" y1="600" x2="887" y2="446.1" stroke="#1F4E79" stroke-width="2.5"/>
+    <polygon points="887,446.1 882.4,461.6 892.8,454.9" fill="#1F4E79"/>
+    <path d="M730 600A40 40 0 0 0 727.8 587" fill="none" stroke="#2E7D5B" stroke-width="2.5"/>
+    <path d="M727.8 587A40 40 0 0 0 721.5 575.4" fill="none" stroke="#2E7D5B" stroke-width="2.5"/>
+    <line x1="690" y1="600" x2="831.8" y2="551.2" stroke="#E08A2E" stroke-width="2.5" stroke-dasharray="8,5"/>
+
+    <line x1="831.8" y1="551.2" x2="831.8" y2="600" stroke="#E08A2E" stroke-width="2.5"/>
+    <line x1="831.8" y1="551.2" x2="801.8" y2="512.7" stroke="#E08A2E" stroke-width="2.5"/>
+    <path d="M816.8 600L816.8 585L831.8 585" fill="none" stroke="#2E7D5B" stroke-width="2"/>
+    <path d="M789.9 521.9L799.2 533.7L811 524.5" fill="none" stroke="#2E7D5B" stroke-width="2"/>
+
+    <line x1="831.8" y1="600" x2="893.8" y2="600" stroke="#E08A2E" stroke-width="2.5"/>
+    <line x1="801.8" y1="512.7" x2="850.6" y2="474.5" stroke="#E08A2E" stroke-width="2.5"/>
+    <line x1="831.8" y1="551.2" x2="893.8" y2="600" stroke="#2E7D5B" stroke-width="2"/>
+    <line x1="831.8" y1="551.2" x2="850.6" y2="474.5" stroke="#2E7D5B" stroke-width="2"/>
+
+    <circle cx="690" cy="600" r="6" fill="#1F4E79"/>
+    <circle cx="831.8" cy="551.2" r="7" fill="#E08A2E"/>
+    <circle cx="831.8" cy="600" r="5" fill="#E08A2E"/>
+    <circle cx="801.8" cy="512.7" r="5" fill="#E08A2E"/>
+    <circle cx="893.8" cy="600" r="5" fill="#E08A2E"/>
+    <circle cx="850.6" cy="474.5" r="5" fill="#E08A2E"/>
+
+    <text x="668" y="622" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="19" font-style="italic" fill="#1F4E79">O</text>
+    <text x="1076" y="622" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="19" font-style="italic" fill="#1F4E79">A</text>
+    <text x="876" y="438" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="19" font-style="italic" fill="#1F4E79">B</text>
+    <text x="841" y="547" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="19" font-style="italic" fill="#E08A2E">P</text>
+    <text x="840" y="620" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="19" font-style="italic" fill="#E08A2E">D</text>
+    <text x="788" y="508" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="19" font-style="italic" fill="#E08A2E">E</text>
+    <text x="902" y="620" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="19" font-style="italic" fill="#E08A2E">F</text>
+    <text x="858" y="468" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="19" font-style="italic" fill="#E08A2E">G</text>
+  </g>
+
+  <g id="page-footer">
+    <line x1="88" y1="660" x2="1192" y2="660" stroke="#D8E0E8" stroke-width="1"/>
+    <text x="88" y="692" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="16" fill="#8B95A3">{{SECTION_NAME}}</text>
+    <text x="1192" y="692" text-anchor="end" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="16" fill="#8B95A3">{{PAGE_NUM}}</text>
+  </g>
+</svg>

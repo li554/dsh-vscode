@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <g id="bg-grid">
+    <rect width="1280" height="720" fill="#FCFCF9"/>
+    <path d="M0 40H1280M0 80H1280M0 120H1280M0 160H1280M0 200H1280M0 240H1280M0 280H1280M0 320H1280M0 360H1280M0 400H1280M0 440H1280M0 480H1280M0 520H1280M0 560H1280M0 600H1280M0 640H1280M0 680H1280" fill="none" stroke="#E9EDF2" stroke-width="1"/>
+    <path d="M40 0V720M80 0V720M120 0V720M160 0V720M200 0V720M240 0V720M280 0V720M320 0V720M360 0V720M400 0V720M440 0V720M480 0V720M520 0V720M560 0V720M600 0V720M640 0V720M680 0V720M720 0V720M760 0V720M800 0V720M840 0V720M880 0V720M920 0V720M960 0V720M1000 0V720M1040 0V720M1080 0V720M1120 0V720M1160 0V720M1200 0V720M1240 0V720" fill="none" stroke="#E9EDF2" stroke-width="1"/>
+    <path d="M0 200H1280M0 400H1280M0 600H1280" fill="none" stroke="#DCE3EB" stroke-width="1"/>
+    <path d="M200 0V720M400 0V720M600 0V720M800 0V720M1000 0V720M1200 0V720" fill="none" stroke="#DCE3EB" stroke-width="1"/>
+  </g>
+
+  <g id="page-header">
+    <rect x="0" y="0" width="1280" height="8" fill="#1F4E79"/>
+    <rect x="0" y="8" width="1280" height="4" fill="#E08A2E"/>
+    <text x="88" y="78" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="48" font-weight="bold" fill="#1F2937">{{PAGE_TITLE}}</text>
+    <path d="M88 100H232" fill="none" stroke="#E08A2E" stroke-width="6" stroke-linecap="round"/>
+    <g id="header-anchor">
+      <line x1="1150" y1="46" x2="1150" y2="74" stroke="#8B95A3" stroke-width="1.5"/>
+      <line x1="1134" y1="60" x2="1166" y2="60" stroke="#8B95A3" stroke-width="1.5"/>
+      <circle cx="1150" cy="60" r="5" fill="#1F4E79"/>
+      <text x="1126" y="67" text-anchor="end" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="18" fill="#8B95A3">{{SECTION_NAME}}</text>
+    </g>
+  </g>
+
+  <g id="lead-band">
+    <rect x="88" y="124" width="1104" height="58" rx="10" fill="#EDF2F7"/>
+    <rect x="88" y="124" width="6" height="58" rx="3" fill="#E08A2E"/>
+    <text x="118" y="162" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="24" fill="#1F2937">{{KEY_MESSAGE}}</text>
+  </g>
+
+  <g id="explore-figure">
+    <rect x="88" y="202" width="656" height="430" rx="12" fill="#FFFFFF" stroke="#D8E0E8" stroke-width="1.5"/>
+    <rect x="88" y="202" width="656" height="5" rx="2.5" fill="#1F4E79"/>
+    <text x="120" y="244" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="19" font-weight="bold" fill="#8B95A3">度量</text>
+
+    <line x1="180" y1="556" x2="620" y2="556" stroke="#1F4E79" stroke-width="2.5"/>
+    <polygon points="620,556 604,550 604,562" fill="#1F4E79"/>
+    <line x1="180" y1="556" x2="474.4" y2="229" stroke="#1F4E79" stroke-width="2.5"/>
+    <polygon points="474.4,229 458.6,232.4 465.5,242.7" fill="#1F4E79"/>
+    <line x1="180" y1="556" x2="572.8" y2="381.1" stroke="#E08A2E" stroke-width="2.5" stroke-dasharray="8,5"/>
+
+    <path d="M240 556A60 60 0 0 0 234.8 531.6" fill="none" stroke="#2E7D5B" stroke-width="2.5"/>
+    <path d="M234.8 531.6A60 60 0 0 0 220.1 511.4" fill="none" stroke="#2E7D5B" stroke-width="2.5"/>
+
+    <line x1="317" y1="495" x2="317" y2="556" stroke="#E08A2E" stroke-width="2.5"/>
+    <line x1="317" y1="495" x2="271.7" y2="454.2" stroke="#E08A2E" stroke-width="2.5"/>
+    <path d="M302 556L302 541L317 541" fill="none" stroke="#2E7D5B" stroke-width="2"/>
+    <path d="M261.7 465.3L272.8 475.3L282.8 464.2" fill="none" stroke="#2E7D5B" stroke-width="2"/>
+
+    <line x1="422.1" y1="448.2" x2="422.1" y2="556" stroke="#E08A2E" stroke-width="2.5"/>
+    <line x1="422.1" y1="448.2" x2="342" y2="376.1" stroke="#E08A2E" stroke-width="2.5"/>
+    <path d="M407.1 556L407.1 541L422.1 541" fill="none" stroke="#2E7D5B" stroke-width="2"/>
+    <path d="M332 387.2L343.1 397.3L353.1 386.1" fill="none" stroke="#2E7D5B" stroke-width="2"/>
+
+    <circle cx="180" cy="556" r="6" fill="#1F4E79"/>
+    <circle cx="317" cy="495" r="6" fill="#E08A2E"/>
+    <circle cx="317" cy="556" r="5" fill="#E08A2E"/>
+    <circle cx="271.7" cy="454.2" r="5" fill="#E08A2E"/>
+    <circle cx="422.1" cy="448.2" r="6" fill="#E08A2E"/>
+    <circle cx="422.1" cy="556" r="5" fill="#E08A2E"/>
+    <circle cx="342" cy="376.1" r="5" fill="#E08A2E"/>
+
+    <text x="163" y="580" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="20" font-style="italic" fill="#1F4E79">O</text>
+    <text x="626" y="580" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="20" font-style="italic" fill="#1F4E79">A</text>
+    <text x="481" y="222" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="20" font-style="italic" fill="#1F4E79">B</text>
+    <text x="579" y="376" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="20" font-style="italic" fill="#E08A2E">C</text>
+    <text x="325" y="489" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="20" font-style="italic" fill="#E08A2E">P₁</text>
+    <text x="430" y="442" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="20" font-style="italic" fill="#E08A2E">P₂</text>
+    <text x="306" y="580" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="20" font-style="italic" fill="#E08A2E">D₁</text>
+    <text x="255" y="446" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="20" font-style="italic" fill="#E08A2E">E₁</text>
+    <text x="411" y="580" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="20" font-style="italic" fill="#E08A2E">D₂</text>
+    <text x="325" y="368" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="20" font-style="italic" fill="#E08A2E">E₂</text>
+  </g>
+
+  <g id="measure-table">
+    <rect x="776" y="202" width="416" height="248" rx="12" fill="#FFFFFF" stroke="#D8E0E8" stroke-width="1.5"/>
+    <rect x="776" y="202" width="416" height="5" rx="2.5" fill="#2E7D5B"/>
+    <text x="806" y="244" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="19" font-weight="bold" fill="#2E7D5B">量一量，填一填</text>
+
+    <rect x="806" y="266" width="356" height="44" rx="6" fill="#EDF2F7"/>
+    <text x="854" y="295" text-anchor="middle" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="18" fill="#55606E">点到 OA 的距离</text>
+    <text x="1040" y="295" text-anchor="middle" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="18" fill="#55606E">点到 OB 的距离</text>
+
+    <text x="830" y="352" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="20" font-style="italic" fill="#E08A2E">P₁</text>
+    <line x1="866" y1="356" x2="956" y2="356" stroke="#C9D2DC" stroke-width="1.5"/>
+    <line x1="990" y1="356" x2="1120" y2="356" stroke="#C9D2DC" stroke-width="1.5"/>
+
+    <text x="830" y="404" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="20" font-style="italic" fill="#E08A2E">P₂</text>
+    <line x1="866" y1="408" x2="956" y2="408" stroke="#C9D2DC" stroke-width="1.5"/>
+    <line x1="990" y1="408" x2="1120" y2="408" stroke="#C9D2DC" stroke-width="1.5"/>
+
+    <text x="806" y="438" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="16" fill="#8B95A3">拖动点 P，两个长度一起变——它们总相等吗？</text>
+  </g>
+
+  <g id="conjecture-card">
+    <rect x="776" y="458" width="416" height="174" rx="12" fill="#1F4E79"/>
+    <rect x="776" y="458" width="6" height="174" rx="3" fill="#E08A2E"/>
+    <text x="808" y="500" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="19" font-weight="bold" fill="#B8C6D6">猜想</text>
+    <text x="808" y="546" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="22" fill="#FFFFFF">{{EXPLORE_CONJECTURE}}</text>
+    <text x="808" y="610" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="16" fill="#B8C6D6">量出来的相等，还需要证明吗？</text>
+  </g>
+
+  <g id="page-footer">
+    <line x1="88" y1="660" x2="1192" y2="660" stroke="#D8E0E8" stroke-width="1"/>
+    <text x="88" y="692" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="16" fill="#8B95A3">{{SECTION_NAME}}</text>
+    <text x="1192" y="692" text-anchor="end" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="16" fill="#8B95A3">{{PAGE_NUM}}</text>
+  </g>
+</svg>

@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <g id="bg-chapter">
+    <rect width="1280" height="720" fill="#FCFCF9"/>
+    <path d="M0 40H1280M0 80H1280M0 120H1280M0 160H1280M0 200H1280M0 240H1280M0 280H1280M0 320H1280M0 360H1280M0 400H1280M0 440H1280M0 480H1280M0 520H1280M0 560H1280M0 600H1280M0 640H1280M0 680H1280" fill="none" stroke="#E9EDF2" stroke-width="1"/>
+    <path d="M40 0V720M80 0V720M120 0V720M160 0V720M200 0V720M240 0V720M280 0V720M320 0V720M360 0V720M400 0V720M440 0V720M480 0V720M520 0V720M560 0V720M600 0V720M640 0V720M680 0V720M720 0V720M760 0V720M800 0V720M840 0V720M880 0V720M920 0V720M960 0V720M1000 0V720M1040 0V720M1080 0V720M1120 0V720M1160 0V720M1200 0V720M1240 0V720" fill="none" stroke="#E9EDF2" stroke-width="1"/>
+    <rect x="0" y="0" width="1280" height="8" fill="#1F4E79"/>
+    <rect x="0" y="8" width="1280" height="4" fill="#E08A2E"/>
+  </g>
+
+  <g id="chapter-watermark">
+    <text x="1240" y="146" text-anchor="end" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="250" font-weight="bold" fill="#1F4E79" fill-opacity="0.07">{{CHAPTER_NUM}}</text>
+  </g>
+
+  <g id="chapter-figure">
+    <polygon points="880,236 1096,486 748,486" fill="#EDF2F7" stroke="#1F4E79" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M880 284L896 272L908 288" fill="none" stroke="#E08A2E" stroke-width="3"/>
+    <path d="M794 486A38 38 0 0 0 780.9 459.4" fill="none" stroke="#2E7D5B" stroke-width="3"/>
+    <path d="M1050 486A38 38 0 0 1 1063.1 459.4" fill="none" stroke="#2E7D5B" stroke-width="3"/>
+    <circle cx="880" cy="236" r="7" fill="#1F4E79"/>
+    <circle cx="748" cy="486" r="7" fill="#1F4E79"/>
+    <circle cx="1096" cy="486" r="7" fill="#1F4E79"/>
+  </g>
+
+  <g id="chapter-text">
+    <rect x="88" y="286" width="8" height="76" rx="4" fill="#E08A2E"/>
+    <text x="122" y="322" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="22" fill="#8B95A3">第{{CHAPTER_NUM}}章</text>
+    <text x="120" y="380" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="60" font-weight="bold" fill="#1F4E79">{{CHAPTER_TITLE}}</text>
+    <line x1="122" y1="424" x2="600" y2="424" stroke="#D8E0E8" stroke-width="1.5"/>
+    <text x="122" y="480" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="26" fill="#55606E">{{CHAPTER_DESC}}</text>
+  </g>
+
+  <g id="chapter-footer">
+    <text x="88" y="676" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="16" fill="#8B95A3">{{SECTION_NAME}}</text>
+    <text x="1192" y="676" text-anchor="end" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="16" fill="#8B95A3">{{PAGE_NUM}}</text>
+  </g>
+</svg>

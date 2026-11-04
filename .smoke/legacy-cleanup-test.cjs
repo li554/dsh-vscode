@@ -101,14 +101,14 @@ write(path.join(WEB, "package.json"), JSON.stringify({
   dsh: { profile: { bundles: ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app"] } },
   dependencies: {
     "dsh-free-search": "^0.4.17",                                                   // retired plugin
-    "@dsh-vscode/p2h-bridge": "link:" + path.join(ROOT, "plugins", "bundled", "@dsh-vscode", "p2h-bridge"),
+    "dsh-zh-kit": "link:" + path.join(ROOT, "plugins", "bundled", "dsh-zh-kit"),    // self link: (bundled plugin)
     "some-user-plugin": "^1.0.0"                                                    // user's own: KEEP
   }
 }, null, 2) + "\n");
 
 // (e) structural residue
 mkdir(path.join(WEB_MODULES, "@linxin666"));                                            // empty scope dir
-write(path.join(WEB_MODULES, "@dsh-vscode", "p2h-bridge.pnpm-old", "package.json"), "{}\n");
+write(path.join(WEB_MODULES, "@dsh-vscode", "stale-bridge.pnpm-old", "package.json"), "{}\n");
 write(path.join(WEB_MODULES, "@canglongcl", ".ignored_dsh-web-review", "package.json"), "{}\n");
 write(path.join(WEB_MODULES, "dsh-memory-evolve", "package.json"), '{"name":"dsh-memory-evolve"}\n'); // RETIRED plugin: REMOVE
 write(path.join(WEB_MODULES, "user-installed-plugin", "package.json"), '{"name":"user-installed-plugin"}\n'); // real dir, no list mentions it: KEEP
@@ -172,13 +172,13 @@ const isLink = (p) => { try { return fs.lstatSync(p).isSymbolicLink(); } catch {
   check("dangling link (target extension uninstalled) removed", !isLink(path.join(SHARED, "react")));
   check("dangling link (plain target gone) removed", !isLink(path.join(SHARED, "left-pad")));
   check("empty @scope directory removed", !exists(path.join(WEB_MODULES, "@linxin666")));
-  check("*.pnpm-old removed", !exists(path.join(WEB_MODULES, "@dsh-vscode", "p2h-bridge.pnpm-old")));
+  check("*.pnpm-old removed", !exists(path.join(WEB_MODULES, "@dsh-vscode", "stale-bridge.pnpm-old")));
   check(".ignored_* removed", !exists(path.join(WEB_MODULES, "@canglongcl", ".ignored_dsh-web-review")));
   check("cordis.patch.yml.bak-* removed", !exists(path.join(WEB, "cordis.patch.yml.bak-plugin-manager")));
 
   const manifest = JSON.parse(fs.readFileSync(path.join(WEB, "package.json"), "utf8"));
   check("retired profile dependency removed", !("dsh-free-search" in (manifest.dependencies ?? {})));
-  check("self `link:` profile dependency removed", !("@dsh-vscode/p2h-bridge" in (manifest.dependencies ?? {})));
+  check("self `link:` profile dependency removed", !("dsh-zh-kit" in (manifest.dependencies ?? {})));
   check("user's own dependency kept", (manifest.dependencies ?? {})["some-user-plugin"] === "^1.0.0");
 
   console.log("\nstill intact");

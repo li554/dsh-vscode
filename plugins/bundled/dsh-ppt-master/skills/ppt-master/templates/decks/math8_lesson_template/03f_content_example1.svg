@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <g id="p07-bg">
+    <rect x="0" y="0" width="1280" height="720" fill="#FFFFFF" />
+  </g>
+
+  <g id="p07-header">
+    <path fill="#1B4F9C" d="M64,54 H64 A4,4 0 0 1 68,58 V106 A4,4 0 0 1 64,110 H64 A4,4 0 0 1 60,106 V58 A4,4 0 0 1 64,54 Z" />
+    <text x="88" y="110" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="56" font-weight="bold" fill="#1B4F9C">例题精讲 1</text>
+    <g transform="translate(404, 70) scale(1.66667)" fill="none" stroke="#4A90D9" stroke-width="2">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+    </g>
+    <text x="88" y="158" font-family="'Microsoft YaHei', sans-serif" font-size="36" fill="#1F2937">跟着这四步走一遍，<tspan fill="#1B4F9C" font-weight="bold">写成什么样才算对</tspan>，一看就明白。</text>
+  </g>
+
+  <g id="p07-problem">
+    <path fill="#F2F6FC" stroke="#DCE4F0" stroke-width="1" d="M76,176 H1204 A16,16 0 0 1 1220,192 V262 A16,16 0 0 1 1204,278 H76 A16,16 0 0 1 60,262 V192 A16,16 0 0 1 76,176 Z" />
+    <path fill="#1B4F9C" d="M64,176 H64 A4,4 0 0 1 68,180 V274 A4,4 0 0 1 64,278 H64 A4,4 0 0 1 60,274 V180 A4,4 0 0 1 64,176 Z" />
+    <text x="96" y="216" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="24" font-weight="bold" fill="#1B4F9C">题目</text>
+    <text x="180" y="216" font-family="'Microsoft YaHei', sans-serif" font-size="32" fill="#1F2937">{{PROBLEM_TEXT}}</text>
+    <text x="180" y="254" font-family="'Microsoft YaHei', sans-serif" font-size="24" fill="#5B6472">先自己读一遍题，再往下看。</text>
+  </g>
+
+  <g id="p07-step-1">
+    <circle cx="106" cy="322" r="26" fill="#1B4F9C" />
+    <text x="106" y="332" text-anchor="middle" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="24" font-weight="bold" fill="#FFFFFF">1</text>
+    <text x="150" y="332" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="36" font-weight="bold" fill="#1F2937">读题</text>
+    <text x="260" y="332" font-family="'Microsoft YaHei', sans-serif" font-size="32" fill="#1F2937">标出已知条件与所求目标，判断它属于哪个模型。</text>
+  </g>
+
+  <g id="p07-step-2">
+    <circle cx="106" cy="392" r="26" fill="#1B4F9C" />
+    <text x="106" y="402" text-anchor="middle" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="24" font-weight="bold" fill="#FFFFFF">2</text>
+    <text x="150" y="402" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="36" font-weight="bold" fill="#1F2937">分析</text>
+    <text x="260" y="402" font-family="'Microsoft YaHei', sans-serif" font-size="32" fill="#1F2937">要得到结论，还缺哪个量？用{{KEY_FORMULA}}把它补上。</text>
+  </g>
+
+  <g id="p07-step-3">
+    <circle cx="106" cy="462" r="26" fill="#1B4F9C" />
+    <text x="106" y="472" text-anchor="middle" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="24" font-weight="bold" fill="#FFFFFF">3</text>
+    <text x="150" y="472" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="36" font-weight="bold" fill="#1F2937">书写</text>
+    <text x="260" y="472" font-family="'Microsoft YaHei', sans-serif" font-size="32" fill="#1F2937">按“因为 …… 所以 ……”写完整推理，<tspan fill="#F08A24" font-weight="bold">不跳步</tspan>。</text>
+  </g>
+
+  <g id="p07-step-4">
+    <circle cx="106" cy="532" r="26" fill="#F08A24" />
+    <text x="106" y="542" text-anchor="middle" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="24" font-weight="bold" fill="#FFFFFF">4</text>
+    <text x="150" y="542" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="36" font-weight="bold" fill="#1F2937">检验</text>
+    <text x="260" y="542" font-family="'Microsoft YaHei', sans-serif" font-size="32" fill="#1F2937">回代验算，写出答句；检查单位与取值范围。</text>
+  </g>
+
+  <g id="p07-answer">
+    <path fill="#E7EFFA" d="M76,564 H1204 A16,16 0 0 1 1220,580 V608 A16,16 0 0 1 1204,624 H76 A16,16 0 0 1 60,608 V580 A16,16 0 0 1 76,564 Z" />
+    <g transform="translate(88, 578)" fill="none" stroke="#1B4F9C" stroke-width="2">
+      <path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" />
+      <path d="M9 12l2 2l4 -4" />
+    </g>
+    <text x="128" y="598" font-family="'Microsoft YaHei', sans-serif" font-size="24" fill="#1B4F9C">规范解答：{{SOLUTION_STEPS}}　　答：{{ANSWER_TEXT}}</text>
+  </g>
+
+  <g id="p07-footer">
+    <text x="1220" y="636" text-anchor="end" font-family="'Microsoft YaHei', sans-serif" font-size="20" fill="#8A93A3">07</text>
+  </g>
+</svg>

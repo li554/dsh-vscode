@@ -60,7 +60,7 @@ export async function updateNpmInstall({
 function productionRunner() {
   return {
     output(command, args) {
-      const result = spawnSync(command, args, { encoding: "utf8" });
+      const result = spawnSync(command, args, { encoding: "utf8", windowsHide: true });
       if (result.error) {
         throw result.error;
       }

@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <g id="p13-bg">
+    <rect x="0" y="0" width="1280" height="720" fill="#FFFFFF" />
+  </g>
+
+  <g id="p13-header">
+    <path fill="#1B4F9C" d="M64,54 H64 A4,4 0 0 1 68,58 V106 A4,4 0 0 1 64,110 H64 A4,4 0 0 1 60,106 V58 A4,4 0 0 1 64,54 Z" />
+    <text x="88" y="110" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="56" font-weight="bold" fill="#1B4F9C">课堂小结</text>
+    <g transform="translate(340, 70) scale(1.66667)" fill="none" stroke="#4A90D9" stroke-width="2">
+      <path d="M6 4h11a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-11a1 1 0 0 1 -1 -1v-14a1 1 0 0 1 1 -1m3 0v18" />
+      <path d="M13 8l2 0" />
+      <path d="M13 12l2 0" />
+    </g>
+    <text x="88" y="158" font-family="'Microsoft YaHei', sans-serif" font-size="36" fill="#1F2937">这节课的路线：提出问题 → 动手探究 → 写成结论 → 用它解题。</text>
+  </g>
+
+  <g id="p13-card-1">
+    <path fill="#F2F6FC" d="M76,176 H412 A16,16 0 0 1 428,192 V440 A16,16 0 0 1 412,456 H76 A16,16 0 0 1 60,440 V192 A16,16 0 0 1 76,176 Z" />
+    <path d="M 176 176 h 136 a 24 24 0 0 1 24 24 v 24 h -184 v -24 a 24 24 0 0 1 24 -24 Z" fill="#1B4F9C" />
+    <text x="244" y="210" text-anchor="middle" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="24" font-weight="bold" fill="#FFFFFF">知识</text>
+    <path fill="#FFFFFF" d="M100,248 H388 A16,16 0 0 1 404,264 V416 A16,16 0 0 1 388,432 H100 A16,16 0 0 1 84,416 V264 A16,16 0 0 1 100,248 Z" />
+    <text font-size="30" fill="#1F2937" font-family="'Microsoft YaHei', sans-serif" x="112" y="300">本课核心：</text>
+    <text font-size="30" fill="#1F2937" font-family="'Microsoft YaHei', sans-serif" x="112" y="344">{{KEY_KNOWLEDGE}}</text>
+    <text font-size="30" fill="#1F2937" font-family="'Microsoft YaHei', sans-serif" x="112" y="388">的内容与适用条件。</text>
+  </g>
+
+  <g id="p13-card-2">
+    <path fill="#F2F6FC" d="M472,176 H808 A16,16 0 0 1 824,192 V440 A16,16 0 0 1 808,456 H472 A16,16 0 0 1 456,440 V192 A16,16 0 0 1 472,176 Z" />
+    <path d="M 572 176 h 136 a 24 24 0 0 1 24 24 v 24 h -184 v -24 a 24 24 0 0 1 24 -24 Z" fill="#2A62B0" />
+    <text x="640" y="210" text-anchor="middle" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="24" font-weight="bold" fill="#FFFFFF">方法</text>
+    <path fill="#FFFFFF" d="M496,248 H784 A16,16 0 0 1 800,264 V416 A16,16 0 0 1 784,432 H496 A16,16 0 0 1 480,416 V264 A16,16 0 0 1 496,248 Z" />
+    <text font-size="26" fill="#1F2937" font-family="'Microsoft YaHei', sans-serif" x="508" y="300">四步法：</text>
+    <text font-size="26" fill="#1F2937" font-family="'Microsoft YaHei', sans-serif" x="508" y="344">读题找条件 → 对应结论</text>
+    <text font-size="26" fill="#1F2937" font-family="'Microsoft YaHei', sans-serif" x="508" y="388">书写 → 检验作答</text>
+  </g>
+
+  <g id="p13-card-3">
+    <path fill="#FDF1E3" d="M868,176 H1204 A16,16 0 0 1 1220,192 V440 A16,16 0 0 1 1204,456 H868 A16,16 0 0 1 852,440 V192 A16,16 0 0 1 868,176 Z" />
+    <path d="M 968 176 h 136 a 24 24 0 0 1 24 24 v 24 h -184 v -24 a 24 24 0 0 1 24 -24 Z" fill="#F08A24" />
+    <text x="1036" y="210" text-anchor="middle" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="24" font-weight="bold" fill="#FFFFFF">易错</text>
+    <path fill="#FFFFFF" d="M892,248 H1180 A16,16 0 0 1 1196,264 V416 A16,16 0 0 1 1180,432 H892 A16,16 0 0 1 876,416 V264 A16,16 0 0 1 892,248 Z" />
+    <text font-size="30" fill="#1F2937" font-family="'Microsoft YaHei', sans-serif" x="904" y="300">先判断条件，</text>
+    <text font-size="30" fill="#1F2937" font-family="'Microsoft YaHei', sans-serif" x="904" y="344">再计算；两个</text>
+    <text font-size="30" fill="#1F2937" font-family="'Microsoft YaHei', sans-serif" x="904" y="388">公式不要混用。</text>
+  </g>
+
+  <g id="p13-closing-band">
+    <path fill="#1B4F9C" d="M76,478 H1204 A16,16 0 0 1 1220,494 V566 A16,16 0 0 1 1204,582 H76 A16,16 0 0 1 60,566 V494 A16,16 0 0 1 76,478 Z" />
+    <g transform="translate(96, 510) scale(1.66667)" fill="none" stroke="#FFFFFF" stroke-width="2">
+      <path d="M9.615 20h-2.615a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v8" />
+      <path d="M14 19l2 2l4 -4" />
+      <path d="M9 8h4" />
+      <path d="M9 12h2" />
+    </g>
+    <text x="160" y="522" font-family="'Microsoft YaHei', sans-serif" font-size="24" fill="#FFFFFF" fill-opacity="0.8">一句话记住</text>
+    <text x="160" y="562" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="36" font-weight="bold" fill="#FFFFFF">先看条件，再选结论，最后写全步骤。</text>
+  </g>
+
+  <g id="p13-footer">
+    <g transform="translate(60, 596)" fill="none" stroke="#8A93A3" stroke-width="2">
+      <path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0" />
+      <path d="M12 16v.01" />
+      <path d="M12 13a2 2 0 0 0 .914 -3.782a1.98 1.98 0 0 0 -2.414 .483" />
+    </g>
+    <text x="96" y="616" font-family="'Microsoft YaHei', sans-serif" font-size="24" fill="#5B6472">课后作业：{{HOMEWORK}}　·　预习：{{NEXT_SECTION}}</text>
+    <text x="1220" y="616" text-anchor="end" font-family="'Microsoft YaHei', sans-serif" font-size="20" fill="#8A93A3">13</text>
+  </g>
+</svg>

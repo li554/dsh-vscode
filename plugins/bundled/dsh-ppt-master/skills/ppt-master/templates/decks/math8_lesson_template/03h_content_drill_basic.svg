@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <g id="p09-bg">
+    <rect x="0" y="0" width="1280" height="720" fill="#FFFFFF" />
+  </g>
+
+  <g id="p09-header">
+    <path fill="#1B4F9C" d="M64,54 H64 A4,4 0 0 1 68,58 V106 A4,4 0 0 1 64,110 H64 A4,4 0 0 1 60,106 V58 A4,4 0 0 1 64,54 Z" />
+    <text x="88" y="110" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="56" font-weight="bold" fill="#1B4F9C">当堂练习：基础</text>
+    <g transform="translate(508, 70) scale(1.66667)" fill="none" stroke="#4A90D9" stroke-width="2">
+      <path d="M9 5h-2a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-12a2 2 0 0 0 -2 -2h-2" />
+      <path d="M9 5a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2a2 2 0 0 1 -2 2h-2a2 2 0 0 1 -2 -2" />
+      <path d="M9 12l.01 0" />
+      <path d="M13 12l2 0" />
+      <path d="M9 16l.01 0" />
+      <path d="M13 16l2 0" />
+    </g>
+    <text x="88" y="158" font-family="'Microsoft YaHei', sans-serif" font-size="36" fill="#1F2937">这四道题用本课结论<tspan fill="#1B4F9C" font-weight="bold">直接就能做</tspan>，先独立完成。</text>
+  </g>
+
+  <g id="p09-q1">
+    <path fill="#F2F6FC" stroke="#DCE4F0" stroke-width="1" d="M76,176 H1204 A16,16 0 0 1 1220,192 V278 A16,16 0 0 1 1204,294 H76 A16,16 0 0 1 60,278 V192 A16,16 0 0 1 76,176 Z" />
+    <circle cx="112" cy="235" r="26" fill="#1B4F9C" />
+    <text x="112" y="245" text-anchor="middle" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="24" font-weight="bold" fill="#FFFFFF">1</text>
+    <text x="164" y="226" font-family="'Microsoft YaHei', sans-serif" font-size="32" fill="#1F2937">{{DRILL_1}}</text>
+    <text x="164" y="268" font-family="'Microsoft YaHei', sans-serif" font-size="24" fill="#8A93A3">作答：____________________________________________</text>
+  </g>
+
+  <g id="p09-q2">
+    <path fill="#F2F6FC" stroke="#DCE4F0" stroke-width="1" d="M76,288 H1204 A16,16 0 0 1 1220,304 V390 A16,16 0 0 1 1204,406 H76 A16,16 0 0 1 60,390 V304 A16,16 0 0 1 76,288 Z" />
+    <circle cx="112" cy="347" r="26" fill="#1B4F9C" />
+    <text x="112" y="357" text-anchor="middle" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="24" font-weight="bold" fill="#FFFFFF">2</text>
+    <text x="164" y="338" font-family="'Microsoft YaHei', sans-serif" font-size="32" fill="#1F2937">{{DRILL_2}}</text>
+    <text x="164" y="380" font-family="'Microsoft YaHei', sans-serif" font-size="24" fill="#8A93A3">作答：____________________________________________</text>
+  </g>
+
+  <g id="p09-q3">
+    <path fill="#F2F6FC" stroke="#DCE4F0" stroke-width="1" d="M76,400 H1204 A16,16 0 0 1 1220,416 V502 A16,16 0 0 1 1204,518 H76 A16,16 0 0 1 60,502 V416 A16,16 0 0 1 76,400 Z" />
+    <circle cx="112" cy="459" r="26" fill="#1B4F9C" />
+    <text x="112" y="469" text-anchor="middle" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="24" font-weight="bold" fill="#FFFFFF">3</text>
+    <text x="164" y="450" font-family="'Microsoft YaHei', sans-serif" font-size="32" fill="#1F2937">{{DRILL_3}}</text>
+    <text x="164" y="492" font-family="'Microsoft YaHei', sans-serif" font-size="24" fill="#8A93A3">作答：____________________________________________</text>
+  </g>
+
+  <g id="p09-q4">
+    <path fill="#FDF1E3" stroke="#F5D5AE" stroke-width="1" d="M76,512 H1204 A16,16 0 0 1 1220,528 V614 A16,16 0 0 1 1204,630 H76 A16,16 0 0 1 60,614 V528 A16,16 0 0 1 76,512 Z" />
+    <circle cx="112" cy="571" r="26" fill="#F08A24" />
+    <text x="112" y="581" text-anchor="middle" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="24" font-weight="bold" fill="#FFFFFF">4</text>
+    <text x="164" y="562" font-family="'Microsoft YaHei', sans-serif" font-size="32" fill="#1F2937">{{DRILL_4}}</text>
+    <text x="164" y="604" font-family="'Microsoft YaHei', sans-serif" font-size="24" fill="#B4690E">判断：______　理由：__________________________</text>
+  </g>
+
+  <g id="p09-footer">
+    <text x="60" y="640" font-family="'Microsoft YaHei', sans-serif" font-size="20" fill="#8A93A3">做完和同桌交换，检查对方的步骤。</text>
+    <text x="1220" y="640" text-anchor="end" font-family="'Microsoft YaHei', sans-serif" font-size="20" fill="#8A93A3">09</text>
+  </g>
+</svg>

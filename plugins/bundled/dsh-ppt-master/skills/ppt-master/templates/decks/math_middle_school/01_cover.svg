@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <g id="bg-grid">
+    <rect width="1280" height="720" fill="#FCFCF9"/>
+    <path d="M0 40H1280M0 80H1280M0 120H1280M0 160H1280M0 200H1280M0 240H1280M0 280H1280M0 320H1280M0 360H1280M0 400H1280M0 440H1280M0 480H1280M0 520H1280M0 560H1280M0 600H1280M0 640H1280M0 680H1280" fill="none" stroke="#E9EDF2" stroke-width="1"/>
+    <path d="M40 0V720M80 0V720M120 0V720M160 0V720M200 0V720M240 0V720M280 0V720M320 0V720M360 0V720M400 0V720M440 0V720M480 0V720M520 0V720M560 0V720M600 0V720M640 0V720M680 0V720M720 0V720M760 0V720M800 0V720M840 0V720M880 0V720M920 0V720M960 0V720M1000 0V720M1040 0V720M1080 0V720M1120 0V720M1160 0V720M1200 0V720M1240 0V720" fill="none" stroke="#E9EDF2" stroke-width="1"/>
+    <path d="M0 200H1280M0 400H1280M0 600H1280" fill="none" stroke="#DCE3EB" stroke-width="1"/>
+    <path d="M200 0V720M400 0V720M600 0V720M800 0V720M1000 0V720M1200 0V720" fill="none" stroke="#DCE3EB" stroke-width="1"/>
+  </g>
+
+  <g id="cover-art">
+    <rect x="744" y="136" width="472" height="448" rx="18" fill="#FFFFFF" stroke="#D8E0E8" stroke-width="1.5"/>
+    <line x1="804" y1="500" x2="1168" y2="500" stroke="#8B95A3" stroke-width="2"/>
+    <polygon points="1168,500 1152,494 1152,506" fill="#8B95A3"/>
+    <line x1="856" y1="528" x2="856" y2="204" stroke="#8B95A3" stroke-width="2"/>
+    <polygon points="856,204 850,220 862,220" fill="#8B95A3"/>
+    <polygon points="856,500 1120,500 1120,300" fill="#E7EEF5" stroke="#1F4E79" stroke-width="2.5" stroke-linejoin="round"/>
+    <path d="M1104 500L1104 484L1120 484" fill="none" stroke="#E08A2E" stroke-width="2.5"/>
+    <path d="M900 500A44 44 0 0 0 884 466" fill="none" stroke="#2E7D5B" stroke-width="2.5"/>
+    <circle cx="1120" cy="300" r="7" fill="#E08A2E"/>
+    <circle cx="856" cy="500" r="7" fill="#1F4E79"/>
+    <circle cx="1120" cy="500" r="7" fill="#1F4E79"/>
+    <text x="1136" y="292" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="24" font-style="italic" fill="#E08A2E">C</text>
+    <text x="826" y="524" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="24" font-style="italic" fill="#1F4E79">A</text>
+    <text x="1130" y="526" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="24" font-style="italic" fill="#1F4E79">B</text>
+    <text x="896" y="486" font-family="Cambria, Georgia, 'Times New Roman', serif" font-size="20" fill="#2E7D5B">α</text>
+  </g>
+
+  <g id="cover-chapter-chip">
+    <rect x="88" y="112" width="164" height="54" rx="12" fill="#1F4E79"/>
+    <text x="170" y="149" text-anchor="middle" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="26" font-weight="bold" fill="#FFFFFF">{{CHAPTER_NUM}}</text>
+  </g>
+
+  <g id="cover-title">
+    <text x="88" y="288" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="64" font-weight="bold" fill="#1F4E79">{{TITLE}}</text>
+    <path d="M88 320H344" fill="none" stroke="#E08A2E" stroke-width="7" stroke-linecap="round"/>
+    <text x="88" y="384" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="34" fill="#55606E">{{SUBTITLE}}</text>
+    <line x1="88" y1="432" x2="632" y2="432" stroke="#D8E0E8" stroke-width="1.5"/>
+    <text x="88" y="484" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="24" fill="#1F2937">{{AUTHOR}}</text>
+    <text x="88" y="522" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="20" fill="#8B95A3">{{DATE}}</text>
+  </g>
+
+  <g id="cover-footer">
+    <text x="88" y="664" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="18" fill="#8B95A3">义务教育教科书 · 初中数学</text>
+  </g>
+</svg>

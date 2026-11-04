@@ -1,0 +1,14 @@
+# dsh-ppt-master's original patch inserted a profile-level preset declaration:
+#
+#   - id: preset-ppt-master
+#     name: '@deepseek-ai/dsh-agent-preset'
+#     config: { id: ppt-master, ..., plugins: [...] }
+#
+# `@deepseek-ai/dsh-agent-preset` (singular) only exists on dsh >= 0.1.7 — this
+# profile runs 0.1.5, where presets are declared the platform way: a
+# .agent-presets/<id>/{preset.yml,agent.cordis.yml} pair. That conversion lives
+# in plugins/presets/ppt-master/ (shipped by syncBakedPresets), so this bundle
+# patch intentionally inserts nothing — the package is only transplanted into
+# the profile's node_modules so the preset's `name: dsh-ppt-master` row can
+# resolve it.
+[]

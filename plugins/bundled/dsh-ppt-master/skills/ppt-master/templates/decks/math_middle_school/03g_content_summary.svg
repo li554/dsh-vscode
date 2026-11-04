@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <g id="bg-grid">
+    <rect width="1280" height="720" fill="#FCFCF9"/>
+    <path d="M0 40H1280M0 80H1280M0 120H1280M0 160H1280M0 200H1280M0 240H1280M0 280H1280M0 320H1280M0 360H1280M0 400H1280M0 440H1280M0 480H1280M0 520H1280M0 560H1280M0 600H1280M0 640H1280M0 680H1280" fill="none" stroke="#E9EDF2" stroke-width="1"/>
+    <path d="M40 0V720M80 0V720M120 0V720M160 0V720M200 0V720M240 0V720M280 0V720M320 0V720M360 0V720M400 0V720M440 0V720M480 0V720M520 0V720M560 0V720M600 0V720M640 0V720M680 0V720M720 0V720M760 0V720M800 0V720M840 0V720M880 0V720M920 0V720M960 0V720M1000 0V720M1040 0V720M1080 0V720M1120 0V720M1160 0V720M1200 0V720M1240 0V720" fill="none" stroke="#E9EDF2" stroke-width="1"/>
+    <path d="M0 200H1280M0 400H1280M0 600H1280" fill="none" stroke="#DCE3EB" stroke-width="1"/>
+    <path d="M200 0V720M400 0V720M600 0V720M800 0V720M1000 0V720M1200 0V720" fill="none" stroke="#DCE3EB" stroke-width="1"/>
+  </g>
+
+  <g id="page-header">
+    <rect x="0" y="0" width="1280" height="8" fill="#1F4E79"/>
+    <rect x="0" y="8" width="1280" height="4" fill="#E08A2E"/>
+    <text x="88" y="78" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="48" font-weight="bold" fill="#1F2937">{{PAGE_TITLE}}</text>
+    <path d="M88 100H232" fill="none" stroke="#E08A2E" stroke-width="6" stroke-linecap="round"/>
+    <g id="header-anchor">
+      <line x1="1150" y1="46" x2="1150" y2="74" stroke="#8B95A3" stroke-width="1.5"/>
+      <line x1="1134" y1="60" x2="1166" y2="60" stroke="#8B95A3" stroke-width="1.5"/>
+      <circle cx="1150" cy="60" r="5" fill="#1F4E79"/>
+      <text x="1126" y="67" text-anchor="end" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="18" fill="#8B95A3">{{SECTION_NAME}}</text>
+    </g>
+  </g>
+
+  <g id="lead-line">
+    <text x="88" y="152" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="24" fill="#55606E">{{KEY_MESSAGE}}</text>
+  </g>
+
+  <g id="summary-links">
+    <line x1="571" y1="369" x2="462" y2="362" stroke="#C9D2DC" stroke-width="2" stroke-dasharray="6,5"/>
+    <line x1="709" y1="369" x2="818" y2="362" stroke="#C9D2DC" stroke-width="2" stroke-dasharray="6,5"/>
+    <line x1="571" y1="491" x2="462" y2="498" stroke="#C9D2DC" stroke-width="2" stroke-dasharray="6,5"/>
+    <line x1="709" y1="491" x2="818" y2="498" stroke="#C9D2DC" stroke-width="2" stroke-dasharray="6,5"/>
+  </g>
+
+  <g id="summary-hub">
+    <circle cx="640" cy="430" r="96" fill="#1F4E79"/>
+    <circle cx="640" cy="430" r="96" fill="none" stroke="#E08A2E" stroke-width="4"/>
+    <text x="640" y="424" text-anchor="middle" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="24" font-weight="bold" fill="#FFFFFF">{{SUMMARY_HUB}}</text>
+    <text x="640" y="456" text-anchor="middle" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="16" fill="#B8C6D6">{{SUMMARY_HUB_SUB}}</text>
+  </g>
+
+  <g id="summary-branch-1">
+    <rect x="140" y="230" width="320" height="132" rx="12" fill="#FFFFFF" stroke="#D8E0E8" stroke-width="1.5"/>
+    <rect x="140" y="230" width="6" height="132" rx="3" fill="#1F4E79"/>
+    <text x="172" y="276" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="22" font-weight="bold" fill="#1F4E79">{{BRANCH_1_TITLE}}</text>
+    <text x="172" y="316" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="17" fill="#55606E">{{BRANCH_1_DESC}}</text>
+  </g>
+
+  <g id="summary-branch-2">
+    <rect x="820" y="230" width="320" height="132" rx="12" fill="#FFFFFF" stroke="#D8E0E8" stroke-width="1.5"/>
+    <rect x="820" y="230" width="6" height="132" rx="3" fill="#2E7D5B"/>
+    <text x="852" y="276" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="22" font-weight="bold" fill="#2E7D5B">{{BRANCH_2_TITLE}}</text>
+    <text x="852" y="316" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="17" fill="#55606E">{{BRANCH_2_DESC}}</text>
+  </g>
+
+  <g id="summary-branch-3">
+    <rect x="140" y="498" width="320" height="132" rx="12" fill="#FFFFFF" stroke="#D8E0E8" stroke-width="1.5"/>
+    <rect x="140" y="498" width="6" height="132" rx="3" fill="#E08A2E"/>
+    <text x="172" y="544" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="22" font-weight="bold" fill="#E08A2E">{{BRANCH_3_TITLE}}</text>
+    <text x="172" y="584" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="17" fill="#55606E">{{BRANCH_3_DESC}}</text>
+  </g>
+
+  <g id="summary-branch-4">
+    <rect x="820" y="498" width="320" height="132" rx="12" fill="#FFFFFF" stroke="#D8E0E8" stroke-width="1.5"/>
+    <rect x="820" y="498" width="6" height="132" rx="3" fill="#1F4E79"/>
+    <text x="852" y="544" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="22" font-weight="bold" fill="#1F4E79">{{BRANCH_4_TITLE}}</text>
+    <text x="852" y="584" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="17" fill="#55606E">{{BRANCH_4_DESC}}</text>
+  </g>
+
+  <g id="page-footer">
+    <line x1="88" y1="660" x2="1192" y2="660" stroke="#D8E0E8" stroke-width="1"/>
+    <text x="88" y="692" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="16" fill="#8B95A3">{{SECTION_NAME}}</text>
+    <text x="1192" y="692" text-anchor="end" font-family="'Microsoft YaHei', 'PingFang SC', Arial, sans-serif" font-size="16" fill="#8B95A3">{{PAGE_NUM}}</text>
+  </g>
+</svg>

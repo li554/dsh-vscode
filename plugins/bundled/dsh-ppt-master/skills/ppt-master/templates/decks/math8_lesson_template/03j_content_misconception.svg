@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <g id="p11-bg">
+    <rect x="0" y="0" width="1280" height="720" fill="#FFFFFF" />
+  </g>
+
+  <g id="p11-header">
+    <path fill="#1B4F9C" d="M64,54 H64 A4,4 0 0 1 68,58 V106 A4,4 0 0 1 64,110 H64 A4,4 0 0 1 60,106 V58 A4,4 0 0 1 64,54 Z" />
+    <text x="88" y="110" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="56" font-weight="bold" fill="#1B4F9C">易错辨析</text>
+    <g transform="translate(340, 70) scale(1.66667)" fill="none" stroke="#F08A24" stroke-width="2">
+      <path d="M12 9v4" />
+      <path d="M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0" />
+      <path d="M12 16h.01" />
+    </g>
+    <text x="88" y="158" font-family="'Microsoft YaHei', sans-serif" font-size="36" fill="#1F2937">把最容易踩的坑摆出来，看清楚<tspan fill="#1B4F9C" font-weight="bold">错在哪一步</tspan>。</text>
+  </g>
+
+  <g id="p11-col-head">
+    <path fill="#C62828" fill-opacity="0.08" d="M76,176 H606 A16,16 0 0 1 622,192 V212 A16,16 0 0 1 606,228 H76 A16,16 0 0 1 60,212 V192 A16,16 0 0 1 76,176 Z" />
+    <g transform="translate(88, 190)" fill="none" stroke="#C62828" stroke-width="2">
+      <path d="M18 6l-12 12" />
+      <path d="M6 6l12 12" />
+    </g>
+    <text x="128" y="212" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="24" font-weight="bold" fill="#C62828">典型错解</text>
+    <path fill="#2E7D32" fill-opacity="0.08" d="M674,176 H1204 A16,16 0 0 1 1220,192 V212 A16,16 0 0 1 1204,228 H674 A16,16 0 0 1 658,212 V192 A16,16 0 0 1 674,176 Z" />
+    <g transform="translate(686, 190)" fill="none" stroke="#2E7D32" stroke-width="2">
+      <path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" />
+      <path d="M9 12l2 2l4 -4" />
+    </g>
+    <text x="726" y="212" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="24" font-weight="bold" fill="#2E7D32">正确解法</text>
+  </g>
+
+  <g id="p11-divider">
+    <line x1="640" y1="252" x2="640" y2="556" stroke="#DCE4F0" stroke-width="2" stroke-dasharray="6,6" />
+  </g>
+
+  <g id="p11-wrong-1">
+    <line x1="60" y1="272" x2="60" y2="356" stroke="#C62828" stroke-width="6" stroke-linecap="round" />
+    <text x="92" y="302" font-family="'Microsoft YaHei', sans-serif" font-size="32" fill="#1F2937">{{WRONG_1}}</text>
+    <text x="92" y="344" font-family="'Microsoft YaHei', sans-serif" font-size="24" fill="#C62828">错因：漏条件 / 符号写错 / 跳步。</text>
+  </g>
+
+  <g id="p11-wrong-2">
+    <line x1="60" y1="396" x2="60" y2="480" stroke="#C62828" stroke-width="6" stroke-linecap="round" />
+    <text x="92" y="426" font-family="'Microsoft YaHei', sans-serif" font-size="32" fill="#1F2937">{{WRONG_2}}</text>
+    <text x="92" y="468" font-family="'Microsoft YaHei', sans-serif" font-size="24" fill="#C62828">错因：混淆了两个公式的适用范围。</text>
+  </g>
+
+  <g id="p11-right-1">
+    <line x1="1220" y1="272" x2="1220" y2="356" stroke="#2E7D32" stroke-width="6" stroke-linecap="round" />
+    <text x="658" y="302" font-family="'Microsoft YaHei', sans-serif" font-size="32" fill="#1F2937">{{RIGHT_1}}</text>
+    <text x="658" y="344" font-family="'Microsoft YaHei', sans-serif" font-size="24" fill="#2E7D32">关键：先写条件，再写结论。</text>
+  </g>
+
+  <g id="p11-right-2">
+    <line x1="1220" y1="396" x2="1220" y2="480" stroke="#2E7D32" stroke-width="6" stroke-linecap="round" />
+    <text x="658" y="426" font-family="'Microsoft YaHei', sans-serif" font-size="32" fill="#1F2937">{{RIGHT_2}}</text>
+    <text x="658" y="468" font-family="'Microsoft YaHei', sans-serif" font-size="24" fill="#2E7D32">关键：分清两个公式各自的使用场景。</text>
+  </g>
+
+  <g id="p11-reminder">
+    <line x1="60" y1="520" x2="1220" y2="520" stroke="#EAF0F8" stroke-width="3" />
+    <g transform="translate(60, 552) scale(1.33333)" fill="none" stroke="#F08A24" stroke-width="2">
+      <path d="M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0" />
+      <path d="M7 10l6 0" />
+      <path d="M10 7l0 6" />
+      <path d="M21 21l-6 -6" />
+    </g>
+    <text x="108" y="580" font-family="SimHei, 'Microsoft YaHei', sans-serif" font-size="36" font-weight="bold" fill="#1B4F9C">先判断条件，再动笔计算。</text>
+    <text x="1220" y="580" text-anchor="end" font-family="'Microsoft YaHei', sans-serif" font-size="20" fill="#8A93A3">11</text>
+  </g>
+</svg>
