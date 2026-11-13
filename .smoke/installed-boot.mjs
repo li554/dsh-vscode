@@ -26,6 +26,28 @@ const vsixArg = argv.find((a) => a.startsWith("--vsix="));
 const VSIX = vsixArg ? path.resolve(vsixArg.slice("--vsix=".length)) : path.join(PROJ, "dsh-vscode.vsix");
 const KEEP = argv.includes("--keep");
 const UNPACK = path.join(SMOKE, "installed");
+// The extension hosts DSH on VS Code's own binary as Node, so the packaged tree
+// must be boot-tested on THAT runtime too: Electron reports a different
+// process.versions and some native probes (node-addon-require-builtin's
+// fingerprint) refuse it. `--electron` reproduces the real deployment.
+const runtimeArg = argv.find((a) => a.startsWith("--runtime="));
+const WANT_ELECTRON = argv.includes("--electron");
+function findVsCodeExe() {
+  const candidates = [
+    process.env.DSH_VSCODE_EXE,
+    path.join(process.env.LOCALAPPDATA ?? "", "Programs", "Microsoft VS Code", "Code.exe"),
+    path.join(process.env.PROGRAMFILES ?? "", "Microsoft VS Code", "Code.exe")
+  ].filter(Boolean);
+  return candidates.find((candidate) => fs.existsSync(candidate)) ?? "";
+}
+const RUNTIME = runtimeArg
+  ? path.resolve(runtimeArg.slice("--runtime=".length))
+  : (WANT_ELECTRON ? findVsCodeExe() : process.execPath);
+const RUNTIME_IS_ELECTRON = /code|electron/i.test(path.basename(RUNTIME)) || WANT_ELECTRON;
+if (WANT_ELECTRON && !RUNTIME) {
+  console.log("cannot find VS Code's Code.exe; pass --runtime=<path> or set DSH_VSCODE_EXE");
+  process.exit(2);
+}
 
 if (!fs.existsSync(VSIX)) {
   console.log("missing vsix: " + VSIX + " (run `python .smoke/pack.py` first)");
@@ -60,6 +82,7 @@ if (!fs.existsSync(BIN)) {
 }
 const runtimeVersion = JSON.parse(fs.readFileSync(DSH_PKG, "utf8")).version;
 console.log(`packaged extension ${pkg.version}, dsh ${runtimeVersion}`);
+console.log(`host runtime: ${RUNTIME}${RUNTIME_IS_ELECTRON ? " (Electron-as-Node: the real VS Code deployment)" : " (plain node)"}`);
 
 // Pruned-on-purpose packages must be absent from the archive, or pack.py drifted.
 for (const pruned of ["@deepseek-ai/libreoffice-kit-wasm", "@img/sharp-wasm32"]) {
@@ -116,8 +139,10 @@ for (const name of entries) {
 }
 fs.writeFileSync(path.join(PROFILE, "compatibility.json"), JSON.stringify(exemptions, null, 2) + "\n");
 
-const child = spawn(process.execPath, ["--expose-internals", BIN, "--profile", "web", "--port", "0", "--no-open"], {
-  cwd: HOME, env: { ...process.env, DSH_HOME: HOME }, stdio: ["ignore", "pipe", "pipe"]
+const child = spawn(RUNTIME, ["--expose-internals", BIN, "--profile", "web", "--port", "0", "--no-open"], {
+  cwd: HOME,
+  env: { ...process.env, DSH_HOME: HOME, ...(RUNTIME_IS_ELECTRON ? { ELECTRON_RUN_AS_NODE: "1" } : {}) },
+  stdio: ["ignore", "pipe", "pipe"]
 });
 let out = "", err = "";
 child.stdout.on("data", (d) => { out += d.toString(); });

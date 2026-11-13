@@ -33,6 +33,9 @@ vendor/node_modules/.bin/
 /.review-debug/
 /fix-dsh-ripgrep.ps1
 
+# headless-browser profile used by .smoke/ui-boot-test.mjs
+.smoke/.ui-edge-profile/
+
 # Python bytecode from the smoke/pack scripts (regenerated on every run)
 __pycache__/
 *.pyc

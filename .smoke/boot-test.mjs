@@ -47,6 +47,36 @@ const argv = process.argv.slice(2);
 const onlyArg = argv.find((a) => a.startsWith("--only="));
 const ONLY = onlyArg ? new Set(onlyArg.slice("--only=".length).split(",").map((s) => s.trim()).filter(Boolean)) : null;
 const KEEP_HOME = argv.includes("--keep-home");
+/**
+ * Runtime the host is spawned with. The extension uses VS Code's own binary as
+ * the Node runtime (`ELECTRON_RUN_AS_NODE=1`, no system Node required), and that
+ * is a DIFFERENT runtime from `node`: it reports `process.versions.electron` and
+ * its V8 build differs. Code paths that probe the embedder (the
+ * node-addon-require-builtin fingerprint, for instance) behave differently
+ * there, so a host that boots under node can still fail inside VS Code. This
+ * flag reproduces the embedded deployment:
+ *
+ *   node .smoke/boot-test.mjs --electron            # auto-detect VS Code's Code.exe
+ *   node .smoke/boot-test.mjs --runtime=<exe path>  # any Electron/Node binary
+ */
+const runtimeArg = argv.find((a) => a.startsWith("--runtime="));
+const WANT_ELECTRON = argv.includes("--electron");
+function findVsCodeExe() {
+  const candidates = [
+    process.env.DSH_VSCODE_EXE,
+    path.join(process.env.LOCALAPPDATA ?? "", "Programs", "Microsoft VS Code", "Code.exe"),
+    path.join(process.env.PROGRAMFILES ?? "", "Microsoft VS Code", "Code.exe")
+  ].filter(Boolean);
+  return candidates.find((candidate) => fs.existsSync(candidate)) ?? "";
+}
+const RUNTIME = runtimeArg
+  ? path.resolve(runtimeArg.slice("--runtime=".length))
+  : (WANT_ELECTRON ? findVsCodeExe() : process.execPath);
+const RUNTIME_IS_ELECTRON = /code|electron/i.test(path.basename(RUNTIME)) || WANT_ELECTRON;
+if (WANT_ELECTRON && !RUNTIME) {
+  console.log("cannot find VS Code's Code.exe; pass --runtime=<path> or set DSH_VSCODE_EXE");
+  process.exit(2);
+}
 
 function readBundledPlugins() {
   const src = fs.readFileSync(path.join(PROJ, "src", "extension.js"), "utf8");
@@ -82,6 +112,7 @@ function packageManifest(name) {
 let entries = readBundledPlugins();
 if (ONLY) entries = entries.filter((name) => ONLY.has(name));
 console.log(`dsh runtime: ${runtimeVersion} (${BIN})`);
+console.log(`host runtime: ${RUNTIME}${RUNTIME_IS_ELECTRON ? " (Electron-as-Node: the real VS Code deployment)" : " (plain node)"}`);
 console.log("baked plugin entries (" + entries.length + "): " + entries.join(", "));
 
 /** True when the entry declares a web client half, i.e. is expected to be
@@ -156,9 +187,11 @@ fs.writeFileSync(overlay, [
   "    - id: ui-directory-picker-browse",
   "      name: '@deepseek-ai/dsh-client-ui-directory-picker-browse'"
 ].join("\n") + "\n");
-const child = spawn(process.execPath, ["--expose-internals", BIN, "--profile", "web", "--patch", overlay, "--port", "0", "--no-open"], {
+const child = spawn(RUNTIME, ["--expose-internals", BIN, "--profile", "web", "--patch", overlay, "--port", "0", "--no-open"], {
   cwd: PROJ,
-  env: { ...process.env, DSH_HOME: HOME },
+  // ELECTRON_RUN_AS_NODE is what the extension sets so VS Code's binary behaves
+  // as the Node runtime; harmless for a plain node.exe.
+  env: { ...process.env, DSH_HOME: HOME, ...(RUNTIME_IS_ELECTRON ? { ELECTRON_RUN_AS_NODE: "1" } : {}) },
   stdio: ["ignore", "pipe", "pipe"]
 });
 let out = "", err = "";

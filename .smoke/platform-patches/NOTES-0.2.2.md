@@ -58,6 +58,20 @@ capability is caught the same way the other patches are.
 
 ---
 
+## 1b. Added after the first install attempt: the host could not start inside VS Code
+
+| # | Store file (manifest `storedAs`) | Disposition | Old anchor (0.2.2 pristine) | New anchor (patched store) | Evidence | Guard test |
+|---|---|---|---|---|---|---|
+| 10 | `dsh-app-boot/lib/index.js` + `dsh-app-boot/lib/worker/profile-resolution-bootstrap.js` | **NEW-PATCH (0.4.1)** | `internalModules()` calls `createRequire(import.meta.url)("node-addon-require-builtin").requireBuiltin(...)` for all five internals | same function now goes through a local `requireInternalModule(id)`: `--expose-internals` native require first, builtin addon as fallback, and a combined error when both fail | The host could not boot in the shipped extension at all: `dsh: host preparation failed: node-addon-require-builtin unsupported: Unsupported/no-context (unsupported Electron runtime fingerprint: Node 24.22.1, V8 15.0.245.31-electron.0 (supported Electron versions: 43.0.0, 44.0.0, 44.7.0, 45.0.0-alpha.6))`. The extension hosts DSH on VS Code's own binary (`ELECTRON_RUN_AS_NODE=1`), i.e. Electron 43.8.3 on VS Code 1.144.1, which is not on the addon's exact allowlist, and inside that runtime the addon also reports `has_v8_context: false`. Nothing is broken about the modules themselves: the same platform code reaches them natively under `--expose-internals` (which the extension always passes), and `require('internal/modules/esm/{loader,utils,resolve}')`, `cjs/loader` and `helpers` expose exactly the interfaces the addon returned (`resolveSync`, `getOrCreateModuleJob`, `Module._resolveFilename`, `getCjsConditions`, `getDefaultConditions`, `defaultResolve`). This mirrors what `cordis-plugin-loader`/`dsh-hmr` already do — app-boot was the only hardcoded addon consumer. | `.smoke/boot-test.mjs --electron` (full 14/14 on Code.exe), `.smoke/ui-boot-test.mjs` (real browser, 0 console errors), `.smoke/installed-boot.mjs --electron` (packaged vsix) |
+
+Re-apply after a vendor rebuild: `python .smoke/patch-app-boot-internals.py apply`, then
+`python .smoke/platform-patches.py verify` and `python .smoke/store-app-boot-patch.py` to refresh the store bytes.
+
+Why the existing harness missed it: every host test spawned `process.execPath` (node.exe). VS Code spawns
+its own binary with `ELECTRON_RUN_AS_NODE=1`, so `process.versions.electron` is set and the addon's
+fingerprint path runs. `boot-test.mjs --electron`, `installed-boot.mjs --electron` and `ui-boot-test.mjs`
+now cover that runtime; keep at least one of them in the release checklist.
+
 ## 2. Verify output
 
 ```
