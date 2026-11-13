@@ -34,9 +34,8 @@ window.__ModuleLoader__.load({
 		var zh = {
 			"nav.documents": "档案",
 			"documents.title": "项目档案",
-			"documents.description": "在当前工作区维护结构化的项目文档。活跃档案参与近场检索；达到 10 MB 上限前，最久未使用的档案会先在 Mnemon 中建立索引，再迁入归档。",
+			"documents.description": "当前工作区的项目文档：先检索，再按需阅读全文；接近容量上限时，最久未用的档案会归档。",
 			"documents.capacity": "{used} / {limit}",
-			"documents.refresh": "刷新",
 			"documents.summary": "档案存储摘要",
 			"documents.active": "活跃档案",
 			"documents.activeHint": "近场检索范围",
@@ -66,6 +65,7 @@ window.__ModuleLoader__.load({
 			"documents.updated": "已保存新的档案修订。",
 			"documents.updatedAfterArchive": "已先迁移 {count} 份旧档案，再保存修订。",
 			"documents.archived": "已建立 Mnemon 冷索引并归档；关联记忆空间：{spaces}",
+			"documents.archivedLocally": "已归档到本地：原文移入归档目录，没有建立 Mnemon 冷索引。",
 			"documents.list": "项目档案列表",
 			"documents.activeList": "活跃目录",
 			"documents.archiveList": "归档目录",
@@ -80,25 +80,31 @@ window.__ModuleLoader__.load({
 			"documents.selectText": "在左侧查看活跃项目知识或沿 Mnemon 引用打开归档原文。",
 			"documents.coldArchive": "归档原文",
 			"documents.edit": "编辑",
+			"documents.delete": "删除",
+			"documents.deleteConfirm": "永久删除这份档案？",
+			"documents.deleteDescription": "将永久移除档案记录和托管副本，无法撤销。不会建立记忆空间冷索引，也不会修改已有记忆空间条目或项目源文件。",
+			"documents.deleteNow": "永久删除",
+			"documents.deleting": "删除中…",
+			"documents.deleted": "档案已永久删除。",
 			"documents.path": "托管路径",
 			"documents.revision": "修订",
 			"documents.hash": "内容哈希",
 			"documents.size": "文件大小",
 			"documents.archiveReceipt": "Mnemon 冷索引回执",
+			"documents.archiveNote": "归档说明",
 			"documents.archiveTitle": "迁入归档",
-			"documents.archiveDescription": "独立任务 Agent 先拟定摘要和目标空间；Host 校验后写入冷索引，再移动原文。需要已启用且支持精确写入与删除的记忆空间。",
+			"documents.archiveDescription": "独立任务 Agent 先拟定摘要和目标空间；Host 校验后写入冷索引，再移动原文。没有已启用且支持精确写入与删除的记忆空间时，原文直接移入本地归档，不建立索引。",
 			"documents.archive": "归档",
-			"documents.archiveConfirm": "确认建立 Mnemon 索引并迁移这份档案？",
-			"documents.archiving": "索引并迁移中…",
+			"documents.archiveConfirm": "确认归档这份档案？",
+			"documents.archiving": "归档中…",
 			"documents.archiveNow": "确认归档",
 			"documents.footnote": "`.mnemon/documents/index.json` 是控制面事实源；active 总量固定不超过 10 MB，archived 不计入上限，项目源文件不会被修改。"
 		};
 		var en = {
 			"nav.documents": "Documents",
 			"documents.title": "Project Documents",
-			"documents.description": "Maintain structured project documents in the current workspace. Active documents support near-field search; before the 10 MB limit is exceeded, the least-recently-used document is indexed in Mnemon and moved to the archive.",
+			"documents.description": "Project documents for this workspace: searched first, read in full when needed; near the limit the least-used ones are archived.",
 			"documents.capacity": "{used} / {limit}",
-			"documents.refresh": "Refresh",
 			"documents.summary": "Document storage summary",
 			"documents.active": "Active",
 			"documents.activeHint": "Near-field search scope",
@@ -128,6 +134,7 @@ window.__ModuleLoader__.load({
 			"documents.updated": "New document revision saved.",
 			"documents.updatedAfterArchive": "Archived {count} older document(s), then saved the revision.",
 			"documents.archived": "Mnemon cold index created and document archived; Memory Spaces: {spaces}",
+			"documents.archivedLocally": "Archived locally: the original moved to the archive, without a Mnemon cold index.",
 			"documents.list": "Project document list",
 			"documents.activeList": "Active directory",
 			"documents.archiveList": "Archive directory",
@@ -142,22 +149,29 @@ window.__ModuleLoader__.load({
 			"documents.selectText": "Read active project knowledge or follow a Mnemon reference to an archived original.",
 			"documents.coldArchive": "Archived original",
 			"documents.edit": "Edit",
+			"documents.delete": "Delete",
+			"documents.deleteConfirm": "Permanently delete this document?",
+			"documents.deleteDescription": "This permanently removes the document record and managed copy and cannot be undone. No Memory Space index is created. Existing Memory Space entries and original project files remain unchanged.",
+			"documents.deleteNow": "Delete permanently",
+			"documents.deleting": "Deleting…",
+			"documents.deleted": "Document permanently deleted.",
 			"documents.path": "Managed path",
 			"documents.revision": "Revision",
 			"documents.hash": "Content hash",
 			"documents.size": "File size",
 			"documents.archiveReceipt": "Mnemon cold-index receipt",
+			"documents.archiveNote": "Archive note",
 			"documents.archiveTitle": "Move to archive",
-			"documents.archiveDescription": "An independent task Agent proposes a summary and destination. The Host validates and writes the cold index before moving the original. An active Memory Space with exact writes and safe deletion is required.",
+			"documents.archiveDescription": "An independent task Agent proposes a summary and destination. The Host validates and writes the cold index before moving the original. Without an active Memory Space that has exact writes and safe deletion, the original moves to the local archive without an index.",
 			"documents.archive": "Archive",
-			"documents.archiveConfirm": "Create the Mnemon index and archive this document?",
-			"documents.archiving": "Indexing and moving…",
+			"documents.archiveConfirm": "Archive this document?",
+			"documents.archiving": "Archiving…",
 			"documents.archiveNow": "Confirm archive",
 			"documents.footnote": "`.mnemon/documents/index.json` is the control-plane source of truth. active stays at or below 10 MB, archived is excluded, and project source files are never modified."
 		};
 		//#endregion
 		//#region \0source-css:/home/runner/work/dsh-mnemon/dsh-mnemon/plugins/dsh-mnemon-source-documents/presentation/page.module.css.mjs
-		const css$2 = ".IIa07q_documentSummary{grid-template-columns:.7fr .7fr 1.6fr;gap:9px;margin-bottom:12px;display:grid}.IIa07q_documentSummary article{border:1px solid var(--mn-line);background:var(--mn-layer-1);border-radius:11px;min-width:0;min-height:91px;padding:13px 14px}.IIa07q_documentSummary article>span{color:var(--mn-faint);font-size:9px;display:block}.IIa07q_documentSummary article>strong{font:650 21px/1 var(--mn-code);margin:7px 0 4px;display:block}.IIa07q_documentSummary article>small{color:var(--mn-muted);font-size:9px}.IIa07q_documentCapacity>div{background:var(--mn-layer-2);border-radius:999px;height:4px;margin:7px 0 6px;overflow:hidden}.IIa07q_documentCapacity>div i{border-radius:inherit;background:var(--mn-accent);height:100%;transition:width .3s;display:block}.IIa07q_documentToolbar{border:1px solid var(--mn-line);background:var(--mn-layer-1);border-radius:11px;align-items:center;gap:9px;margin-bottom:12px;padding:9px;display:flex}.IIa07q_documentToolbar form{flex:1;grid-template-columns:20px minmax(0,1fr) auto;align-items:center;gap:5px;min-width:260px;padding-left:8px;display:grid}.IIa07q_documentToolbar form>span{color:var(--mn-faint);font:15px var(--mn-code)}.IIa07q_documentToolbar input,.IIa07q_documentEditor input,.IIa07q_documentEditor textarea{border:1px solid var(--mn-line);background:var(--mn-input);border-radius:8px;outline:0;width:100%;padding:8px 10px}.IIa07q_documentToolbar input{background:0 0;border-color:#0000;height:34px}.IIa07q_documentToolbar input:focus,.IIa07q_documentEditor input:focus,.IIa07q_documentEditor textarea:focus{border-color:var(--mn-accent)}.IIa07q_documentToolbar>div{border:1px solid var(--mn-line);background:var(--mn-layer-2);border-radius:8px;align-items:center;gap:3px;padding:3px;display:flex}.IIa07q_documentToolbar>div button{min-height:32px;color:var(--mn-muted);cursor:pointer;background:0 0;border:0;border-radius:6px;padding:0 10px;font-size:10.5px}.IIa07q_documentToolbar>div button[data-active]{color:var(--mn-text);background:var(--mn-layer-1);box-shadow:0 1px 3px color-mix(in srgb, var(--mn-text) 8%, transparent)}.IIa07q_documentToolbar>div b{color:var(--mn-faint);font:600 9px var(--mn-code);margin-left:4px}.IIa07q_documentWorkspace{grid-template-columns:minmax(250px,310px) minmax(0,1fr);gap:10px;min-height:590px;display:grid}.IIa07q_documentList,.IIa07q_documentReader{border:1px solid var(--mn-line);background:var(--mn-layer-1);border-radius:11px;min-width:0;overflow:hidden}.IIa07q_documentList{align-self:stretch}.IIa07q_documentList>header{border-bottom:1px solid var(--mn-line);min-height:42px;color:var(--mn-faint);justify-content:space-between;align-items:center;padding:0 12px;font-size:9px;display:flex}.IIa07q_documentList>header code{color:var(--mn-accent)}.IIa07q_documentList>button{--mn-provider-color:var(--mn-faint);border:1px solid var(--mn-line);width:calc(100% - 16px);color:var(--mn-text);background:linear-gradient(90deg, color-mix(in srgb, var(--mn-provider-color) 5%, var(--mn-layer-1)), var(--mn-layer-1) 34%);box-shadow:inset 3px 0 0 color-mix(in srgb, var(--mn-provider-color) 55%, transparent);text-align:left;cursor:pointer;border-radius:8px;margin:8px 8px 0;padding:11px 11px 10px 14px;transition:border-color .15s,background-color .15s,box-shadow .15s;display:block}.IIa07q_documentList>button:hover{--mn-provider-color:var(--mn-accent);border-color:color-mix(in srgb, var(--mn-accent) 28%, var(--mn-line))}.IIa07q_documentList>button[data-selected]{--mn-provider-color:var(--mn-accent);border-color:color-mix(in srgb, var(--mn-accent) 38%, var(--mn-line));background:linear-gradient(90deg, color-mix(in srgb, var(--mn-accent) 7%, var(--mn-layer-1)), var(--mn-layer-1) 38%);box-shadow:inset 3px 0 0 color-mix(in srgb, var(--mn-accent) 78%, transparent), inset 0 0 0 1px color-mix(in srgb, var(--mn-accent) 8%, transparent)}.IIa07q_documentList>button>div{justify-content:space-between;align-items:baseline;gap:12px;display:flex}.IIa07q_documentList>button strong{text-overflow:ellipsis;white-space:nowrap;font-size:12px;overflow:hidden}.IIa07q_documentList>button time{color:var(--mn-faint);font:8px var(--mn-code);flex:none}.IIa07q_documentList>button p{min-height:30px;color:var(--mn-muted);-webkit-line-clamp:2;-webkit-box-orient:vertical;margin:6px 0 9px;font-size:10px;line-height:1.5;display:-webkit-box;overflow:hidden}.IIa07q_documentList>button footer{color:var(--mn-faint);align-items:center;gap:8px;font-size:9px;display:flex}.IIa07q_documentList>button footer code{margin-left:auto}.IIa07q_documentList>button footer em{color:var(--mn-danger);font-style:normal}.IIa07q_documentListEmpty{min-height:230px;color:var(--mn-muted);text-align:center;align-content:center;place-items:center;gap:4px;padding:22px;display:grid}.IIa07q_documentListEmpty>span{color:var(--mn-accent);font:28px var(--mn-code);opacity:.6;margin-bottom:6px}.IIa07q_documentListEmpty p{color:var(--mn-faint);margin:0;font-size:10px}.IIa07q_documentReader{padding:clamp(16px,2vw,22px)}.IIa07q_documentReader>.IIa07q_emptyState{background:0 0;border:0;height:100%}.IIa07q_documentDetail>header{border-bottom:1px solid var(--mn-line);justify-content:space-between;align-items:flex-start;gap:18px;padding-bottom:15px;display:flex}.IIa07q_documentDetail>header span{color:var(--mn-accent);font:650 9px var(--mn-code);letter-spacing:.08em;text-transform:uppercase}.IIa07q_documentDetail>header h3{margin:5px 0 3px;font-size:18px}.IIa07q_documentDetail>header p{color:var(--mn-muted);margin:0;font-size:11px}.IIa07q_documentDetail>dl{border-top:1px solid var(--mn-line);border-left:1px solid var(--mn-line);grid-template-columns:2fr .45fr .8fr .55fr;margin:13px 0;display:grid}.IIa07q_documentDetail>dl>div{border-right:1px solid var(--mn-line);border-bottom:1px solid var(--mn-line);min-width:0;padding:8px 9px}.IIa07q_documentDetail dt{color:var(--mn-faint);margin-bottom:3px;font-size:8px}.IIa07q_documentDetail dd{text-overflow:ellipsis;white-space:nowrap;margin:0;font-size:9px;overflow:hidden}.IIa07q_documentSources{flex-wrap:wrap;align-items:center;gap:5px;margin:11px 0;display:flex}.IIa07q_documentSources>span{color:var(--mn-faint);margin-right:4px;font-size:9px}.IIa07q_documentSources code,.IIa07q_documentArchiveReceipt code{color:var(--mn-muted);background:var(--mn-layer-2);border-radius:5px;padding:3px 6px;font-size:8px}.IIa07q_markdownBody{overflow-wrap:anywhere;border:1px solid var(--mn-line);min-height:310px;color:var(--mn-text);background:color-mix(in srgb, var(--mn-layer-2) 30%, var(--mn-layer-1));border-radius:10px;margin:16px 0 0;padding:clamp(18px,2.5vw,28px);font-size:13px;line-height:1.78}.IIa07q_markdownBody>:first-child{margin-top:0}.IIa07q_markdownBody>:last-child{margin-bottom:0}.IIa07q_markdownBody h1,.IIa07q_markdownBody h2,.IIa07q_markdownBody h3,.IIa07q_markdownBody h4{color:var(--mn-text);letter-spacing:-.015em;margin:1.55em 0 .65em;line-height:1.3}.IIa07q_markdownBody h1{border-bottom:1px solid var(--mn-line);padding-bottom:.35em;font-size:1.75em}.IIa07q_markdownBody h2{border-bottom:1px solid var(--mn-line);padding-bottom:.3em;font-size:1.42em}.IIa07q_markdownBody h3{font-size:1.18em}.IIa07q_markdownBody p,.IIa07q_markdownBody ul,.IIa07q_markdownBody ol,.IIa07q_markdownBody blockquote,.IIa07q_markdownBody table,.IIa07q_markdownBody pre{margin:.85em 0}.IIa07q_markdownBody ul,.IIa07q_markdownBody ol{padding-left:1.6em}.IIa07q_markdownBody li+li{margin-top:.3em}.IIa07q_markdownBody blockquote{border-left:3px solid var(--mn-accent);color:var(--mn-muted);background:color-mix(in srgb, var(--mn-accent) 4%, transparent);margin-inline:0;padding:.15em 1em}.IIa07q_markdownBody code{color:var(--mn-text);background:var(--mn-layer-2);font:.88em/1.55 var(--mn-code);border-radius:5px;padding:.15em .38em}.IIa07q_markdownBody pre{border:1px solid var(--mn-line);background:var(--mn-layer-2);border-radius:9px;max-width:100%;padding:14px 16px;overflow:auto}.IIa07q_markdownBody pre code{background:0 0;padding:0;font-size:11px}.IIa07q_markdownBody a{color:var(--mn-accent);text-underline-offset:3px;text-decoration-thickness:1px}.IIa07q_markdownBody hr{border:0;border-top:1px solid var(--mn-line);margin:1.8em 0}.IIa07q_markdownBody table{border-collapse:collapse;max-width:100%;display:block;overflow-x:auto}.IIa07q_markdownBody th,.IIa07q_markdownBody td{border:1px solid var(--mn-line);text-align:left;vertical-align:top;padding:8px 10px}.IIa07q_markdownBody th{background:var(--mn-layer-2);font-weight:600}.IIa07q_markdownBody img{border-radius:8px;max-width:100%;height:auto}.IIa07q_documentArchiveReceipt{border:1px solid color-mix(in srgb, var(--mn-success) 28%, var(--mn-line));background:color-mix(in srgb, var(--mn-success) 5%, transparent);border-radius:9px;margin:12px 0;padding:11px 12px}.IIa07q_documentArchiveReceipt p{color:var(--mn-muted);margin:4px 0 8px;font-size:10px}.IIa07q_documentArchiveReceipt div{flex-wrap:wrap;gap:5px;display:flex}.IIa07q_documentDanger{border-top:1px solid var(--mn-line);justify-content:flex-end;align-items:center;gap:7px;min-height:57px;margin-top:13px;padding-top:12px;display:flex}.IIa07q_documentDanger>div{margin-right:auto}.IIa07q_documentDanger strong{font-size:11px;display:block}.IIa07q_documentDanger p{color:var(--mn-faint);margin:2px 0 0;font-size:9px}.IIa07q_documentDanger>span{color:var(--mn-danger);margin-right:auto;font-size:10px}.IIa07q_documentEditor{border:1px solid var(--mn-line);background:linear-gradient(135deg, color-mix(in srgb, var(--mn-accent) 5%, var(--mn-layer-1)), var(--mn-layer-1) 55%);border-radius:11px;margin-bottom:12px;padding:15px}.IIa07q_documentReader>.IIa07q_documentEditor{background:0 0;border:0;margin:0;padding:0}.IIa07q_documentEditor>header{justify-content:space-between;align-items:flex-start;gap:18px;margin-bottom:12px;display:flex}.IIa07q_documentEditor h3{margin:0;font-size:14px}.IIa07q_documentEditor header p{color:var(--mn-muted);margin:2px 0 0;font-size:10px}.IIa07q_documentEditor header>span,.IIa07q_documentEditor header>code{color:var(--mn-accent);font:650 9px var(--mn-code)}.IIa07q_documentEditor label{color:var(--mn-faint);gap:4px;margin-top:9px;font-size:9px;display:grid}.IIa07q_documentEditor textarea{resize:vertical;line-height:1.65}.IIa07q_documentEditorMeta{grid-template-columns:.8fr 1.2fr;gap:9px;display:grid}.IIa07q_documentEditorMeta label{margin:0}.IIa07q_documentEditor footer{justify-content:flex-end;gap:7px;margin-top:11px;display:flex}@media (width<=1000px){.IIa07q_documentWorkspace{grid-template-columns:minmax(220px,270px) minmax(0,1fr)}.IIa07q_documentDetail>dl{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (width<=760px){.IIa07q_documentSummary{grid-template-columns:repeat(2,minmax(0,1fr))}.IIa07q_documentCapacity{grid-column:1/-1}.IIa07q_documentToolbar{flex-direction:column;align-items:stretch}.IIa07q_documentToolbar form{min-width:0}.IIa07q_documentToolbar>div,.IIa07q_documentToolbar>button{width:100%}.IIa07q_documentToolbar>div button{flex:1}.IIa07q_documentWorkspace{grid-template-columns:1fr;min-height:0}.IIa07q_documentList{-webkit-overflow-scrolling:touch;max-height:330px;overflow:auto}.IIa07q_documentReader{min-height:430px}.IIa07q_documentEditorMeta{grid-template-columns:1fr}}@media (width<=520px){.IIa07q_documentDetail>header,.IIa07q_documentDanger{flex-direction:column;align-items:flex-start}.IIa07q_documentDetail>header>div:last-child,.IIa07q_documentDetail>header button{width:100%}.IIa07q_documentDanger>div,.IIa07q_documentDanger>span{margin-right:0}.IIa07q_documentDanger>button{width:100%}.IIa07q_documentDetail>dl{grid-template-columns:1fr}.IIa07q_markdownBody{padding:16px;font-size:12.5px}}";
+		const css$2 = ".IIa07q_documentSummary{grid-template-columns:.7fr .7fr 1.6fr;gap:12px;margin-bottom:12px;display:grid}.IIa07q_documentSummary article{border:.5px solid var(--mn-card-line);border-radius:var(--dsw-radius-lg);min-width:0;min-height:92px;padding:14px 16px}.IIa07q_documentSummary article>span{color:var(--mn-faint);font-size:12px;line-height:18px;display:block}.IIa07q_documentSummary article>strong{font-variant-numeric:tabular-nums;margin:4px 0 2px;font-size:20px;font-weight:500;line-height:28px;display:block}.IIa07q_documentSummary article>small{color:var(--mn-faint);font-size:12px;line-height:18px}.IIa07q_documentCapacity>div{background:var(--mn-fill);border-radius:999px;height:4px;margin:8px 0 6px;overflow:hidden}.IIa07q_documentCapacity>div i{border-radius:inherit;background:var(--dsw-alias-brand-primary);height:100%;transition:width .3s;display:block}.IIa07q_documentToolbar{border:.5px solid var(--mn-card-line);border-radius:var(--dsw-radius-lg);align-items:center;gap:8px;margin-bottom:12px;padding:8px;display:flex}.IIa07q_documentToolbar form{flex:1;align-items:center;gap:8px;min-width:260px;display:flex}.IIa07q_documentSearch{flex:1}.IIa07q_documentEditor input,.IIa07q_documentEditor textarea{border:.5px solid var(--mn-field-line);border-radius:var(--dsw-radius-md);width:100%;color:var(--mn-text);background:var(--mn-input);outline:0;padding:6px 10px;font-size:13px;line-height:20px}.IIa07q_documentEditor input:focus,.IIa07q_documentEditor textarea:focus{border-color:var(--mn-accent)}.IIa07q_documentToolbar>div{border-radius:var(--dsw-radius-md);background:var(--mn-hover);align-items:center;gap:2px;padding:3px;display:flex}.IIa07q_documentToolbar>div button{border-radius:var(--dsw-radius-sm);min-height:28px;color:var(--mn-muted);cursor:pointer;background:0 0;border:0;padding:0 12px;font-size:13px;font-weight:500;line-height:20px}.IIa07q_documentToolbar>div button:hover{color:var(--mn-text)}.IIa07q_documentToolbar>div button[data-active]{color:var(--mn-text);background:var(--mn-layer-1);box-shadow:var(--dsw-elevation-soft)}.IIa07q_documentToolbar>div b{color:var(--mn-faint);font-variant-numeric:tabular-nums;margin-left:6px;font-size:12px;font-weight:400}.IIa07q_documentWorkspace{grid-template-columns:minmax(250px,310px) minmax(0,1fr);gap:12px;min-height:590px;display:grid}.IIa07q_documentList,.IIa07q_documentReader{border:.5px solid var(--mn-card-line);border-radius:var(--dsw-radius-lg);min-width:0;overflow:hidden}.IIa07q_documentList{align-self:stretch}.IIa07q_documentList>header{border-bottom:.5px solid var(--mn-line);min-height:44px;color:var(--mn-faint);justify-content:space-between;align-items:center;padding:0 14px;font-size:12px;line-height:18px;display:flex}.IIa07q_documentList>header code{color:var(--mn-muted)}.IIa07q_documentList>button{--mn-provider-color:var(--mn-faint);border-radius:var(--dsw-radius-md);width:calc(100% - 12px);color:var(--mn-text);text-align:left;cursor:pointer;background:0 0;border:0;margin:6px 6px 0;padding:10px 12px;transition:background-color .15s;display:block}.IIa07q_documentList>button:hover{background:var(--mn-hover)}.IIa07q_documentList>button[data-selected]{background:var(--mn-fill)}.IIa07q_documentList>button>div{justify-content:space-between;align-items:baseline;gap:12px;display:flex}.IIa07q_documentList>button strong{text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:500;line-height:20px;overflow:hidden}.IIa07q_documentList>button time{color:var(--mn-faint);font-variant-numeric:tabular-nums;flex:none;font-size:11px}.IIa07q_documentList>button p{color:var(--mn-faint);-webkit-line-clamp:2;-webkit-box-orient:vertical;margin:4px 0 6px;font-size:12px;line-height:18px;display:-webkit-box;overflow:hidden}.IIa07q_documentList>button footer{color:var(--mn-faint);align-items:center;gap:8px;font-size:11px;line-height:16px;display:flex}.IIa07q_documentList>button footer code{margin-left:auto}.IIa07q_documentList>button footer em{color:var(--mn-danger);font-style:normal}.IIa07q_documentListEmpty{min-height:230px;color:var(--mn-muted);text-align:center;align-content:center;place-items:center;gap:4px;padding:24px;display:grid}.IIa07q_documentListEmpty>span{color:var(--mn-faint);margin-bottom:6px;font-size:24px;line-height:1}.IIa07q_documentListEmpty p{color:var(--mn-faint);margin:0;font-size:12px;line-height:18px}.IIa07q_documentReader{padding:clamp(16px,2vw,24px)}.IIa07q_documentReader>.IIa07q_emptyState{background:0 0;border:0;height:100%}.IIa07q_documentDetail>header{border-bottom:.5px solid var(--mn-line);justify-content:space-between;align-items:flex-start;gap:16px;padding-bottom:14px;display:flex}.IIa07q_documentDetail>header span{color:var(--mn-faint);font-size:12px;line-height:18px}.IIa07q_documentDetail>header h3{margin:2px 0;font-size:16px;font-weight:500;line-height:24px}.IIa07q_documentDetail>header p{color:var(--mn-faint);margin:0;font-size:12px;line-height:18px}.IIa07q_documentActions{flex-wrap:wrap;align-items:center;gap:8px;display:flex}.IIa07q_documentDetail>dl{border:.5px solid var(--mn-line);border-radius:var(--dsw-radius-md);grid-template-columns:2fr .45fr .8fr .55fr;margin:12px 0;display:grid;overflow:hidden}.IIa07q_documentDetail>dl>div{min-width:0;padding:8px 10px}.IIa07q_documentDetail>dl>div+div{border-left:.5px solid var(--mn-line)}.IIa07q_documentDetail dt{color:var(--mn-faint);margin-bottom:2px;font-size:11px;line-height:16px}.IIa07q_documentDetail dd{text-overflow:ellipsis;white-space:nowrap;margin:0;font-size:12px;line-height:18px;overflow:hidden}.IIa07q_documentSources{flex-wrap:wrap;align-items:center;gap:6px;margin:12px 0;display:flex}.IIa07q_documentSources>span{color:var(--mn-faint);margin-right:4px;font-size:12px}.IIa07q_documentSources code,.IIa07q_documentArchiveReceipt code{color:var(--mn-muted);background:var(--mn-fill);border-radius:999px;padding:1px 8px;font-size:11px;line-height:17px}.IIa07q_markdownBody{overflow-wrap:anywhere;border:.5px solid var(--mn-line);border-radius:var(--dsw-radius-md);min-height:310px;color:var(--mn-text);margin:16px 0 0;padding:clamp(16px,2.5vw,28px);font-size:14px;line-height:1.75}.IIa07q_markdownBody>:first-child{margin-top:0}.IIa07q_markdownBody>:last-child{margin-bottom:0}.IIa07q_markdownBody h1,.IIa07q_markdownBody h2,.IIa07q_markdownBody h3,.IIa07q_markdownBody h4{color:var(--mn-text);margin:1.5em 0 .6em;font-weight:500;line-height:1.35}.IIa07q_markdownBody h1{border-bottom:.5px solid var(--mn-line);padding-bottom:.35em;font-size:1.6em}.IIa07q_markdownBody h2{border-bottom:.5px solid var(--mn-line);padding-bottom:.3em;font-size:1.35em}.IIa07q_markdownBody h3{font-size:1.15em}.IIa07q_markdownBody p,.IIa07q_markdownBody ul,.IIa07q_markdownBody ol,.IIa07q_markdownBody blockquote,.IIa07q_markdownBody table,.IIa07q_markdownBody pre{margin:.85em 0}.IIa07q_markdownBody ul,.IIa07q_markdownBody ol{padding-left:1.6em}.IIa07q_markdownBody li+li{margin-top:.3em}.IIa07q_markdownBody blockquote{border-left:2px solid var(--mn-line-strong);color:var(--mn-muted);margin-inline:0;padding:.1em 1em}.IIa07q_markdownBody code{border-radius:var(--dsw-radius-xs);color:var(--mn-text);background:var(--dsw-alias-markdown-inline-code,var(--mn-fill));font:.88em/1.55 var(--mn-code);padding:.15em .4em}.IIa07q_markdownBody pre{border-radius:var(--dsw-radius-md);background:var(--dsw-alias-markdown-code-block,var(--mn-fill));max-width:100%;padding:12px 16px;overflow:auto}.IIa07q_markdownBody pre code{background:0 0;padding:0;font-size:12px}.IIa07q_markdownBody a{color:var(--dsw-alias-link,var(--mn-accent));text-underline-offset:3px;text-decoration-thickness:1px}.IIa07q_markdownBody hr{border:0;border-top:.5px solid var(--mn-line);margin:1.8em 0}.IIa07q_markdownBody table{border-collapse:collapse;max-width:100%;display:block;overflow-x:auto}.IIa07q_markdownBody th,.IIa07q_markdownBody td{border:.5px solid var(--mn-line);text-align:left;vertical-align:top;padding:8px 10px}.IIa07q_markdownBody th{background:var(--mn-fill);font-weight:500}.IIa07q_markdownBody img{border-radius:var(--dsw-radius-sm);max-width:100%;height:auto}.IIa07q_documentArchiveReceipt{border-radius:var(--dsw-radius-md);background:color-mix(in srgb, var(--mn-success) 8%, transparent);margin:12px 0;padding:10px 12px}.IIa07q_documentArchiveReceipt p{color:var(--mn-muted);margin:2px 0 8px;font-size:12px;line-height:18px}.IIa07q_documentArchiveReceipt div{flex-wrap:wrap;gap:6px;display:flex}.IIa07q_documentDanger{border-top:.5px solid var(--mn-line);justify-content:flex-end;align-items:center;gap:8px;min-height:56px;margin-top:12px;padding-top:12px;display:flex}.IIa07q_documentDanger>div{margin-right:auto}.IIa07q_documentDanger strong{font-size:13px;font-weight:500;line-height:20px;display:block}.IIa07q_documentDanger p{color:var(--mn-faint);margin:2px 0 0;font-size:12px;line-height:18px}.IIa07q_documentDanger>span{color:var(--mn-danger);margin-right:auto;font-size:12px}.IIa07q_documentEditor{border:.5px solid var(--mn-card-line);border-radius:var(--dsw-radius-lg);margin-bottom:12px;padding:16px}.IIa07q_documentReader>.IIa07q_documentEditor{background:0 0;border:0;margin:0;padding:0}.IIa07q_documentEditor>header{justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:12px;display:flex}.IIa07q_documentEditor h3{margin:0;font-size:14px;font-weight:500;line-height:22px}.IIa07q_documentEditor header p{color:var(--mn-faint);margin:2px 0 0;font-size:12px;line-height:18px}.IIa07q_documentEditor header>span,.IIa07q_documentEditor header>code{color:var(--mn-muted);background:var(--mn-fill);border-radius:999px;padding:1px 8px;font-size:11px;font-weight:500;line-height:17px}.IIa07q_documentEditor label{color:var(--mn-muted);gap:6px;margin-top:12px;font-size:12px;font-weight:500;line-height:18px;display:grid}.IIa07q_documentEditor textarea{resize:vertical;line-height:1.65}.IIa07q_documentEditorMeta{grid-template-columns:.8fr 1.2fr;gap:12px;display:grid}.IIa07q_documentEditorMeta label{margin:0}.IIa07q_documentEditor footer{justify-content:flex-end;gap:8px;margin-top:12px;display:flex}@media (width<=1000px){.IIa07q_documentWorkspace{grid-template-columns:minmax(220px,270px) minmax(0,1fr)}.IIa07q_documentDetail>dl{grid-template-columns:repeat(2,minmax(0,1fr))}.IIa07q_documentDetail>dl>div+div{border-left:0}.IIa07q_documentDetail>dl>div:nth-child(2n){border-left:.5px solid var(--mn-line)}.IIa07q_documentDetail>dl>div:nth-child(n+3){border-top:.5px solid var(--mn-line)}}@media (width<=760px){.IIa07q_documentSummary{grid-template-columns:repeat(2,minmax(0,1fr))}.IIa07q_documentCapacity{grid-column:1/-1}.IIa07q_documentToolbar{flex-direction:column;align-items:stretch}.IIa07q_documentToolbar form{min-width:0}.IIa07q_documentToolbar>div,.IIa07q_documentToolbar>button{width:100%}.IIa07q_documentToolbar>div button{flex:1}.IIa07q_documentWorkspace{grid-template-columns:1fr;min-height:0}.IIa07q_documentList{-webkit-overflow-scrolling:touch;max-height:330px;overflow:auto}.IIa07q_documentReader{min-height:430px}.IIa07q_documentEditorMeta{grid-template-columns:1fr}}@media (width<=520px){.IIa07q_documentDetail>header,.IIa07q_documentDanger{flex-direction:column;align-items:flex-start}.IIa07q_documentDetail>header>div:last-child,.IIa07q_documentDetail>header button{width:100%}.IIa07q_documentDanger>div,.IIa07q_documentDanger>span{margin-right:0}.IIa07q_documentDanger>button{width:100%}.IIa07q_documentDetail>dl{grid-template-columns:1fr}.IIa07q_documentDetail>dl>div:nth-child(2n){border-left:0}.IIa07q_documentDetail>dl>div+div{border-top:.5px solid var(--mn-line)}.IIa07q_markdownBody{padding:16px;font-size:13px}}";
 		const id$1 = "dsh-mnemon-source-documents/presentation/page.module.css";
 		if (typeof document !== "undefined") {
 			let tag = document.querySelector("style[data-plugin-css=" + JSON.stringify(id$1) + "]");
@@ -169,6 +183,7 @@ window.__ModuleLoader__.load({
 			if (tag.textContent !== css$2) tag.textContent = css$2;
 		}
 		var page_module_css_default = {
+			"documentActions": "IIa07q_documentActions",
 			"documentArchiveReceipt": "IIa07q_documentArchiveReceipt",
 			"documentCapacity": "IIa07q_documentCapacity",
 			"documentDanger": "IIa07q_documentDanger",
@@ -178,6 +193,7 @@ window.__ModuleLoader__.load({
 			"documentList": "IIa07q_documentList",
 			"documentListEmpty": "IIa07q_documentListEmpty",
 			"documentReader": "IIa07q_documentReader",
+			"documentSearch": "IIa07q_documentSearch",
 			"documentSources": "IIa07q_documentSources",
 			"documentSummary": "IIa07q_documentSummary",
 			"documentToolbar": "IIa07q_documentToolbar",
@@ -187,7 +203,7 @@ window.__ModuleLoader__.load({
 		};
 		//#endregion
 		//#region \0source-css:/home/runner/work/dsh-mnemon/dsh-mnemon/plugins/dsh-mnemon-source-documents/presentation/sidebar.module.css.mjs
-		const css$1 = "._Bh55G_shell ._Bh55G_modal form[class*=documentEditor]{background:0 0;border:0;border-radius:0;margin:0;padding:0}._Bh55G_shell ._Bh55G_modal form[class*=documentEditor]>header{display:none}._Bh55G_shell [class*=documentEditor] label{color:var(--dsw-alias-label-secondary);gap:5px;font-size:12px;font-weight:500}._Bh55G_shell [class*=documentEditor] input,._Bh55G_shell [class*=documentEditor] textarea{border:1px solid var(--dsw-alias-border-l2);min-height:34px;color:var(--dsw-alias-label-primary);background:var(--dsw-specific-input-major);border-radius:8px;padding:7px 10px;font-size:13px;font-weight:400}._Bh55G_shell [class*=documentList]>button p,._Bh55G_shell [class*=documentDetail]>header p,._Bh55G_shell [class*=documentArchiveReceipt] p{font-size:12px}._Bh55G_shell [class*=documentSummary] article>span,._Bh55G_shell [class*=documentSummary] article>small,._Bh55G_shell [class*=documentList]>header,._Bh55G_shell [class*=documentList]>button time,._Bh55G_shell [class*=documentList]>button footer,._Bh55G_shell [class*=documentDetail] dt,._Bh55G_shell [class*=documentSources]>span{font-size:11px}._Bh55G_shell [class*=documentToolbar]>div button,._Bh55G_shell [class*=documentDetail] dd,._Bh55G_shell [class*=documentDanger] p{font-size:12px}._Bh55G_shell [class*=documentList]>button strong{font-size:13px}._Bh55G_shell [class*=documentWorkspace]{align-items:stretch;height:clamp(520px,100dvh - 220px,760px);min-height:520px}._Bh55G_shell [class*=documentList],._Bh55G_shell [class*=documentReader]{overscroll-behavior:contain;scrollbar-gutter:stable;min-height:0;overflow-y:auto}@media (width<=760px){._Bh55G_shell [class*=documentWorkspace]{height:auto;min-height:0}._Bh55G_shell [class*=documentList]{scrollbar-gutter:auto;overflow-y:auto}._Bh55G_shell [class*=documentReader]{scrollbar-gutter:auto;overflow:visible}}";
+		const css$1 = "._Bh55G_shell ._Bh55G_modal form[class*=documentEditor]{background:0 0;border:0;border-radius:0;margin:0;padding:0}._Bh55G_shell ._Bh55G_modal form[class*=documentEditor]>header{display:none}._Bh55G_shell [class*=documentWorkspace]{align-items:stretch;height:clamp(520px,100dvh - 220px,760px);min-height:520px}._Bh55G_shell [class*=documentList],._Bh55G_shell [class*=documentReader]{overscroll-behavior:contain;scrollbar-gutter:stable;min-height:0;overflow-y:auto}@media (width<=760px){._Bh55G_shell [class*=documentWorkspace]{height:auto;min-height:0}._Bh55G_shell [class*=documentList]{scrollbar-gutter:auto;overflow-y:auto}._Bh55G_shell [class*=documentReader]{scrollbar-gutter:auto;overflow:visible}}";
 		const id = "dsh-mnemon-source-documents/presentation/sidebar.module.css";
 		if (typeof document !== "undefined") {
 			let tag = document.querySelector("style[data-plugin-css=" + JSON.stringify(id) + "]");
@@ -1175,7 +1191,7 @@ window.__ModuleLoader__.load({
 			const [snapshot, setSnapshot] = (0, react.useState)(null);
 			const [items, setItems] = (0, react.useState)([]);
 			const [visibleLimit, setVisibleLimit] = (0, react.useState)(pageSize);
-			const [selectedId, setSelectedId] = (0, react.useState)(null);
+			const [selectedId, setSelectedId] = (0, react.useState)(props.documentId ?? null);
 			const [selected, setSelected] = (0, react.useState)(null);
 			const [status, setStatus] = (0, react.useState)("active");
 			const [query, setQuery] = (0, react.useState)("");
@@ -1186,6 +1202,8 @@ window.__ModuleLoader__.load({
 			const [composing, setComposing] = (0, react.useState)(false);
 			const [editing, setEditing] = (0, react.useState)(false);
 			const [confirmArchive, setConfirmArchive] = (0, react.useState)(false);
+			const [deleteTarget, setDeleteTarget] = (0, react.useState)(null);
+			const [deleteError, setDeleteError] = (0, react.useState)(null);
 			const [title, setTitle] = (0, react.useState)("");
 			const [description, setDescription] = (0, react.useState)("");
 			const [content, setContent] = (0, react.useState)("");
@@ -1197,8 +1215,9 @@ window.__ModuleLoader__.load({
 				setError(null);
 				setVisibleLimit(pageSize);
 				try {
+					const searched = nextQuery.trim() === "" ? void 0 : (await props.client.searchDocuments(nextQuery, nextStatus === "archived")).results;
 					const current = await props.client.documents();
-					const filtered = (nextQuery.trim() === "" ? current.documents : (await props.client.searchDocuments(nextQuery, nextStatus === "archived")).results).filter((record) => record.status === nextStatus).sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
+					const filtered = (searched ?? current.documents).filter((record) => record.status === nextStatus).sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
 					if (!displayRequests.isCurrent(request)) return;
 					setSnapshot(current);
 					setItems(filtered);
@@ -1226,7 +1245,7 @@ window.__ModuleLoader__.load({
 			]);
 			(0, react.useEffect)(() => {
 				setSelected(null);
-				if (selectedId === null) return;
+				if (selectedId === null || !snapshot?.documents.some((document) => document.id === selectedId)) return;
 				let active = true;
 				props.client.document(selectedId).then((value) => {
 					if (active) setSelected(value);
@@ -1239,7 +1258,7 @@ window.__ModuleLoader__.load({
 			}, [
 				props.client,
 				selectedId,
-				props.revision
+				snapshot
 			]);
 			(0, react.useLayoutEffect)(() => {
 				if (readerRef.current !== null) readerRef.current.scrollTop = 0;
@@ -1339,7 +1358,8 @@ window.__ModuleLoader__.load({
 				setNotice(null);
 				try {
 					const result = await props.client.archiveDocument(selected.id);
-					setNotice(t("documents.archived", { spaces: result.maintenance?.memoryBodyIds.join(", ") || "—" }));
+					const spaces = result.maintenance?.memoryBodyIds ?? [];
+					setNotice(spaces.length === 0 ? t("documents.archivedLocally") : t("documents.archived", { spaces: spaces.join(", ") }));
 					setConfirmArchive(false);
 					setStatus("archived");
 					setQuery("");
@@ -1352,9 +1372,31 @@ window.__ModuleLoader__.load({
 					setSaving(false);
 				}
 			};
+			const remove = async () => {
+				if (!props.writeEnabled || deleteTarget?.document.fileRevision === void 0 || props.client.deleteDocument === void 0) return;
+				setSaving(true);
+				setDeleteError(null);
+				setError(null);
+				setNotice(null);
+				try {
+					await props.client.deleteDocument(deleteTarget.document.id, deleteTarget.revision, deleteTarget.document.fileRevision);
+					setDeleteTarget(null);
+					setSelected(null);
+					setSelectedId(null);
+					setNotice(t("documents.deleted"));
+					props.onMutate();
+					await display(query, status);
+				} catch (reason) {
+					setDeleteError((0, dsh_mnemon_client.message)(reason));
+				} finally {
+					setSaving(false);
+				}
+			};
 			const usage = snapshot === null ? 0 : Math.min(100, snapshot.activeBytes / snapshot.limitBytes * 100);
 			const activeCount = snapshot?.activeCount ?? 0;
 			const archivedCount = snapshot?.archivedCount ?? 0;
+			const selectedRecord = snapshot?.documents.find((document) => document.id === selected?.id);
+			const selectedIsCurrent = selected?.fileRevision !== void 0 && selectedRecord?.revision === selected.revision && selectedRecord.contentHash === selected.contentHash && selectedRecord.status === selected.status;
 			const composer = /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("form", {
 				id: documentCreateFormId,
 				className: css.documentEditor,
@@ -1423,6 +1465,7 @@ window.__ModuleLoader__.load({
 				setSelectedId(documentId);
 				setEditing(false);
 				setConfirmArchive(false);
+				setDeleteTarget(null);
 			};
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 				className: css.page,
@@ -1434,18 +1477,12 @@ window.__ModuleLoader__.load({
 							used: (0, dsh_mnemon_client.humanBytes)(snapshot.activeBytes),
 							limit: (0, dsh_mnemon_client.humanBytes)(snapshot.limitBytes)
 						}),
-						action: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-							type: "button",
-							className: css.secondaryButton,
-							disabled: loading,
-							onClick: () => void display(query, status),
-							children: t("documents.refresh")
-						}), props.writeEnabled && (props.canCreate ?? props.sessionId !== void 0) && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+						...props.writeEnabled && (props.canCreate ?? props.sessionId !== void 0) ? { action: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 							type: "button",
 							className: css.primaryButton,
 							onClick: startComposer,
 							children: t("documents.new")
-						})] })
+						}) } : {}
 					}),
 					error !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 						className: css.inlineError,
@@ -1489,23 +1526,17 @@ window.__ModuleLoader__.load({
 								event.preventDefault();
 								display(query, status);
 							},
-							children: [
-								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-									"aria-hidden": "true",
-									children: "⌕"
-								}),
-								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
-									"aria-label": t("documents.searchAria"),
-									value: query,
-									onChange: (event) => setQuery(event.target.value),
-									placeholder: t("documents.searchPlaceholder")
-								}),
-								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-									type: "submit",
-									className: css.secondaryButton,
-									children: t("documents.search")
-								})
-							]
+							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.SearchField, {
+								className: css.documentSearch,
+								label: t("documents.searchAria"),
+								value: query,
+								onChange: (event) => setQuery(event.target.value),
+								placeholder: t("documents.searchPlaceholder")
+							}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+								type: "submit",
+								className: css.secondaryButton,
+								children: t("documents.search")
+							})]
 						}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 							role: "group",
 							"aria-label": t("documents.scope"),
@@ -1548,11 +1579,7 @@ window.__ModuleLoader__.load({
 											children: new Date(document.createdAt).toLocaleDateString(locale)
 										})] }),
 										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", { children: document.description || document.excerpt || t("documents.noDescription") }),
-										/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("footer", { children: [
-											/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: (0, dsh_mnemon_client.humanBytes)(document.sizeBytes) }),
-											/* @__PURE__ */ (0, react_jsx_runtime.jsx)("code", { children: document.id.slice(0, 8) }),
-											document.healthy === false && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("em", { children: t("documents.missing") })
-										] })
+										/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("footer", { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: (0, dsh_mnemon_client.humanBytes)(document.sizeBytes) }), document.healthy === false && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("em", { children: t("documents.missing") })] })
 									]
 								}, document.id)),
 								!loading && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.ProgressiveFooter, {
@@ -1591,12 +1618,27 @@ window.__ModuleLoader__.load({
 										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: selected.status === "active" ? t("documents.active") : t("documents.coldArchive") }),
 										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("h3", { children: selected.title }),
 										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", { children: selected.description || t("documents.noDescription") })
-									] }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", { children: props.writeEnabled && selected.status === "active" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-										type: "button",
-										className: documentEditActionClass,
-										onClick: beginEdit,
-										children: t("documents.edit")
-									}) })] }),
+									] }), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+										className: css.documentActions,
+										children: [props.writeEnabled && selected.status === "active" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+											type: "button",
+											className: documentEditActionClass,
+											onClick: beginEdit,
+											children: t("documents.edit")
+										}), props.writeEnabled && props.client.deleteDocument !== void 0 && snapshot !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+											type: "button",
+											className: documentArchiveActionClass,
+											disabled: !selectedIsCurrent,
+											onClick: () => {
+												setDeleteError(null);
+												setDeleteTarget({
+													document: selected,
+													revision: snapshot.revision
+												});
+											},
+											children: t("documents.delete")
+										})]
+									})] }),
 									/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("dl", { children: [
 										/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("dt", { children: t("documents.path") }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("dd", { children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("code", { children: selected.relativePath }) })] }),
 										/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("dt", { children: t("documents.revision") }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("dd", { children: selected.revision })] }),
@@ -1610,7 +1652,7 @@ window.__ModuleLoader__.load({
 									selected.status === "archived" && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 										className: css.documentArchiveReceipt,
 										children: [
-											/* @__PURE__ */ (0, react_jsx_runtime.jsx)("strong", { children: t("documents.archiveReceipt") }),
+											/* @__PURE__ */ (0, react_jsx_runtime.jsx)("strong", { children: t(selected.memoryBodyIds.length === 0 ? "documents.archiveNote" : "documents.archiveReceipt") }),
 											/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", { children: selected.archiveSummary }),
 											/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", { children: selected.memoryBodyIds.map((id) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("code", { children: id }, id)) })
 										]
@@ -1643,7 +1685,7 @@ window.__ModuleLoader__.load({
 							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 								type: "button",
 								"data-dialog-close": true,
-								className: css.ghostButton,
+								className: css.secondaryButton,
 								disabled: saving,
 								onClick: resetComposer,
 								children: t("common.cancel")
@@ -1667,7 +1709,7 @@ window.__ModuleLoader__.load({
 							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 								type: "button",
 								"data-dialog-close": true,
-								className: css.ghostButton,
+								className: css.secondaryButton,
 								disabled: saving,
 								onClick: () => setEditing(false),
 								children: t("common.cancel")
@@ -1692,7 +1734,7 @@ window.__ModuleLoader__.load({
 								type: "button",
 								"data-dialog-close": true,
 								"data-autofocus": true,
-								className: css.ghostButton,
+								className: css.secondaryButton,
 								disabled: saving,
 								onClick: () => setConfirmArchive(false),
 								children: t("common.cancel")
@@ -1715,6 +1757,49 @@ window.__ModuleLoader__.load({
 								] })]
 							})]
 						})
+					}),
+					deleteTarget !== null && props.writeEnabled && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.SidebarModal, {
+						title: t("documents.deleteConfirm"),
+						description: deleteTarget.document.title,
+						busy: saving,
+						onClose: () => setDeleteTarget(null),
+						footer: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+							className: css.modalFooterActions,
+							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+								type: "button",
+								"data-dialog-close": true,
+								"data-autofocus": true,
+								className: css.secondaryButton,
+								disabled: saving,
+								onClick: () => setDeleteTarget(null),
+								children: t("common.cancel")
+							}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+								type: "button",
+								className: css.dangerSolidButton,
+								disabled: saving,
+								onClick: () => void remove(),
+								children: saving ? t("documents.deleting") : t("documents.deleteNow")
+							})]
+						}),
+						children: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+							className: css.bodyDeleteConfirm,
+							children: [
+								deleteError !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+									className: css.inlineError,
+									role: "alert",
+									children: deleteError
+								}),
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", { children: t("documents.deleteDescription") }),
+								/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+									className: css.bodyDeleteSummary,
+									children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("strong", { children: deleteTarget.document.title }), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", { children: [
+										deleteTarget.document.relativePath,
+										" · ",
+										(0, dsh_mnemon_client.humanBytes)(deleteTarget.document.sizeBytes)
+									] })]
+								})
+							]
+						})
 					})
 				]
 			});
@@ -1724,22 +1809,41 @@ window.__ModuleLoader__.load({
 		function documentsPageClient(management) {
 			const client = (0, dsh_mnemon_client.createMemorySourcePageClient)(management);
 			return {
-				documents: () => client.read("snapshot"),
+				documents: () => client.read("snapshot", null, { coalesce: true }),
 				document: (id) => client.read("document", { id }),
 				searchDocuments: (query, includeArchived = false, limit = 50) => client.read("search", {
 					query,
 					includeArchived,
 					limit
 				}),
-				mutateDocument: (input) => client.canAssist("mutate") ? client.assist("mutate", { ...input }, true) : client.mutate("mutate", { ...input }, true),
-				archiveDocument: (id) => client.canAssist("archive") ? client.assist("archive", { id }, true) : client.mutate("archive", { id }, true)
+				mutateDocument: (input) => input.action === "delete" ? client.mutate("delete", {
+					id: input.id,
+					...input.fileRevision === void 0 ? {} : { fileRevision: input.fileRevision }
+				}, true) : client.canAssist("mutate") ? client.assist("mutate", { ...input }, true) : client.mutate("mutate", { ...input }, true),
+				archiveDocument: (id) => client.canAssist("archive") ? client.assist("archive", { id }, true) : client.mutate("archive", { id }, true),
+				deleteDocument: async (id, expectedRevision, fileRevision) => (await management.mutate("delete", {
+					id,
+					fileRevision
+				}, {
+					confirmed: true,
+					expectedRevision
+				})).value
 			};
 		}
 		function DocumentsSourceView(props) {
 			const client = (0, react.useMemo)(() => props.management === void 0 ? void 0 : documentsPageClient(props.management), [props.management]);
 			const [revision, setRevision] = (0, react.useState)(0);
+			const refreshKey = (0, react.useRef)(props.refreshKey);
+			(0, react.useEffect)(() => {
+				if (refreshKey.current === props.refreshKey) return;
+				refreshKey.current = props.refreshKey;
+				setRevision((value) => value + 1);
+			}, [props.refreshKey]);
 			if (client === void 0) return null;
+			const navigation = props.navigationInput;
+			const focus = typeof navigation === "object" && navigation !== null && !Array.isArray(navigation) && typeof navigation.seed === "string" && navigation.seed !== "" ? navigation : void 0;
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsx)(DocumentsPage, {
+				...focus === void 0 ? {} : { documentId: focus.seed },
 				canCreate: true,
 				client,
 				revision,
@@ -1748,7 +1852,7 @@ window.__ModuleLoader__.load({
 					setRevision((value) => value + 1);
 					props.onRefresh?.();
 				}
-			});
+			}, typeof focus?.nonce === "number" ? focus.nonce : 0);
 		}
 		function DocumentsSourcePage(props) {
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.MemorySourcePageFrame, {
@@ -1773,7 +1877,7 @@ window.__ModuleLoader__.load({
 		}
 		const inject = ["slots", "locale"];
 		function apply(ctx) {
-			installDocumentsMemoryUI(ctx, ctx.locale?.bind("mnemon") ?? dsh_mnemon_client.translateEn);
+			installDocumentsMemoryUI(ctx, ctx.locale.bind("mnemon"));
 		}
 		//#endregion
 		exports.DocumentsPage = DocumentsPage;

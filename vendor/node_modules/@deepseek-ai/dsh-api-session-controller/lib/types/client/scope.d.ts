@@ -6,11 +6,14 @@ import type { TypertRemoteScopeApi } from '@deepseek-ai/dsh-typert-protocol';
 export type AgentContext = Omit<Context, 'remote'> & {
     readonly remote: ClientRemote & TypertRemoteScopeApi<'agent'>;
 };
+interface ScopeIdentity {
+    readonly sessionId: SessionId;
+}
 /** A minted Agent scope and its disposal boundary. */
 export interface AgentScopeHandle {
     /**
      * Tagged context: scope-owned registrations and scoped dispatch both go
-     * through it (passing it as the dispatch subject routes to this agent's
+     * through it (passing it as the dispatch subject routes to this generation's
      * tagged listeners plus every untagged one).
      */
     ctx: AgentContext;
@@ -20,10 +23,10 @@ export interface AgentScopeHandle {
 /**
  * Mint an Agent scope under `ctx`: a no-op plugin fiber whose context
  * carries the agent tag and the dispatch filter — untagged listeners are
- * admitted globally, tagged listeners only for a matching agent.
+ * admitted globally, tagged listeners only for the same Client generation.
  * Registrations through the returned ctx dispose with the fiber.
  * @param ctx - client root context the scope fiber mounts under.
- * @param key - owning agent identity (the routing tag; agent id === session id).
+ * @param key - durable Session identity carried by this generation.
  * @returns the tagged context and its backing fiber.
  */
 export declare function createScope(ctx: Context, key: SessionId): AgentScopeHandle;
@@ -33,4 +36,11 @@ export declare function createScope(ctx: Context, key: SessionId): AgentScopeHan
  * @returns its agent identity (the session id), or undefined for root contexts.
  */
 export declare function scopeOf(ctx: Context): SessionId | undefined;
+/**
+ * Read the exact generation identity inherited by a Client Context.
+ * @param ctx - scoped or root Client Context.
+ * @returns the generation identity, or undefined for an unscoped Context.
+ */
+export declare function scopeIdentityOf(ctx: Context): ScopeIdentity | undefined;
+export {};
 //# sourceMappingURL=scope.d.ts.map

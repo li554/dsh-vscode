@@ -6,6 +6,6 @@ type SkillRowProps = ToolCallViewProps & PropsLocale<'skill'>;
  * @param props - keyed toolview payload plus the skill locale seat.
  * @returns the dedicated skill row.
  */
-export declare function SkillRow({ block, inspect, t }: SkillRowProps): import("react").JSX.Element;
+export declare function SkillRow(props: SkillRowProps): import("react").JSX.Element;
 export {};
 //# sourceMappingURL=SkillRow.d.ts.map

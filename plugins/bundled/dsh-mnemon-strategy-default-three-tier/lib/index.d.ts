@@ -1,9 +1,9 @@
-import { MemoryAvailableSource, MemoryViewRequest, MemoryViewSpec } from "dsh-mnemon/contracts";
+import * as projectionSDK from "dsh-mnemon/extension-sdk";
 import { Context } from "@deepseek-ai/cordis";
 //#region src/strategy.d.ts
 /** Pure View composition; no dependency on any Source implementation. */
 declare const DEFAULT_THREE_TIER_VIEW_STRATEGY: {
-  createTurn: (view: import("dsh-mnemon/extension-sdk").ComposableMemoryView) => import("dsh-mnemon/extension-sdk").MemoryStrategyTurn;
+  createTurn: (view: projectionSDK.ComposableMemoryView) => projectionSDK.MemoryStrategyTurn;
   manifest: {
     apiVersion: "dsh-mnemon/v1";
     kind: "strategy";
@@ -15,8 +15,9 @@ declare const DEFAULT_THREE_TIER_VIEW_STRATEGY: {
     maxRoutes: number;
     maxActions: number;
     extensionSlots: string[];
+    workflows: ("idle-review" | "runtime-capacity")[];
   };
-  compose(request: MemoryViewRequest, sources: readonly MemoryAvailableSource[], contributions?: readonly import("dsh-mnemon/extension-sdk").MemoryStrategyContribution[] | undefined): MemoryViewSpec;
+  compose(request: projectionSDK.MemoryViewRequest, sources: readonly projectionSDK.MemoryAvailableSource[], contributions?: readonly projectionSDK.MemoryStrategyContribution[] | undefined): projectionSDK.MemoryViewSpec;
 };
 //#endregion
 //#region src/index.d.ts

@@ -10,7 +10,9 @@
  * default — and whether the user layer carries it (presence, not value
  * equality, marks an override).
  */
-import type { SettingsScope, SnapshotStore } from './dsh-store-compat.ts';
+import type { SettingsScope, SettingsScopeSnapshot, SnapshotStore } from './dsh-store-compat.ts';
+/** Current forms omit mode; legacy memory scopes still cannot persist settings. */
+export declare function canWriteSettings(snapshot: SettingsScopeSnapshot<unknown>): boolean;
 /** The write one field's staged text performs when the card is saved. */
 export type FieldWrite = {
     kind: 'set';
@@ -84,6 +86,7 @@ export declare class CardForm<T> {
     private readonly specs;
     private readonly staged;
     private readonly listeners;
+    private readonly unsubscribe;
     private saving;
     private failed;
     /**
@@ -91,6 +94,8 @@ export declare class CardForm<T> {
      * @param specs - the section fields this card edits.
      */
     constructor(scope: SettingsScope<T>, specs: CardFieldSpec[]);
+    /** Release this editor's listeners without disposing the provider's shared form. */
+    dispose(): void;
     /** Publish a projection of this form, rebuilt whenever the scope or a draft changes. */
     bind<S>(project: () => S, createStore: (init: S) => SnapshotStore<S>): SnapshotStore<S>;
     /** Read the card-level state: what the Host serves, and what a save would do. */
@@ -101,9 +106,9 @@ export declare class CardForm<T> {
     actions(): CardActions;
     /**
      * Write every staged edit, then re-seed from what the Host accepted.
-     * @returns settlement after every write and the read-back.
+     * @returns true only when a non-empty save was accepted and read back.
      */
-    save(): Promise<void>;
+    save(): Promise<boolean>;
     /**
      * Every staged edit a save would write. An entry whose draft is not a value
      * its field accepts carries no write: the form is still dirty, and the save

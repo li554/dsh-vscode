@@ -29,6 +29,7 @@ __export(index_exports, {
   apply: () => apply,
   inject: () => inject,
   pausedSessions: () => pausedSessions,
+  readRecoveryAttempts: () => readRecoveryAttempts,
   readTodayStats: () => readTodayStats,
   resetTodayStats: () => resetTodayStats,
   unpauseSession: () => unpauseSession
@@ -36,10 +37,23 @@ __export(index_exports, {
 module.exports = __toCommonJS(index_exports);
 
 // src/shared/core.ts
+function resolveLocale(locale) {
+  if (typeof locale !== "string") return "en";
+  if (/^zh(?:-|$)/i.test(locale)) return "zh";
+  if (/^ru(?:-|$)/i.test(locale)) return "ru";
+  return "en";
+}
+var isSessionMode = (value) => value === "default" || value === "off" || value === "recover" || value === "loop";
+function sessionMode(modes, sessionId) {
+  return Object.prototype.hasOwnProperty.call(modes, sessionId) && isSessionMode(modes[sessionId]) ? modes[sessionId] : "default";
+}
 var LOCALIZED_TEXT_DEFAULTS = {
   zh: {
     continueText: "继续",
     continueTextMaxTokens: "继续",
+    continueTextSilent: "继续。你上一轮只输出了内部推理, 既没有回复也没有调用工具, 用户什么都没看到。每一轮都要以工具调用或可见回复结束。",
+    continueTextLoop: "继续",
+    continueTextInterrupted: "继续。宿主在你上一轮运行期间重启了; 重启时未完成的工具调用已按「结果未知」收尾。从中断处继续, 重试可能有副作用的操作前先核实外部状态。",
     guardPendingText: "(上一步工具「{tool}」可能未完成, 先确认状态再继续, 不要重复执行)",
     guardDoneText: "(上一步工具「{tool}」已完成, 结果: {result}; 不要重复执行, 直接继续)",
     loopText: "(检测到你可能陷入循环, 请停止重复刚才的动作, 换一种方式继续)"
@@ -47,14 +61,32 @@ var LOCALIZED_TEXT_DEFAULTS = {
   en: {
     continueText: "Continue",
     continueTextMaxTokens: "Continue",
+    continueTextSilent: "Continue. Your previous turn ended with internal reasoning only, with no message and no tool call, so nothing reached the user. Always finish a turn with a tool call or a visible answer.",
+    continueTextLoop: "Continue",
+    continueTextInterrupted: "Continue. The harness was restarted while your previous turn was still running; tool calls pending at the restart are recorded with unknown outcomes. Resume where you left off, verifying external state before retrying anything that may have side effects.",
     guardPendingText: '(The previous tool "{tool}" may not have completed. Check its state before continuing and do not run it again.)',
     guardDoneText: '(The previous tool "{tool}" completed successfully. Result: {result}; do not run it again. Continue from there.)',
     loopText: "(You may be stuck in a loop. Stop repeating the last action and continue with a different approach.)"
+  },
+  ru: {
+    continueText: "Продолжай",
+    continueTextMaxTokens: "Продолжай",
+    continueTextSilent: "Продолжай. Предыдущий ход закончился только внутренним рассуждением: ни ответа, ни вызова инструмента, поэтому пользователь ничего не увидел. Каждый ход должен заканчиваться вызовом инструмента или видимым ответом.",
+    continueTextLoop: "Продолжай",
+    continueTextInterrupted: "Продолжай. Хост перезапустился, пока предыдущий ход ещё выполнялся; вызовы инструментов, незавершённые на момент перезапуска, записаны с неизвестным результатом. Продолжай с места остановки, проверяя внешнее состояние перед повтором действий с возможными побочными эффектами.",
+    guardPendingText: "(Предыдущий инструмент «{tool}», возможно, не завершился. Проверь его состояние перед продолжением и не запускай его повторно.)",
+    guardDoneText: "(Предыдущий инструмент «{tool}» завершился успешно. Результат: {result}; не запускай его повторно, продолжай с этого места.)",
+    loopText: "(Похоже, ты застрял в цикле. Перестань повторять последнее действие и продолжай другим способом.)"
   }
 };
 var DEFAULT_CONFIG = {
-  locale: "zh",
-  ...LOCALIZED_TEXT_DEFAULTS.zh,
+  locale: "en",
+  ...LOCALIZED_TEXT_DEFAULTS.en,
+  usePluginSource: false,
+  resumeSilentTurns: true,
+  resumeSubagentSessions: false,
+  resumeCompletedTurns: false,
+  continueTextLoop: "",
   guardTools: true,
   graceMs: 3e3,
   cooldownMs: 2e4,
@@ -69,45 +101,103 @@ var DEFAULT_CONFIG = {
   backoffMaxMs: 3e5,
   notify: false,
   paused: false,
+  sessionModes: {},
+  showComposerToggle: true,
   loopGuard: true,
   loopShortChars: 40,
   loopWindowMs: 3e4,
   loopShortCount: 12,
   loopRepeatText: 4,
-  loopToolRepeat: 5
+  loopToolRepeat: 5,
+  resumeInterruptedChildren: false,
+  resumeGoals: false,
+  resumePausedGoals: false,
+  pauseWhenOffline: true,
+  offlineCheckMs: 15e3,
+  loopMaxIterations: 0
 };
 var RECOVERY_WINDOW_MS = 10 * 60 * 1e3;
 var ECHO_WINDOW_MS = 10 * 60 * 1e3;
 
 // src/client/locales.ts
 var zh = {
-  "card.title": "自动继续",
-  "card.description": "接住意外中断的请求，等现场稳定下来，再把对话交还给 Agent。",
-  "flow.interrupted": "检测中断",
-  "flow.grace": "安全等待",
-  "flow.continue": "发送继续",
-  "repo.star": "去 GitHub 点 Star",
-  "repo.aria": "打开 dsh-auto-continue 的 GitHub 开源地址并点 Star",
-  "section.handoff.title": "接力方式",
-  "section.handoff.description": "决定中断后说什么，以及什么时候暂时停手。",
-  "section.safety.title": "安全节奏",
-  "section.safety.description": "先确认上一步，再控制等待与连续续跑的边界。",
-  "section.recovery.title": "恢复雷达",
-  "section.recovery.description": "扫描掉线会话，识别可恢复错误并逐步退避。",
-  "section.loop.title": "循环断路器",
-  "section.loop.description": "发现空转时及时换路，而不是让 Agent 原地消耗。",
-  "section.live.title": "现场状态",
-  "section.live.description": "看看今天接住了多少次，以及哪些会话还在暂停。",
-  "field.paused": "暂停自动继续",
-  "field.pausedHint": "全局暂停: 实时与扫描都不会再自动发送, 已排队的待发送也会取消。",
+  "chrome.saved": "所有更改已保存",
+  "notification.title": "自动继续设置",
+  "notification.enabled": "设置已保存，浏览器通知已开启。",
+  "notification.disabled": "设置已保存，浏览器通知已关闭。",
+  "notification.saved": "自动继续的设置已保存。",
+  "notification.blocked": "设置已保存，但浏览器尚未允许通知。请在此网站的权限设置中允许通知。",
+  "notification.unsupported": "设置已保存，当前浏览器不支持通知。",
+  "notification.failed": "设置已保存，但浏览器通知未能发出。请检查网站和系统的通知权限。",
+  "chrome.categories": "设置类别",
+  "repo.star": "觉得好用的话，点个 Star 吧",
+  "repo.link": "GitHub 仓库",
+  "repo.aria": "在新标签页打开 HsiangNianian/dsh-auto-continue 的 GitHub 仓库",
+  "category.general.title": "常规",
+  "category.general.description": "控制自动继续的启停、显示和通知。",
+  "category.recovery.title": "重试策略",
+  "category.recovery.description": "设置等待时间、次数上限和错误分类。",
+  "category.startup.title": "启动恢复",
+  "category.startup.description": "DSH 重启后，找回最近中断的会话。",
+  "category.prompts.title": "继续文本",
+  "category.prompts.description": "留空使用内置文案，跟随 DSH 的界面语言。",
+  "category.safety.title": "安全保护",
+  "category.safety.description": "避免重复执行工具，识别并打断无效循环。",
+  "category.status.title": "状态与日志",
+  "category.status.description": "查看活动记录与暂停的会话。",
+  "field.paused": "全局启用自动继续",
+  "field.showComposerToggle": "在会话区显示自动继续开关",
+  "field.showComposerToggleHint": "默认显示。隐藏控件不会改变会话模式；点击保存后生效。",
+  "field.usePluginSource": "以插件来源发送继续消息",
+  "field.usePluginSourceHint": "默认关闭，沿用旧版用户消息来源；开启后标记为本插件来源。点击保存后生效。",
+  "composer.label": "自动继续",
+  "composer.mode": "自动继续模式",
+  "composer.scope": "只控制当前会话，立即保存并同步到其他标签页。关闭后也不再自动打断循环。",
+  "composer.default": "跟随默认",
+  "composer.off": "关闭",
+  "composer.recover": "仅故障恢复",
+  "composer.loop": "自主循环",
+  "composer.paused": "全局已暂停",
+  "composer.unavailable": "等待宿主连接",
+  "composer.reconnecting": "正在重新连接状态桥…当前显示的是上次的设置，重连后才能修改。",
+  "composer.saving": "正在保存自动继续设置…",
+  "composer.saveFailed": "保存失败，请重试",
+  "field.pausedHint": "恢复意外中断的会话。关闭并保存后，全局暂停恢复并取消已排队的继续。循环守卫独立运行；如需停止自动打断，请同时关闭循环守卫。",
   "field.continueText": "继续文本",
   "field.continueTextHint": "中断后自动发送的消息内容。",
   "default.continueText": LOCALIZED_TEXT_DEFAULTS.zh.continueText,
   "field.continueTextMaxTokens": "超限时的继续文本",
   "field.continueTextMaxTokensHint": "达到输出 token 上限时自动发送的文本, 支持与继续文本相同的占位符。",
   "default.continueTextMaxTokens": LOCALIZED_TEXT_DEFAULTS.zh.continueTextMaxTokens,
+  "field.resumeSilentTurns": "续跑无输出回合",
+  "field.resumeSilentTurnsHint": "已观察到模型活动但没有可见输出时续跑；不把空回合、图片或扩展内容误判为静默，冷却与连续上限照常生效。",
+  "field.resumeSubagentSessions": "续跑子代理会话",
+  "field.resumeSubagentSessionsHint": "当子代理所属主会话启用自动继续时，自动续跑其中断的子代理会话。子代理不会进入自主循环、不会被循环守卫重启，也不会由启动扫描恢复。默认关闭。只对仍处于加载状态的子代理生效：DSH 通常会在后台子代理失败后立即关闭它，并把失败结果交给父会话。",
+  "field.resumeCompletedTurns": "默认会话模式",
+  "field.resumeCompletedTurnsHint": "用于未单独设置模式的会话。仅故障恢复继续中断和无输出回合；自主循环还会在正常完成后继续。无输出和失败回合仍计入连续重试次数。",
+  "field.resumeInterruptedChildren": "重启后唤醒子代理会话",
+  "field.resumeInterruptedChildrenHint": "DSH 重启后，将中断的子代理或团队成员会话清单发送给根会话，由其决定继续或收尾。默认关闭；你手动停止的根会话保持停止。",
+  "field.resumeGoals": "重新武装被重启失活的 goal",
+  "field.resumeGoalsHint": "会话被自动续跑时，把被宿主 disarm 的 active goal 重新 arm，让 goal 的自动继续轮能转起来。注意：这等于代替你做了授权，所以默认关闭。",
+  "field.resumePausedGoals": "恢复被暂停的 goal",
+  "field.resumePausedGoalsHint": "连你手动 pause 的 goal 也一并恢复（需同时开启「重新武装被重启失活的 goal」）。暂停通常是人的明确决定，非必要别开。",
+  "field.pauseWhenOffline": "断网时暂停续跑",
+  "field.pauseWhenOfflineHint": "网络类错误(连不上、DNS 失败、传输超时)续跑前先检测宿主是否联网；断网时挂起，不消耗连续次数，联网后自动继续。设了 HTTP(S)_PROXY 时只检查网卡。",
+  "field.offlineCheckMs": "断网复检间隔 (ms)",
+  "field.offlineCheckMsHint": "挂起期间多久重新检测一次网络，最小 1000。",
+  "field.loopMaxIterations": "自主循环轮数上限",
+  "field.loopMaxIterationsHint": "每个会话自主续跑的最多轮数，0 为不限制。到达上限后停下并提示一次；你发消息或重新开启循环后重新计数。",
+  "field.continueTextLoop": "自主循环的继续文本",
+  "field.continueTextLoopHint": "自主循环每次续跑时发送的文本。",
+  "default.continueTextLoop": LOCALIZED_TEXT_DEFAULTS.zh.continueTextLoop,
+  "field.continueTextSilent": "无输出回合的继续文本",
+  "field.continueTextSilentHint": "回合只输出推理就结束时自动发送的文本, 支持与继续文本相同的占位符。",
+  "default.continueTextSilent": LOCALIZED_TEXT_DEFAULTS.zh.continueTextSilent,
+  "field.continueTextInterrupted": "宿主重启后恢复的继续文本",
+  "field.continueTextInterruptedHint": "DSH 重启后恢复中断会话时发送的文本。",
+  "default.continueTextInterrupted": LOCALIZED_TEXT_DEFAULTS.zh.continueTextInterrupted,
   "field.guardTools": "幂等护栏",
-  "field.guardToolsHint": "续跑前检查上一步工具调用: 结果未确认时提示先确认状态, 已成功时提示不要重复执行, 避免重复 commit/调 API。",
+  "field.guardToolsHint": "继续前，工具结果未确认时提醒模型核实状态，已成功时提醒跳过该操作。",
   "field.guardPendingText": "结果未确认时的护栏文本",
   "field.guardPendingTextHint": "上一步工具可能已部分执行时附加到继续文本之后, 支持 {tool} 占位符。",
   "default.guardPendingText": LOCALIZED_TEXT_DEFAULTS.zh.guardPendingText,
@@ -117,28 +207,28 @@ var zh = {
   "field.graceMs": "宽限期 (ms)",
   "field.graceMsHint": "检测到中断后等待的时长; 期间宿主自行恢复则取消。",
   "field.cooldownMs": "冷却时间 (ms)",
-  "field.cooldownMsHint": "同一会话两次自动「继续」的最小间隔, 失败尝试也计入。",
+  "field.cooldownMsHint": "同一会话两次恢复尝试的最小间隔。冷却期间失败会先等待冷却结束，再进入宽限期；正常完成后的自主循环不受此限制。",
   "field.maxConsecutive": "最大连续次数",
-  "field.maxConsecutiveHint": "同一会话连续自动「继续」的上限; 超过后停止, 直到用户手动介入或出现成功回合。",
-  "field.scanOnBoot": "启动/重连扫描",
-  "field.scanOnBootHint": "页面启动或重连时扫描最近中断的会话并自动续跑(如浏览器关闭期间宿主崩溃)。",
+  "field.maxConsecutiveHint": "连续恢复尝试的上限；用户介入或回合成功且有可见输出后清零。正常完成后的自主循环不计入。",
+  "field.scanOnBoot": "启动恢复扫描",
+  "field.scanOnBootHint": "DSH 启动后，在扫描时间窗内查找并恢复近期中断的会话，包括当前未打开的会话。",
   "field.scanLimit": "扫描会话数",
-  "field.scanLimitHint": "最多检查多少个最近更新的会话(不含运行中与子代理会话)。",
+  "field.scanLimitHint": "每次扫描最多恢复多少个符合条件的会话，优先最近活动的会话。",
   "field.freshMs": "扫描时间窗 (ms)",
-  "field.freshMsHint": "扫描只处理该时间窗内的中断。",
+  "field.freshMsHint": "恢复此时长内中断的会话；启动扫描也在此时长后结束。",
   "field.verbose": "详细日志",
-  "field.verboseHint": "在浏览器控制台输出 [auto-continue] 日志。",
+  "field.verboseHint": "在 DSH 日志中记录自动继续活动，前缀为 [auto-continue]；使用 CLI 时可在运行 DSH 的终端查看。",
   "field.classify": "错误分类",
   "field.classifyHint": "仅自动恢复临时性错误(网络/超时/5xx 等); 认证/余额/模型不存在等永久性错误跳过并通知。",
   "field.retryableErrorPatterns": "自定义可恢复错误",
-  "field.retryableErrorPatternsHint": "每行一个大小写不敏感的普通文本片段; 命中错误码、HTTP 状态或消息时覆盖内置分类。请只填 provider 稳定且足够具体的文案, 过宽会重复请求。",
+  "field.retryableErrorPatternsHint": "每行填写一个具体文本片段，忽略大小写。匹配错误码、HTTP 状态或消息后允许重试；宽泛片段也会重试认证、余额等原本跳过的错误。",
   "field.retryableErrorPatternsPlaceholder": "例如：Upstream rejected the request as invalid",
   "field.backoffFactor": "退避系数",
   "field.backoffFactorHint": "连续失败时冷却间隔的倍率(如 2 表示 20s→40s→80s 递增)。",
   "field.backoffMaxMs": "最大退避间隔 (ms)",
-  "field.backoffMaxMsHint": "自适应退避的上限, 防止等待过久。",
+  "field.backoffMaxMsHint": "连续失败时，冷却间隔增长到此值后不再增加。",
   "field.notify": "浏览器通知",
-  "field.notifyHint": "自动继续成功/放弃/遇到永久性错误时弹出浏览器通知, 通知带「立即续跑」与「暂停该会话 1 小时」按钮。",
+  "field.notifyHint": "开启后，自动继续活动和设置保存成功时会通知；关闭并保存时也会收到确认。首次开启需允许浏览器通知。",
   "stats.title": "今日统计",
   "stats.sent": "自动继续",
   "stats.skipped": "跳过(永久错误)",
@@ -147,23 +237,35 @@ var zh = {
   "stats.gaveUp": "停止(达上限)",
   "stats.looped": "循环打断",
   "field.loopGuard": "循环守卫",
-  "field.loopGuardHint": "检测运行中的回合空转: 连续短句且无工具调用、流式消息内连续复读, 或连续调用相同工具时, 自动取消并用循环提示文本重启回合。",
+  "field.loopGuardHint": "回合连续输出短句且无工具调用、重复文本或重复相同工具调用时，按以下阈值自动打断，并用循环提示文本重启。",
   "field.loopShortChars": "短句长度上限 (字符)",
-  "field.loopShortCharsHint": "模型消息文本短于该值计为一条短句(空转信号)。",
+  "field.loopShortCharsHint": "模型消息文本短于此值时计为一条短句。",
   "field.loopWindowMs": "短句时间窗 (ms)",
-  "field.loopWindowMsHint": "连续短句必须落在这个时间窗内; 正常思考的短文本散布在长时间里不会被误判。",
+  "field.loopWindowMsHint": "仅统计此时间窗内的连续短句。",
   "field.loopShortCount": "连续短句阈值",
   "field.loopShortCountHint": "时间窗内连续多少条短句且期间无工具调用时判定空转循环。",
   "field.loopRepeatText": "相同消息重复次数",
-  "field.loopRepeatTextHint": "连续输出多少条完全相同的消息时判定空转(最强信号, 不限长度, 也用于流式消息内连续复读段落)。",
+  "field.loopRepeatTextHint": "连续输出相同消息达到此次数时打断，不限消息长度；也适用于单条流式消息内的重复段落。",
   "field.loopToolRepeat": "同工具重复次数",
-  "field.loopToolRepeatHint": "同工具+同参数+同结果的连续调用多少次时判定死循环; 参数或结果有变化视为有进展。",
+  "field.loopToolRepeatHint": "工具、参数和结果均相同的连续调用达到此次数时打断。",
   "field.loopText": "循环提示文本",
   "field.loopTextHint": "打断后重启回合时发送的文本, 支持 {tool} 占位符。",
   "default.loopText": LOCALIZED_TEXT_DEFAULTS.zh.loopText,
   "stats.byCode": "按错误码统计",
   "stats.empty": "今天还没有自动继续记录。",
   "stats.reset": "清零",
+  "recovery.title": "近期恢复尝试",
+  "recovery.hint": "按会话汇总当前 DSH 最近 20 次恢复尝试，插件重启后清空，不含正常自主续跑。",
+  "recovery.empty": "尚无恢复尝试。",
+  "recovery.count": "窗口内尝试",
+  "recovery.consecutive": "最近发送时连续次数",
+  "recovery.latest": "最近原因",
+  "recovery.reason.error": "请求错误",
+  "recovery.reason.max-tokens": "输出上限",
+  "recovery.reason.silent": "无可见输出",
+  "recovery.reason.interrupted": "宿主重启中断",
+  "recovery.reason.loop-guard": "循环守卫",
+  "recovery.reason.manual": "手动立即续跑",
   "pause.title": "已暂停会话",
   "pause.none": "没有暂停中的会话。",
   "pause.clearAll": "全部解除",
@@ -172,8 +274,9 @@ var zh = {
   "chrome.collapse": "收起设置",
   "chrome.expand": "展开设置",
   "chrome.unsaved": "未保存",
-  "chrome.readOnly": "当前部署的设置只读。",
-  "chrome.saveFailed": "部署未接受这些值, 已保留供你修改。",
+  "chrome.readOnly": "设置为只读，无法修改。",
+  "chrome.unavailable": "设置暂不可用。",
+  "chrome.saveFailed": "保存失败，修改已保留。请检查后重试。",
   "chrome.discard": "放弃",
   "chrome.saving": "保存中…",
   "chrome.save": "保存",
@@ -185,33 +288,83 @@ var zh = {
   "chrome.off": "关"
 };
 var en = {
-  "card.title": "Auto continue",
-  "card.description": "Catches an interrupted request, waits for things to settle, then hands the thread back to the agent.",
-  "flow.interrupted": "Interrupted",
-  "flow.grace": "Safe pause",
-  "flow.continue": "Continue",
-  "repo.star": "Star on GitHub",
-  "repo.aria": "Open the dsh-auto-continue repository on GitHub and star it",
-  "section.handoff.title": "The handoff",
-  "section.handoff.description": "Choose what gets sent after an interruption and when the relay should stand down.",
-  "section.safety.title": "Safety rhythm",
-  "section.safety.description": "Confirm the previous step, then set the boundaries for waiting and repeated resumes.",
-  "section.recovery.title": "Recovery radar",
-  "section.recovery.description": "Find dropped sessions, recognize recoverable errors, and back off gracefully.",
-  "section.loop.title": "Loop breaker",
-  "section.loop.description": "Spot a spinning agent and route it forward before it burns time in place.",
-  "section.live.title": "Live signal",
-  "section.live.description": "See what the relay caught today and which sessions are still paused.",
-  "field.paused": "Pause auto-continue",
-  "field.pausedHint": "Globally pause: no live or scan auto-send fires, and queued pending sends are cancelled.",
+  "chrome.saved": "All changes saved",
+  "notification.title": "Auto-continue settings",
+  "notification.enabled": "Settings saved. Browser notifications are on.",
+  "notification.disabled": "Settings saved. Browser notifications are off.",
+  "notification.saved": "Your auto-continue settings have been saved.",
+  "notification.blocked": "Settings saved, but browser notifications are not allowed. Allow notifications in this site’s permissions.",
+  "notification.unsupported": "Settings saved. This browser does not support notifications.",
+  "notification.failed": "Settings saved, but the notification could not be sent. Check notification permissions for this site and your system.",
+  "chrome.categories": "Settings categories",
+  "repo.star": "Finding it useful? Leave a Star",
+  "repo.link": "GitHub repo",
+  "repo.aria": "Open HsiangNianian/dsh-auto-continue on GitHub in a new tab",
+  "category.general.title": "General",
+  "category.general.description": "Control automatic recovery, visibility, and notifications.",
+  "category.recovery.title": "Retry strategy",
+  "category.recovery.description": "Set wait times, retry limits, and error classification.",
+  "category.startup.title": "Startup recovery",
+  "category.startup.description": "Find recently interrupted sessions when DSH restarts.",
+  "category.prompts.title": "Continue text",
+  "category.prompts.description": "Leave blank for built-in text in the current DSH language.",
+  "category.safety.title": "Safety",
+  "category.safety.description": "Avoid duplicate tool actions and break unproductive loops.",
+  "category.status.title": "Status and logs",
+  "category.status.description": "View activity and paused sessions.",
+  "field.paused": "Enable auto-continue globally",
+  "field.showComposerToggle": "Show auto-continue switch in the composer",
+  "field.showComposerToggleHint": "Shown by default. Hiding the control does not change session modes. Click Save to apply.",
+  "field.usePluginSource": "Send continue messages with plugin source",
+  "field.usePluginSourceHint": "Off by default to keep the legacy user-message source. Turn on to identify messages as coming from this plugin. Click Save to apply.",
+  "composer.label": "Auto-continue",
+  "composer.mode": "Auto-continue mode",
+  "composer.scope": "Only affects this session. Saved immediately and synced across tabs. Off also disables loop-guard interruptions here.",
+  "composer.default": "Follow default",
+  "composer.off": "Off",
+  "composer.recover": "Recovery only",
+  "composer.loop": "Autonomous loop",
+  "composer.paused": "Globally paused",
+  "composer.unavailable": "Waiting for host",
+  "composer.reconnecting": "Reconnecting to the host… Showing the last known setting; changes are available again once reconnected.",
+  "composer.saving": "Saving auto-continue setting…",
+  "composer.saveFailed": "Could not save. Try again.",
+  "field.pausedHint": "Resume interrupted sessions. Turn off and save to pause recovery globally and cancel queued continuations. The loop guard stays active; turn it off separately to stop automatic interruptions.",
   "field.continueText": "Continue text",
   "field.continueTextHint": "Message automatically sent after an interruption.",
   "default.continueText": LOCALIZED_TEXT_DEFAULTS.en.continueText,
   "field.continueTextMaxTokens": "Continue text (max tokens)",
   "field.continueTextMaxTokensHint": "Text sent when the output token ceiling is reached; same placeholders as the continue text.",
   "default.continueTextMaxTokens": LOCALIZED_TEXT_DEFAULTS.en.continueTextMaxTokens,
+  "field.resumeSilentTurns": "Resume silent turns",
+  "field.resumeSilentTurnsHint": "Resume observed model activity without visible output. No-op turns, images and extension blocks are not treated as silent; cooldown and retry limits still apply.",
+  "field.resumeSubagentSessions": "Resume subagent sessions",
+  "field.resumeSubagentSessionsHint": "Auto-continue interrupted subagent sessions when their main conversation has auto-continue enabled. Subagents never start the autonomous loop, are never loop-guard restarted, and are not recovered by the startup scan. Off by default. Only applies while the subagent is still loaded: DSH usually closes a background subagent as soon as it fails and reports the failure to its parent.",
+  "field.resumeCompletedTurns": "Default session mode",
+  "field.resumeCompletedTurnsHint": "Applies to sessions without their own mode. Recovery only resumes interruptions and silent turns; autonomous loop also continues after normal completions. Silent and failed turns still count toward the consecutive retry limit.",
+  "field.resumeInterruptedChildren": "Wake child sessions after restart",
+  "field.resumeInterruptedChildrenHint": "After DSH restarts, send the root session a list of interrupted subagent or team-member sessions so it can continue or wrap up their work. Off by default; root sessions you stopped manually stay stopped.",
+  "field.resumeGoals": "Re-arm goals disarmed by a restart",
+  "field.resumeGoalsHint": "When a session is auto-continued, re-arm an active goal that the host disarmed so its continuation rounds can run again. This authorizes on your behalf, so it is off by default.",
+  "field.resumePausedGoals": "Resume paused goals",
+  "field.resumePausedGoalsHint": "Also resume goals you paused by hand (requires “Re-arm goals disarmed by a restart” to be on as well). Pausing is normally a deliberate human decision; leave this off unless you want it.",
+  "field.pauseWhenOffline": "Pause while offline",
+  "field.pauseWhenOfflineHint": "Before retrying a network error (unreachable host, DNS failure, transport timeout), check that the host is online. While offline the retry waits without using up consecutive attempts, then continues once the network is back. With HTTP(S)_PROXY set, only network interfaces are checked.",
+  "field.offlineCheckMs": "Offline re-check interval (ms)",
+  "field.offlineCheckMsHint": "How often a held retry checks the network again. Minimum 1000.",
+  "field.loopMaxIterations": "Autonomous loop round limit",
+  "field.loopMaxIterationsHint": "Maximum autonomous rounds per session; 0 means no limit. When reached, the loop stops and tells you once; sending a message or turning the loop back on starts the count over.",
+  "field.continueTextLoop": "Continue text (autonomous loop)",
+  "field.continueTextLoopHint": "Text sent on each autonomous-loop continuation.",
+  "default.continueTextLoop": LOCALIZED_TEXT_DEFAULTS.en.continueTextLoop,
+  "field.continueTextSilent": "Continue text (silent turn)",
+  "field.continueTextSilentHint": "Text sent when a turn ends with reasoning only; same placeholders as the continue text.",
+  "default.continueTextSilent": LOCALIZED_TEXT_DEFAULTS.en.continueTextSilent,
+  "field.continueTextInterrupted": "Continue text (after harness restart)",
+  "field.continueTextInterruptedHint": "Text sent when resuming an interrupted session after DSH restarts.",
+  "default.continueTextInterrupted": LOCALIZED_TEXT_DEFAULTS.en.continueTextInterrupted,
   "field.guardTools": "Idempotency guard",
-  "field.guardToolsHint": "Before resuming, inspect the last tool call: if its result is unconfirmed, tell the model to check state first; if it succeeded, tell it not to rerun — avoids duplicate commits / API calls.",
+  "field.guardToolsHint": "Before resuming, remind the model to check unconfirmed tool results or skip an action that already succeeded.",
   "field.guardPendingText": "Guard text (unconfirmed result)",
   "field.guardPendingTextHint": "Appended when the last tool may have partially executed; supports the {tool} placeholder.",
   "default.guardPendingText": LOCALIZED_TEXT_DEFAULTS.en.guardPendingText,
@@ -221,28 +374,28 @@ var en = {
   "field.graceMs": "Grace period (ms)",
   "field.graceMsHint": "Wait after an interruption; cancelled if the host recovers on its own.",
   "field.cooldownMs": "Cooldown (ms)",
-  "field.cooldownMsHint": "Minimum interval between auto-continues per session; failed attempts count too.",
+  "field.cooldownMsHint": "Minimum interval between recovery attempts in the same session. Failures during cooldown wait until it ends, then enter the grace period. Autonomous continuations after normal completions are exempt.",
   "field.maxConsecutive": "Max consecutive",
-  "field.maxConsecutiveHint": "Max consecutive auto-continues per session; stops until a user intervenes or a turn completes.",
-  "field.scanOnBoot": "Scan on load / reconnect",
-  "field.scanOnBootHint": "Scan recently interrupted sessions on page load or reconnect (e.g. the host crashed while the browser was closed).",
+  "field.maxConsecutiveHint": "Limit on consecutive recovery attempts. Resets on user intervention or a successful turn with visible output. Autonomous continuations after normal completions do not count.",
+  "field.scanOnBoot": "Scan on host startup",
+  "field.scanOnBootHint": "When DSH starts, find and resume recently interrupted sessions within the scan window, including sessions that are not currently open.",
   "field.scanLimit": "Scan limit",
-  "field.scanLimitHint": "How many most-recently-updated sessions to check (running / subagent sessions excluded).",
+  "field.scanLimitHint": "Maximum eligible sessions to recover per pass, most recently active first.",
   "field.freshMs": "Scan window (ms)",
-  "field.freshMsHint": "Only interruptions inside this window are considered.",
+  "field.freshMsHint": "Resume sessions interrupted within this duration. The startup scan also ends after this duration.",
   "field.verbose": "Verbose logs",
-  "field.verboseHint": "Log [auto-continue] lines to the browser console.",
+  "field.verboseHint": "Record auto-continue activity in DSH logs with the [auto-continue] prefix. CLI users can view them in the terminal running DSH.",
   "field.classify": "Classify errors",
   "field.classifyHint": "Auto-resume transient failures only (network/timeout/5xx…); auth, balance and model errors are skipped and notified.",
   "field.retryableErrorPatterns": "Custom retryable errors",
-  "field.retryableErrorPatternsHint": "One case-insensitive literal per line. A match in the error code, HTTP status, or message overrides built-in classification. Use only stable, provider-specific text; broad matches can repeat requests.",
+  "field.retryableErrorPatternsHint": "Enter one specific text fragment per line, ignoring case. A match in the error code, HTTP status, or message allows a retry. Broad fragments can also retry normally skipped authentication or balance errors.",
   "field.retryableErrorPatternsPlaceholder": "For example: Upstream rejected the request as invalid",
   "field.backoffFactor": "Backoff factor",
   "field.backoffFactorHint": "Cooldown multiplier per consecutive failure (2 = 20s→40s→80s…).",
   "field.backoffMaxMs": "Max backoff (ms)",
-  "field.backoffMaxMsHint": "Cap on the adaptive backoff interval.",
+  "field.backoffMaxMsHint": "Cooldown stops increasing at this value after consecutive failures.",
   "field.notify": "Browser notifications",
-  "field.notifyHint": 'Notify when auto-continue fires, gives up, or hits a permanent error; notifications carry "Resume now" and "Pause this session 1h" buttons.',
+  "field.notifyHint": "When enabled, notify about auto-continue activity and successful settings saves. Turning this off and saving also sends a confirmation. Allow browser notifications when first enabling it.",
   "stats.title": "Today's stats",
   "stats.sent": "Auto-continued",
   "stats.skipped": "Skipped (permanent)",
@@ -251,23 +404,35 @@ var en = {
   "stats.gaveUp": "Gave up (cap)",
   "stats.looped": "Loops broken",
   "field.loopGuard": "Loop guard",
-  "field.loopGuardHint": "Detects a running turn spinning in place — many short sentences with no tool calls, repeated paragraphs inside one streamed assistant message, or the same tool repeating — then cancels and restarts with the loop text.",
+  "field.loopGuardHint": "Interrupt turns that produce consecutive short sentences without tool calls, repeat text, or repeat identical tool calls at the thresholds below. Restart with the loop text.",
   "field.loopShortChars": "Short-sentence max (chars)",
-  "field.loopShortCharsHint": "A model message shorter than this counts as a short sentence (spinning signal).",
+  "field.loopShortCharsHint": "A model message shorter than this counts as a short sentence.",
   "field.loopWindowMs": "Short-sentence window (ms)",
-  "field.loopWindowMsHint": "Consecutive short sentences must land inside this window; normal thinking spread over time is not misjudged.",
+  "field.loopWindowMsHint": "Count consecutive short sentences only within this window.",
   "field.loopShortCount": "Short-sentence threshold",
   "field.loopShortCountHint": "How many consecutive short sentences inside the window, with no tool call, trip the loop guard.",
   "field.loopRepeatText": "Identical message count",
-  "field.loopRepeatTextHint": "How many consecutive identical messages trip the guard (strongest signal, any length; also used for repeated paragraphs inside one streamed assistant message).",
+  "field.loopRepeatTextHint": "Interrupt after this many consecutive identical messages, regardless of length. Also applies to repeated paragraphs within a single streamed message.",
   "field.loopToolRepeat": "Same-tool repeat count",
-  "field.loopToolRepeatHint": "How many consecutive calls of the same tool with identical arguments and results trip the loop guard; a changed argument or result counts as progress.",
+  "field.loopToolRepeatHint": "Interrupt after this many consecutive calls with the same tool, arguments, and results.",
   "field.loopText": "Loop text",
   "field.loopTextHint": "Text sent after the loop guard restarts a turn; supports the {tool} placeholder.",
   "default.loopText": LOCALIZED_TEXT_DEFAULTS.en.loopText,
   "stats.byCode": "By error code",
   "stats.empty": "No auto-continue activity today.",
   "stats.reset": "Reset",
+  "recovery.title": "Recent recovery attempts",
+  "recovery.hint": "The last 20 recovery attempts for this DSH instance, grouped by session. Cleared when the plugin restarts; normal autonomous continuations are excluded.",
+  "recovery.empty": "No recovery attempts yet.",
+  "recovery.count": "Attempts in window",
+  "recovery.consecutive": "Consecutive at last send",
+  "recovery.latest": "Latest reason",
+  "recovery.reason.error": "Request error",
+  "recovery.reason.max-tokens": "Output limit",
+  "recovery.reason.silent": "No visible output",
+  "recovery.reason.interrupted": "Host restart interruption",
+  "recovery.reason.loop-guard": "Loop guard",
+  "recovery.reason.manual": "Manual resume",
   "pause.title": "Paused sessions",
   "pause.none": "No sessions paused.",
   "pause.clearAll": "Clear all",
@@ -276,8 +441,9 @@ var en = {
   "chrome.collapse": "Hide settings",
   "chrome.expand": "Show settings",
   "chrome.unsaved": "Unsaved",
-  "chrome.readOnly": "This deployment stores settings read-only.",
-  "chrome.saveFailed": "The deployment did not accept these values; they were left for you to correct.",
+  "chrome.readOnly": "Settings are read-only.",
+  "chrome.unavailable": "Settings are unavailable.",
+  "chrome.saveFailed": "Could not save. Your edits are still here; review them and try again.",
   "chrome.discard": "Discard",
   "chrome.saving": "Saving…",
   "chrome.save": "Save",
@@ -288,9 +454,204 @@ var en = {
   "chrome.on": "On",
   "chrome.off": "Off"
 };
+var ru = {
+  "chrome.saved": "Все изменения сохранены",
+  "notification.title": "Настройки авто-продолжения",
+  "notification.enabled": "Настройки сохранены. Уведомления браузера включены.",
+  "notification.disabled": "Настройки сохранены. Уведомления браузера выключены.",
+  "notification.saved": "Настройки авто-продолжения сохранены.",
+  "notification.blocked": "Настройки сохранены, но браузер не разрешает уведомления. Разрешите уведомления в настройках этого сайта.",
+  "notification.unsupported": "Настройки сохранены. Этот браузер не поддерживает уведомления.",
+  "notification.failed": "Настройки сохранены, но уведомление не удалось отправить. Проверьте разрешения на уведомления для сайта и в системе.",
+  "chrome.categories": "Категории настроек",
+  "repo.star": "Понравилось? Поставьте звезду",
+  "repo.link": "Репозиторий GitHub",
+  "repo.aria": "Открыть HsiangNianian/dsh-auto-continue на GitHub в новой вкладке",
+  "category.general.title": "Общие",
+  "category.general.description": "Управление запуском, отображением и уведомлениями авто-продолжения.",
+  "category.recovery.title": "Стратегия повторов",
+  "category.recovery.description": "Время ожидания, лимиты повторов и классификация ошибок.",
+  "category.startup.title": "Восстановление при запуске",
+  "category.startup.description": "Поиск недавно прерванных сессий после перезапуска DSH.",
+  "category.prompts.title": "Текст продолжения",
+  "category.prompts.description": "Оставьте пустым, чтобы использовать встроенный текст на текущем языке DSH.",
+  "category.safety.title": "Защита",
+  "category.safety.description": "Защита от повторного выполнения инструментов и разрыв холостых циклов.",
+  "category.status.title": "Состояние и журнал",
+  "category.status.description": "Активность и приостановленные сессии.",
+  "field.paused": "Включить авто-продолжение глобально",
+  "field.showComposerToggle": "Показывать переключатель авто-продолжения в поле ввода",
+  "field.showComposerToggleHint": "Показывается по умолчанию. Скрытие не меняет режимы сессий. Применится после нажатия «Сохранить».",
+  "composer.label": "Авто-продолжение",
+  "composer.mode": "Режим авто-продолжения",
+  "composer.scope": "Действует только на эту сессию: сохраняется сразу и синхронизируется между вкладками. «Выключено» также отключает здесь прерывания защитой от циклов.",
+  "composer.default": "Как по умолчанию",
+  "composer.off": "Выключено",
+  "composer.recover": "Только восстановление",
+  "composer.loop": "Автономный цикл",
+  "composer.paused": "Приостановлено глобально",
+  "composer.unavailable": "Ожидание хоста",
+  "composer.reconnecting": "Переподключение к хосту… Показана последняя известная настройка; изменить её можно после переподключения.",
+  "composer.saving": "Сохранение авто-продолжения…",
+  "composer.saveFailed": "Не удалось сохранить. Повторите попытку.",
+  "field.pausedHint": "Восстанавливать прерванные сессии. Выключите и сохраните, чтобы приостановить восстановление глобально и отменить запланированные продолжения. Защита от циклов продолжает работать; чтобы остановить автоматические прерывания, отключите её отдельно.",
+  "field.continueText": "Текст продолжения",
+  "field.continueTextHint": "Сообщение, автоматически отправляемое после прерывания.",
+  "default.continueText": LOCALIZED_TEXT_DEFAULTS.ru.continueText,
+  "field.continueTextMaxTokens": "Текст продолжения (лимит токенов)",
+  "field.continueTextMaxTokensHint": "Отправляется при достижении лимита выходных токенов; те же подстановки, что и в тексте продолжения.",
+  "default.continueTextMaxTokens": LOCALIZED_TEXT_DEFAULTS.ru.continueTextMaxTokens,
+  "field.resumeSilentTurns": "Продолжать ходы без вывода",
+  "field.resumeSilentTurnsHint": "Продолжать при наблюдаемой активности модели без видимого вывода. Пустые ходы, изображения и блоки расширений тихими не считаются; задержка и лимиты повторов действуют.",
+  "field.resumeSubagentSessions": "Продолжать сессии субагентов",
+  "field.resumeSubagentSessionsHint": "Автоматически продолжать прерванные сессии субагентов, если в их основном диалоге включено авто-продолжение. Субагенты не запускают автономный цикл, не перезапускаются защитой от циклов и не восстанавливаются сканированием при запуске. По умолчанию выключено. Работает, только пока субагент ещё загружен: DSH обычно закрывает фоновый субагент сразу после сбоя и сообщает об ошибке родительскому диалогу.",
+  "field.resumeCompletedTurns": "Режим сессии по умолчанию",
+  "field.resumeCompletedTurnsHint": "Для сессий без собственного режима. «Только восстановление» не трогает обычные завершения; «Автономный цикл» продолжает после них. Тихие и неудачные ходы по-прежнему расходуют бюджет повторов.",
+  "field.continueTextLoop": "Текст продолжения (автономный цикл)",
+  "field.continueTextLoopHint": "Текст, отправляемый при каждом продолжении автономного цикла.",
+  "default.continueTextLoop": LOCALIZED_TEXT_DEFAULTS.ru.continueTextLoop,
+  "field.continueTextSilent": "Текст продолжения (ход без вывода)",
+  "field.continueTextSilentHint": "Текст, отправляемый, когда ход заканчивается только рассуждениями; те же подстановки, что и в тексте продолжения.",
+  "default.continueTextSilent": LOCALIZED_TEXT_DEFAULTS.ru.continueTextSilent,
+  "field.continueTextInterrupted": "Текст продолжения (после перезапуска хоста)",
+  "field.continueTextInterruptedHint": "Текст, отправляемый, когда сканирование при запуске продолжает сессию, прерванную перезапуском; по умолчанию объясняет перезапуск и просит сверять состояние перед повтором.",
+  "default.continueTextInterrupted": LOCALIZED_TEXT_DEFAULTS.ru.continueTextInterrupted,
+  "field.guardTools": "Защита от повторного выполнения",
+  "field.guardToolsHint": "Перед продолжением проверяет последний вызов инструмента: если результат не подтверждён, просит сначала проверить состояние; если вызов успешен — не повторять его. Помогает не дублировать коммиты и вызовы API.",
+  "field.guardPendingText": "Текст защиты (результат не подтверждён)",
+  "field.guardPendingTextHint": "Добавляется, если последний инструмент мог выполниться частично; поддерживает подстановку {tool}.",
+  "default.guardPendingText": LOCALIZED_TEXT_DEFAULTS.ru.guardPendingText,
+  "field.guardDoneText": "Текст защиты (инструмент выполнен)",
+  "field.guardDoneTextHint": "Добавляется, если последний инструмент подтверждённо выполнен; поддерживает подстановки {tool} и {result} (фрагмент результата).",
+  "default.guardDoneText": LOCALIZED_TEXT_DEFAULTS.ru.guardDoneText,
+  "field.graceMs": "Период ожидания (мс)",
+  "field.graceMsHint": "Пауза после прерывания; отменяется, если хост восстановится сам.",
+  "field.cooldownMs": "Задержка перед повтором (мс)",
+  "field.cooldownMsHint": "Минимальный интервал между попытками восстановления; сбои в этот период ждут остаток интервала, затем — период ожидания. Обычные передачи автономного цикла от этого освобождены.",
+  "field.maxConsecutive": "Максимум подряд",
+  "field.maxConsecutiveHint": "Лимит последовательных попыток восстановления; сбрасывается при вмешательстве пользователя или завершении хода с видимым выводом. Обычные передачи автономного цикла не считаются.",
+  "field.scanOnBoot": "Сканирование при запуске хоста",
+  "field.scanOnBootHint": "Ждать поздно загружаемые прерванные сессии в окне сканирования при запуске; сохранённые сессии, которые хост не перезагрузил, тоже материализуются и проверяются; каждая готовая сессия проверяется один раз.",
+  "field.scanLimit": "Лимит сканирования",
+  "field.scanLimitHint": "Сколько подходящих сессий восстанавливать за проход; сначала самые недавно активные.",
+  "field.freshMs": "Окно сканирования (мс)",
+  "field.freshMsHint": "Учитываются только прерывания в этом окне; опрос при запуске тоже прекращается по его истечении.",
+  "field.verbose": "Подробный журнал",
+  "field.verboseHint": "Записывать активность движка в журнал хоста DSH с префиксом [auto-continue]; при работе через CLI эти строки видны в терминале, где запущен DSH.",
+  "field.classify": "Классификация ошибок",
+  "field.classifyHint": "Автоматически восстанавливать только временные сбои (сеть, тайм-аут, 5xx…); ошибки авторизации, баланса и модели пропускаются с уведомлением.",
+  "field.retryableErrorPatterns": "Свои восстанавливаемые ошибки",
+  "field.retryableErrorPatternsHint": "По одному литеральному фрагменту на строку без учёта регистра. Совпадение с кодом ошибки, HTTP-статусом или сообщением переопределяет встроенную классификацию. Указывайте только стабильный текст провайдера; широкие совпадения также запускают повтор для обычно пропускаемых ошибок аутентификации и баланса.",
+  "field.retryableErrorPatternsPlaceholder": "Например: Upstream rejected the request as invalid",
+  "field.backoffFactor": "Коэффициент задержки",
+  "field.backoffFactorHint": "Множитель задержки при повторных сбоях (2 = 20 с → 40 с → 80 с…).",
+  "field.backoffMaxMs": "Максимальная задержка (мс)",
+  "field.backoffMaxMsHint": "Верхняя граница адаптивной задержки.",
+  "field.notify": "Уведомления браузера",
+  "field.notifyHint": "Уведомлять о событиях авто-продолжения и успешном сохранении настроек. Сохранение изменения этого параметра тоже подтверждает его состояние. При первом включении нужно разрешить уведомления в браузере.",
+  "stats.title": "Статистика за сегодня",
+  "stats.sent": "Авто-продолжений",
+  "stats.skipped": "Пропущено (постоянные)",
+  "stats.recovered": "Восстановлено",
+  "stats.failed": "Сбоев после продолжения",
+  "stats.gaveUp": "Остановлено (лимит)",
+  "stats.looped": "Разорвано циклов",
+  "field.loopGuard": "Защита от циклов",
+  "field.loopGuardHint": "Распознаёт холостой ход: много коротких фраз без вызовов инструментов, повторяющиеся абзацы в одном потоковом сообщении или повтор одного инструмента — затем отменяет ход и перезапускает его с текстом цикла.",
+  "field.loopShortChars": "Макс. длина короткой фразы (символов)",
+  "field.loopShortCharsHint": "Сообщение модели короче этого значения считается короткой фразой (признак холостого хода).",
+  "field.loopWindowMs": "Окно коротких фраз (мс)",
+  "field.loopWindowMsHint": "Короткие фразы должны идти подряд внутри этого окна; обычные рассуждения, растянутые во времени, не считаются.",
+  "field.loopShortCount": "Порог коротких фраз",
+  "field.loopShortCountHint": "Сколько коротких фраз подряд в окне без вызова инструмента запускают защиту от циклов.",
+  "field.loopRepeatText": "Порог одинаковых сообщений",
+  "field.loopRepeatTextHint": "Сколько одинаковых сообщений подряд запускают защиту (сильнейший признак, любая длина; также используется для повторяющихся абзацев внутри одного потокового сообщения).",
+  "field.loopToolRepeat": "Порог повторов инструмента",
+  "field.loopToolRepeatHint": "Сколько вызовов одного инструмента с одинаковыми аргументами и результатом подряд запускают защиту; изменение аргументов или результата считается прогрессом.",
+  "field.loopText": "Текст цикла",
+  "field.loopTextHint": "Отправляется после перезапуска хода защитой от циклов; поддерживает подстановку {tool}.",
+  "default.loopText": LOCALIZED_TEXT_DEFAULTS.ru.loopText,
+  "stats.byCode": "По коду ошибки",
+  "stats.empty": "Сегодня ещё не было авто-продолжений.",
+  "stats.reset": "Сбросить",
+  "recovery.title": "Недавние попытки восстановления",
+  "recovery.hint": "Счётчики по сессиям для последних 20 подсказок восстановления на этом хосте; очищаются при перезапуске плагина. Обычные автономные продолжения не учитываются. Отправленная подсказка не означает завершения задачи. Если восстановление повторяется, проверьте диалог и подумайте о передаче в новую сессию.",
+  "recovery.empty": "Попыток восстановления пока нет.",
+  "recovery.count": "Попыток в окне",
+  "recovery.consecutive": "Подряд при последней отправке",
+  "recovery.latest": "Последняя причина",
+  "recovery.reason.error": "Ошибка запроса",
+  "recovery.reason.max-tokens": "Лимит вывода",
+  "recovery.reason.silent": "Нет видимого вывода",
+  "recovery.reason.interrupted": "Прерывание при перезапуске хоста",
+  "recovery.reason.loop-guard": "Защита от циклов",
+  "recovery.reason.manual": "Ручное продолжение",
+  "pause.title": "Приостановленные сессии",
+  "pause.none": "Нет приостановленных сессий.",
+  "pause.clearAll": "Снять все",
+  "pause.unpause": "Продолжить",
+  "pause.minutes": "мин",
+  "chrome.collapse": "Скрыть настройки",
+  "chrome.expand": "Показать настройки",
+  "chrome.unsaved": "Не сохранено",
+  "chrome.readOnly": "В этом развёртывании настройки доступны только для чтения.",
+  "chrome.unavailable": "Настройки недоступны.",
+  "chrome.saveFailed": "Развёртывание не приняло эти значения; они оставлены, чтобы вы их исправили.",
+  "chrome.discard": "Отменить",
+  "chrome.saving": "Сохранение…",
+  "chrome.save": "Сохранить",
+  "chrome.overridden": "Изменено",
+  "chrome.reset": "Сбросить",
+  "chrome.invalidNumber": "Введите число или оставьте поле пустым, чтобы использовать значение по умолчанию.",
+  "chrome.inherit": "Наследовать",
+  "chrome.on": "Вкл",
+  "chrome.off": "Выкл",
+  "field.usePluginSource": "Отправлять сообщения автопродолжения с меткой плагина",
+  "field.usePluginSourceHint": "По умолчанию выключено, чтобы сохранить обычный источник «сообщение пользователя». Включите, чтобы помечать сообщения как пришедшие от плагина. Нажмите «Сохранить», чтобы применить.",
+  "field.resumeInterruptedChildren": "Будить дочерние сессии после перезапуска",
+  "field.resumeInterruptedChildrenHint": "Когда стартовый скан находит сессию субагента или участника команды, прерванную перезапуском, родительской сессии отправляется одно сообщение со списком таких детей, чтобы родитель мог продолжить или завершить их. Пропускается, если родитель завершился штатно или был остановлен вручную. По умолчанию выключено.",
+  "field.resumeGoals": "Перевзводить цели, снятые перезапуском",
+  "field.resumeGoalsHint": "Когда сессия автопродолжается, активная цель, снятая хостом при перезапуске, снова взводится, чтобы её раунды продолжения могли выполняться. Это действует от вашего имени, поэтому по умолчанию выключено.",
+  "field.resumePausedGoals": "Возобновлять приостановленные цели",
+  "field.resumePausedGoalsHint": "Также возобновлять цели, приостановленные вами вручную (требует включённого «Перевзводить цели, снятые перезапуском»). Пауза обычно осознанное решение — оставляйте выключенным, если не нужно.",
+  "field.pauseWhenOffline": "Пауза при отсутствии сети",
+  "field.pauseWhenOfflineHint": "Перед повтором сетевой ошибки (недоступный хост, сбой DNS, таймаут транспорта) проверять, что хост в сети. Пока сети нет, повтор ждёт, не расходуя попытки, и продолжается, когда сеть вернулась. При заданном HTTP(S)_PROXY проверяются только сетевые интерфейсы.",
+  "field.offlineCheckMs": "Интервал повторной проверки сети (мс)",
+  "field.offlineCheckMsHint": "Как часто отложенный повтор снова проверяет сеть. Минимум 1000.",
+  "field.loopMaxIterations": "Лимит раундов автономного цикла",
+  "field.loopMaxIterationsHint": "Максимум автономных раундов на сессию; 0 — без лимита. По достижении цикл останавливается и сообщает об этом один раз; отправка сообщения или повторное включение цикла начинают счёт заново."
+};
 
 // src/client/settings-card.tsx
 var import_react = require("react");
+
+// src/client/native-switch.tsx
+var import_jsx_runtime = require("react/jsx-runtime");
+function legacySwitch(props) {
+  return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+    "button",
+    {
+      type: "button",
+      role: "switch",
+      className: "dshAcSwitch",
+      "aria-checked": props.checked,
+      "aria-label": props.label,
+      disabled: props.disabled,
+      title: props.title,
+      onClick: () => props.onChange(!props.checked),
+      children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {})
+    }
+  );
+}
+function resolveSwitch() {
+  try {
+    const { Switch } = require("@deepseek-ai/dsh-client-ui-primitives");
+    if (typeof Switch === "function") return Switch;
+  } catch {
+  }
+  return legacySwitch;
+}
+var NativeSwitch = resolveSwitch();
 
 // src/client/dsh-store-compat.ts
 function resolveSnapshotStore() {
@@ -315,13 +676,34 @@ var EMPTY_STATS = {
   looped: 0,
   byCode: {}
 };
-var state = { stats: EMPTY_STATS, paused: [] };
+var state = { stats: EMPTY_STATS, paused: [], recoveryAttempts: [], connected: false };
 var listeners = /* @__PURE__ */ new Set();
 function pausedSessions() {
   return state.paused;
 }
 function readTodayStats() {
   return state.stats;
+}
+function readRecoveryAttempts() {
+  return state.recoveryAttempts;
+}
+function readSessionPolicy() {
+  return state.sessionPolicy;
+}
+function isBridgeConnected() {
+  return state.connected;
+}
+async function setSessionMode(sessionId, mode) {
+  if (!state.connected || !state.sessionPolicy?.writable) throw new Error("Session settings are unavailable");
+  const response = await fetch("/api/auto-continue-action", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ action: "set-session-mode", sessionId, mode })
+  });
+  const result = await response.json();
+  if (!response.ok || result?.ok !== true || result.sessionId !== sessionId || result.mode !== mode) {
+    throw new Error("Session mode was not saved");
+  }
 }
 function resetTodayStats() {
   void postAction({ action: "reset-stats" });
@@ -347,9 +729,13 @@ async function postAction(payload) {
 }
 function handleEvent(event) {
   if (event.type === "state") {
+    const policy = event.sessionPolicy;
     state = {
       stats: event.stats ?? EMPTY_STATS,
-      paused: event.paused ?? []
+      paused: event.paused ?? [],
+      recoveryAttempts: event.recoveryAttempts ?? [],
+      sessionPolicy: policy && typeof policy.modes === "object" && policy.modes !== null && !Array.isArray(policy.modes) && (policy.defaultMode === "recover" || policy.defaultMode === "loop") && typeof policy.paused === "boolean" && typeof policy.writable === "boolean" ? policy : void 0,
+      connected: true
     };
     for (const listener of listeners) listener();
   } else if (event.type === "notice" && event.notice !== void 0) {
@@ -393,18 +779,30 @@ function showNotification(notice) {
 function startBridge() {
   let stopped = false;
   let controller;
+  const disconnected = () => {
+    if (!state.connected) return;
+    state = { ...state, connected: false };
+    for (const listener of listeners) listener();
+  };
+  const reset = () => {
+    state = { ...state, sessionPolicy: void 0, connected: false };
+    for (const listener of listeners) listener();
+  };
+  reset();
+  let failures = 0;
   const loop = async () => {
     while (!stopped) {
       controller = new AbortController();
       try {
         const response = await fetch("/api/auto-continue-bridge", { signal: controller.signal });
         if (!response.ok || response.body === null) throw new Error(`bridge HTTP ${response.status}`);
+        failures = 0;
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
         for (; ; ) {
           const { done, value } = await reader.read();
-          if (done) break;
+          if (done || stopped) break;
           buffer += decoder.decode(value, { stream: true });
           let idx = buffer.indexOf("\n\n");
           while (idx !== -1) {
@@ -423,17 +821,26 @@ function startBridge() {
         }
       } catch {
       }
-      if (!stopped) await new Promise((resolve) => setTimeout(resolve, 3e3));
+      if (!stopped) {
+        disconnected();
+        const delay = failures === 0 ? 500 : 3e3;
+        failures += 1;
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
     }
   };
   void loop();
   return () => {
     stopped = true;
     controller?.abort();
+    reset();
   };
 }
 
 // src/client/settings-form.ts
+function canWriteSettings(snapshot) {
+  return snapshot.status === "ready" && snapshot.writable && (snapshot.mode === void 0 || snapshot.mode === "host");
+}
 function numberField(field, min = 0) {
   return {
     field,
@@ -482,7 +889,12 @@ var CardForm = class {
     this.saving = false;
     this.failed = false;
     this.specs = new Map(specs.map((spec) => [spec.field, spec]));
-    this.scope.subscribe(() => this.publish());
+    this.unsubscribe = this.scope.subscribe(() => this.publish());
+  }
+  /** Release this editor's listeners without disposing the provider's shared form. */
+  dispose() {
+    this.unsubscribe();
+    this.listeners.clear();
   }
   /** Publish a projection of this form, rebuilt whenever the scope or a draft changes. */
   bind(project, createStore) {
@@ -495,7 +907,7 @@ var CardForm = class {
     const snapshot = this.scope.getSnapshot();
     return {
       available: snapshot.status === "ready",
-      writable: snapshot.writable,
+      writable: canWriteSettings(snapshot),
       dirty: this.plan().length > 0,
       invalid: this.plan().some((item) => item.run === void 0),
       saving: this.saving,
@@ -538,26 +950,34 @@ var CardForm = class {
   }
   /**
    * Write every staged edit, then re-seed from what the Host accepted.
-   * @returns settlement after every write and the read-back.
+   * @returns true only when a non-empty save was accepted and read back.
    */
   async save() {
     const plan = this.plan();
     const writes = plan.flatMap((item) => item.run === void 0 ? [] : [item.run]);
-    if (plan.length === 0 || this.saving || writes.length !== plan.length) return;
-    const fields = new Set(plan.map((item) => item.field));
+    const snapshot = this.scope.getSnapshot();
+    if (plan.length === 0 || this.saving || writes.length !== plan.length || !canWriteSettings(snapshot)) return false;
+    const edits = plan.map(({ field, staged }) => ({ field, staged }));
     this.saving = true;
     this.failed = false;
     this.publish();
     let landed = true;
-    for (const write of writes) {
-      landed = await write() && landed;
+    try {
+      for (const write of writes) {
+        landed = await write() && landed;
+      }
+    } catch {
+      landed = false;
     }
     if (landed) {
-      for (const field of fields) this.staged.delete(field);
+      for (const { field, staged } of edits) {
+        if (this.staged.get(field) === staged) this.staged.delete(field);
+      }
     }
     this.saving = false;
     this.failed = !landed;
     this.publish();
+    return landed;
   }
   /**
    * Every staged edit a save would write. An entry whose draft is not a value
@@ -570,24 +990,24 @@ var CardForm = class {
     for (const [field, staged] of this.staged) {
       const spec = this.specOf(field);
       if (staged.clear) {
-        if (this.stored(field)) plan.push({ field, run: () => this.clear(field) });
+        if (this.stored(field)) plan.push({ field, staged, run: () => this.clear(field) });
         continue;
       }
       if (staged.text === spec.format(this.sectionValue(field))) continue;
       const write = spec.parse(staged.text);
-      if (write === void 0) plan.push({ field, run: void 0 });
-      else if (write.kind === "clear") plan.push({ field, run: () => this.clear(field) });
-      else plan.push({ field, run: () => this.store(field, write.value) });
+      if (write === void 0) plan.push({ field, staged, run: void 0 });
+      else if (write.kind === "clear") plan.push({ field, staged, run: () => this.clear(field) });
+      else plan.push({ field, staged, run: () => this.store(field, write.value) });
     }
     return plan;
   }
   async clear(field) {
-    await this.scope.unset(field);
-    return !this.stored(field);
+    const accepted = await this.scope.unset(field);
+    return accepted !== false && !this.stored(field);
   }
   async store(field, value) {
-    await this.scope.set(field, value);
-    return this.userLayer()?.[field] === value;
+    const accepted = await this.scope.set(field, value);
+    return accepted !== false && this.userLayer()?.[field] === value;
   }
   stage(field, edit) {
     this.staged.set(field, edit);
@@ -619,392 +1039,165 @@ var CardForm = class {
 
 // src/client/styles.ts
 var css = `
+.dshAcComposer { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; min-height: 28px; max-width: 100%; font: inherit; }
+.dshAcComposerCore { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
+.dshAcComposerCore > span { min-width: 0; }
+.dshAcModeTrigger { display: inline-flex; align-items: center; gap: 3px; min-width: 0; max-width: 132px; height: 28px; margin-left: -1px; padding: 0 4px 0 7px; border: 0; border-radius: var(--dsw-radius-sm, 6px); background: none; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 13px; font-weight: 500; line-height: 20px; cursor: pointer; }
+.dshAcModeTrigger:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.dshAcModeTrigger:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); }
+.dshAcModeTrigger:disabled { color: var(--dsw-alias-label-dimmed, var(--dsw-alias-label-tertiary)); cursor: default; }
+.dshAcModeTriggerLabel { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dshAcModeChevron { display: inline-flex; flex: none; color: var(--dsw-alias-label-caption, var(--dsw-alias-label-tertiary)); transition: transform .12s ease; }
+.dshAcModeChevron > svg { display: block; width: 14px; height: 14px; }
+.dshAcModeChevronFallback { fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+.dshAcModeChevron[data-open=true] { transform: rotate(180deg); }
+.dshAcModeMenu { position: relative; display: inline-flex; align-items: center; gap: 3px; min-width: 0; max-width: 132px; height: 28px; margin-left: -1px; padding: 0 4px 0 7px; border-radius: var(--dsw-radius-sm, 6px); color: var(--dsw-alias-label-secondary); font-size: 13px; font-weight: 500; line-height: 20px; }
+.dshAcModeMenu:hover:not([data-disabled=true]) { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover); }
+.dshAcModeMenu[data-disabled=true] { color: var(--dsw-alias-label-dimmed, var(--dsw-alias-label-tertiary)); }
+.dshAcComposerSelect { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; }
+.dshAcComposerSelect:disabled { cursor: default; }
+/* Settings-card select (default session mode); kept scoped so the composer's
+   invisible overlay cannot stretch it over the whole app. */
+.dshAcCard .dshAcMode { min-height: 32px; max-width: 100%; padding: 4px 6px; border: 1px solid var(--dsh-ac-line); border-radius: 6px; background: var(--dsh-ac-bg); color: var(--dsh-ac-text); font: inherit; font-size: 12px; }
+.dshAcCard .dshAcMode:disabled { opacity: .5; }
+.dshAcCard .dshAcMode:focus-visible { outline: 2px solid var(--dsh-ac-text); outline-offset: 3px; }
+.dshAcComposerLabel { display: inline-flex; align-items: center; gap: 5px; flex: none; color: var(--dsw-alias-label-secondary); font-size: 12px; white-space: nowrap; }
+.dshAcIconBtn { position: relative; display: inline-grid; place-items: center; flex: none; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 999px; background-color: transparent; color: var(--dsw-alias-label-secondary, inherit); opacity: .9; cursor: pointer; transition: opacity .15s ease, background-color .15s ease, color .15s ease; }
+.dshAcIconBtn > svg { display: block; width: 14px; height: 14px; }
+.dshAcIconBtn[data-state="on"] { color: var(--dsw-alias-brand-primary, #4d8cff); opacity: 1; background-color: rgba(77, 140, 255, .14); background-color: color-mix(in srgb, var(--dsw-alias-brand-primary, #4d8cff) 14%, transparent); }
+.dshAcIconBtn[data-state="on"]:hover:not(:disabled) { background-color: rgba(77, 140, 255, .22); background-color: color-mix(in srgb, var(--dsw-alias-brand-primary, #4d8cff) 22%, transparent); }
+.dshAcIconBtn[data-state="off"] { opacity: .5; }
+.dshAcIconBtn[data-state="off"]:hover:not(:disabled) { opacity: .8; background: var(--dsw-alias-interactive-bg-hover); }
+.dshAcIconBtn:disabled { cursor: default; opacity: .4; }
+/* Reconnecting keeps the last known state visible, just dimmed. */
+.dshAcIconBtn[data-stale="true"]:disabled { opacity: .65; }
+.dshAcIconBtn:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--dsw-focus-ring-color, var(--dsw-alias-brand-primary)); }
+.dshAcGlyph { fill: none; stroke: currentColor; stroke-width: 1.35; stroke-linecap: round; stroke-linejoin: round; }
+.dshAcIconBtn[data-state="on"] > .dshAcGlyph { stroke-width: 1.6; }
+/* In the composer the mode name moves into the menu and tooltip; only the chevron stays. */
+.dshAcComposer .dshAcModeTriggerLabel { display: none; }
+.dshAcComposer .dshAcModeTrigger, .dshAcComposer .dshAcModeMenu { max-width: 28px; margin-left: -4px; padding: 0 2px; }
+.dshAcSwitchTarget { display: inline-flex; align-items: center; flex: none; min-height: 32px; }
+.dshAcSwitchTarget > button { position: relative; }
+.dshAcSwitchTarget > button::before { content: ''; position: absolute; inset: -4px; }
+.dshAcComposerError { color: var(--dsw-alias-state-error-primary, var(--dsw-alias-label-secondary)); font-size: 12px; max-width: 160px; }
+.dshAcComposerError:empty { display: none; }
+.dshAcToastIcon { display: block; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+.dshAcSwitch { position: relative; box-sizing: border-box; flex: none; width: 36px; height: 20px; padding: 2px; border: 0; border-radius: 999px; background: var(--dsw-alias-border-l3); cursor: pointer; }
+.dshAcSwitch[aria-checked='true'] { background: var(--dsw-alias-brand-primary); }
+.dshAcSwitch > span { display: block; width: 16px; height: 16px; border-radius: 50%; background: var(--dsw-alias-label-primary-foreground); }
+.dshAcSwitch[aria-checked='true'] > span { transform: translateX(16px); }
+.dshAcSwitch[aria-checked='false'] > span { background: var(--dsw-alias-switch-thumb, var(--dsw-alias-label-primary-foreground)); }
+.dshAcSwitch:disabled { opacity: .5; cursor: default; }
+.dshAcSwitch:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 2px; }
 .dshAcCard {
-  --dsh-ac-violet: #8b7cff;
-  --dsh-ac-cyan: #45cce5;
-  --dsh-ac-mint: #46d69d;
-  --dsh-ac-amber: #f1b95c;
-  isolation: isolate;
-  position: relative;
-  overflow: hidden;
-  border: 1px solid var(--dsw-alias-border-l2);
-  background: var(--dsw-alias-bg-layer-3);
-  border-radius: 16px;
+  --dsh-ac-bg: var(--dsw-alias-bg-base, var(--dsw-alias-bg-layer-2));
+  --dsh-ac-line: var(--dsw-alias-border-l2);
+  --dsh-ac-text: var(--dsw-alias-label-primary);
+  --dsh-ac-muted: var(--dsw-alias-label-tertiary);
+  container: auto-continue-settings / inline-size;
+  color: var(--dsh-ac-text);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
   list-style: none;
-  box-shadow: 0 10px 34px rgb(0 0 0 / 8%);
-  transition: border-color .2s ease, background .2s ease, box-shadow .2s ease, transform .2s ease;
-}
-.dshAcCard::before {
-  content: "";
-  z-index: 2;
-  position: absolute;
-  inset: 0 0 auto;
-  height: 2px;
-  pointer-events: none;
-  opacity: .72;
-  background: linear-gradient(90deg, transparent 1%, var(--dsh-ac-violet) 22%, var(--dsh-ac-cyan) 52%, var(--dsh-ac-mint) 80%, transparent 99%);
-}
-.dshAcCard::after {
-  content: "";
-  z-index: -1;
-  position: absolute;
-  width: 190px;
-  height: 190px;
-  top: -104px;
-  left: -76px;
-  pointer-events: none;
-  border-radius: 999px;
-  background: radial-gradient(circle, rgb(139 124 255 / 14%) 0, transparent 68%);
-}
-.dshAcCard:hover {
-  border-color: color-mix(in srgb, var(--dsh-ac-violet) 48%, var(--dsw-alias-border-l2));
-  box-shadow: 0 14px 42px rgb(0 0 0 / 12%);
-  transform: translateY(-1px);
-}
-.dshAcCardOpen {
-  background: var(--dsw-alias-bg-layer-2);
-  border-color: color-mix(in srgb, var(--dsh-ac-violet) 42%, var(--dsw-alias-border-l2));
-  box-shadow: 0 18px 54px rgb(0 0 0 / 14%);
-  transform: none;
-}
-.dshAcHeaderFrame {
-  align-items: stretch;
-  flex-direction: column;
-  display: flex;
-}
-.dshAcHeader {
-  appearance: none;
-  min-width: 0;
-  flex: 1;
-  font: inherit;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-  background: none;
-  border: 0;
-  border-radius: 16px;
-  align-items: center;
-  gap: 14px;
-  padding: 18px 18px 12px;
-  display: flex;
-}
-.dshAcHeader:focus-visible { outline: 2px solid var(--dsh-ac-violet); outline-offset: -3px; }
-.dshAcRelayMark {
-  width: 54px;
-  height: 54px;
-  flex: none;
-  place-items: center;
-  display: grid;
-  color: var(--dsh-ac-cyan);
-  border: 1px solid color-mix(in srgb, var(--dsh-ac-violet) 42%, var(--dsw-alias-border-l2));
-  border-radius: 17px;
-  background: color-mix(in srgb, var(--dsw-alias-bg-layer-2) 84%, var(--dsh-ac-violet) 16%);
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 4%), 0 8px 24px rgb(62 51 153 / 16%);
-}
-.dshAcRelayMark svg { width: 44px; height: 44px; overflow: visible; }
-.dshAcRelayArc { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
-.dshAcRelayArcEcho { opacity: .42; }
-.dshAcRelayNode { stroke: var(--dsw-alias-bg-layer-3); stroke-width: 1.5; }
-.dshAcRelayNodeStart { fill: var(--dsh-ac-amber); }
-.dshAcRelayNodeEnd { fill: var(--dsh-ac-mint); }
-.dshAcRelayPulse { fill: var(--dsh-ac-violet); opacity: .85; }
-.dshAcCard:hover .dshAcRelayPulse, .dshAcCardOpen .dshAcRelayPulse {
-  animation: dshAcRelayTravel 1.8s cubic-bezier(.4, 0, .2, 1) infinite;
-}
-.dshAcHeadText { flex-direction: column; flex: 1; gap: 3px; min-width: 0; display: flex; }
-.dshAcName {
-  color: var(--dsw-alias-label-primary);
-  font-family: ui-rounded, "SF Pro Rounded", "Segoe UI", sans-serif;
-  font-size: 18px;
-  font-weight: 680;
-  letter-spacing: -.015em;
-  line-height: 1.35;
-}
-.dshAcDescription { max-width: 660px; color: var(--dsw-alias-label-tertiary); font-size: 13px; line-height: 1.5; }
-.dshAcJourney { flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 4px; display: flex; }
-.dshAcJourneyStep {
-  align-items: center;
-  gap: 5px;
-  color: var(--dsw-alias-label-secondary);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 1.4;
-  letter-spacing: .02em;
-  display: inline-flex;
-}
-.dshAcJourneyDot { width: 5px; height: 5px; flex: none; border-radius: 999px; background: currentColor; box-shadow: 0 0 0 3px rgb(255 255 255 / 3%); }
-.dshAcJourneyInterrupted .dshAcJourneyDot { color: var(--dsh-ac-amber); }
-.dshAcJourneyGrace .dshAcJourneyDot { color: var(--dsh-ac-cyan); }
-.dshAcJourneyContinue .dshAcJourneyDot { color: var(--dsh-ac-mint); }
-.dshAcJourneyLine {
-  width: 25px;
-  height: 1px;
-  flex: none;
-  opacity: .7;
-  background: linear-gradient(90deg, var(--dsh-ac-violet), var(--dsh-ac-cyan), var(--dsh-ac-mint));
-  background-size: 220% 100%;
-}
-.dshAcCard:hover .dshAcJourneyLine, .dshAcCardOpen .dshAcJourneyLine { animation: dshAcSignalSweep 1.8s linear infinite; }
-.dshAcChevron {
-  width: 30px;
-  height: 30px;
-  color: var(--dsw-alias-label-tertiary);
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 999px;
-  flex: none;
-  place-items: center;
-  display: grid;
-  transition: color .18s ease, border-color .18s ease, transform .18s ease;
-}
-.dshAcChevron svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
-.dshAcHeader:hover .dshAcChevron { color: var(--dsh-ac-violet); border-color: color-mix(in srgb, var(--dsh-ac-violet) 48%, var(--dsw-alias-border-l2)); }
-.dshAcChevronOpen { transform: rotate(180deg); }
-.dshAcGithub {
-  min-width: 0;
-  max-width: none;
-  align-self: stretch;
-  align-items: center;
-  gap: 10px;
-  margin: 0 18px 16px;
-  padding: 9px 11px;
-  color: var(--dsw-alias-label-primary);
-  text-decoration: none;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 13px;
-  background: color-mix(in srgb, var(--dsw-alias-bg-layer-2) 90%, var(--dsh-ac-violet) 10%);
-  display: flex;
-  transition: border-color .18s ease, background .18s ease, transform .18s ease;
-}
-.dshAcGithub:hover {
-  border-color: color-mix(in srgb, var(--dsh-ac-violet) 58%, var(--dsw-alias-border-l2));
-  background: color-mix(in srgb, var(--dsw-alias-bg-layer-2) 82%, var(--dsh-ac-violet) 18%);
-  transform: translateY(-1px);
-}
-.dshAcGithub:focus-visible { outline: 2px solid var(--dsh-ac-violet); outline-offset: 2px; }
-.dshAcGithubIcon { width: 23px; height: 23px; flex: none; color: var(--dsw-alias-label-primary); }
-.dshAcGithubIcon svg { width: 100%; height: 100%; fill: currentColor; }
-.dshAcGithubText { min-width: 0; flex: 1; flex-direction: column; gap: 1px; display: flex; }
-.dshAcGithubAction { font-size: 12px; font-weight: 680; line-height: 1.4; }
-.dshAcGithubAction::before { content: "★"; color: var(--dsh-ac-amber); margin-right: 5px; }
-.dshAcGithubSlug {
-  overflow: hidden;
-  color: var(--dsw-alias-label-tertiary);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 9.5px;
-  line-height: 1.4;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.dshAcExternal { width: 15px; height: 15px; flex: none; color: var(--dsw-alias-label-tertiary); }
-.dshAcExternal svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.25; stroke-linecap: round; stroke-linejoin: round; }
-.dshAcBody { border-top: 1px solid var(--dsw-alias-border-l2); margin: 0 18px 12px; padding: 4px 0 0; }
-.dshAcReadOnly { color: var(--dsw-alias-label-tertiary); margin: 12px 0 0; font-size: 12px; line-height: 1.5; }
-.dshAcPending {
-  white-space: nowrap;
-  background: var(--dsw-alias-bg-module-platform);
-  color: var(--dsw-alias-label-secondary);
-  border-radius: 999px;
-  flex: none;
-  padding: 1px 8px;
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 17px;
-}
-.dshAcFooter {
-  border-top: 1px solid var(--dsw-alias-border-l2);
-  justify-content: flex-end;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 0 4px;
-  display: flex;
-}
-.dshAcFailed { min-width: 0; color: var(--dsw-alias-label-error); flex: 1; margin: 0; font-size: 12px; line-height: 1.5; }
-.dshAcDiscard, .dshAcSave {
-  appearance: none;
-  font: inherit;
-  cursor: pointer;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  padding: 5px 14px;
-  font-size: 13px;
-  line-height: 1.5;
-}
-.dshAcDiscard { border-color: var(--dsw-alias-border-l2); color: var(--dsw-alias-label-secondary); background: none; }
-.dshAcDiscard:hover:not(:disabled) { color: var(--dsw-alias-label-primary); border-color: var(--dsw-alias-label-dimmed); }
-.dshAcSave { background: var(--dsw-alias-label-primary); color: var(--dsw-alias-bg-layer-3); }
-.dshAcDiscard:disabled, .dshAcSave:disabled { opacity: .4; cursor: default; }
-.dshAcDiscard:focus-visible, .dshAcSave:focus-visible { outline: 2px solid var(--dsw-alias-brand-primary); outline-offset: 1px; }
-.dshAcFormCanvas { flex-direction: column; gap: 14px; padding: 12px 0 8px; display: flex; }
-.dshAcFormSection {
-  --dsh-ac-section: var(--dsh-ac-violet);
-  overflow: hidden;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 14px;
-  background: var(--dsw-alias-bg-layer-3);
-  background: color-mix(in srgb, var(--dsw-alias-bg-layer-3) 95%, var(--dsh-ac-section) 5%);
-}
-.dshAcFormSection-handoff { --dsh-ac-section: var(--dsh-ac-mint); }
-.dshAcFormSection-safety { --dsh-ac-section: var(--dsh-ac-amber); }
-.dshAcFormSection-recovery { --dsh-ac-section: var(--dsh-ac-cyan); }
-.dshAcFormSection-loop { --dsh-ac-section: var(--dsh-ac-violet); }
-.dshAcFormSection-live { --dsh-ac-section: color-mix(in srgb, var(--dsh-ac-violet) 60%, var(--dsh-ac-cyan)); }
-.dshAcSectionHead {
-  align-items: center;
-  gap: 11px;
-  padding: 13px 14px 11px;
-  border-bottom: 1px solid var(--dsw-alias-border-l2);
-  display: flex;
-}
-.dshAcSectionSignal {
-  width: 4px;
-  height: 34px;
-  flex: none;
-  border-radius: 999px;
-  background: var(--dsh-ac-section);
-  box-shadow: 0 0 18px color-mix(in srgb, var(--dsh-ac-section) 55%, transparent);
-}
-.dshAcSectionCopy { min-width: 0; flex-direction: column; gap: 2px; display: flex; }
-.dshAcSectionTitle {
-  color: var(--dsw-alias-label-primary);
-  font-family: ui-rounded, "SF Pro Rounded", "Segoe UI", sans-serif;
-  font-size: 14px;
-  font-weight: 680;
-  line-height: 1.4;
-}
-.dshAcSectionDescription { color: var(--dsw-alias-label-tertiary); font-size: 11.5px; line-height: 1.45; }
-.dshAcSectionGrid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: 22px;
-  padding: 0 14px 4px;
-  display: grid;
-}
-.dshAcField { min-width: 0; flex-direction: column; gap: 6px; padding: 12px 0; border-top: 1px solid var(--dsw-alias-border-l2); display: flex; }
-.dshAcSectionGrid > .dshAcField:first-child { border-top: 0; }
-.dshAcFieldWide { grid-column: 1 / -1; }
-.dshAcHead { align-items: center; gap: 8px; display: flex; }
-.dshAcLabel { min-width: 0; color: var(--dsw-alias-label-primary); flex: 1; font-size: 13px; font-weight: 500; line-height: 1.5; }
-.dshAcBadges { align-items: center; gap: 8px; display: inline-flex; }
-.dshAcBadge {
-  white-space: nowrap;
-  background: var(--dsw-alias-bg-module-platform);
-  color: var(--dsw-alias-label-secondary);
-  border-radius: 999px;
-  padding: 1px 8px;
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 17px;
-}
-.dshAcReset {
-  font: inherit;
-  color: var(--dsw-alias-label-secondary);
-  cursor: pointer;
-  background: none;
-  border: none;
   padding: 0;
-  font-size: 12px;
-  line-height: 1.5;
 }
-.dshAcReset:hover:not(:disabled) { color: var(--dsw-alias-label-primary); }
-.dshAcReset:disabled { cursor: default; }
-.dshAcInput {
-  box-sizing: border-box;
-  width: 100%;
-  border: 1px solid var(--dsw-alias-border-l2);
-  background: var(--dsw-alias-bg-layer-3);
-  height: 34px;
-  font: inherit;
-  color: var(--dsw-alias-label-primary);
-  border-radius: 8px;
-  padding: 0 12px;
-  font-size: 13px;
-  line-height: 1.5;
+.dshAcCard *, .dshAcCard *::before, .dshAcCard *::after { box-sizing: border-box; }
+.dshAcCard :is(h2,h3,p) { margin: 0; }
+.dshAcCard :is(button,input,textarea) { font: inherit; }
+.dshAcCard button { cursor: pointer; }
+.dshAcCard button:disabled { opacity: .4; cursor: default; }
+.dshAcCard :is(a,button,input,textarea):focus-visible { outline: 2px solid var(--dsh-ac-text); outline-offset: 3px; }
+.dshAcInvite { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; margin: 0 0 18px; color: var(--dsh-ac-muted); font-size: 12px; line-height: 1.6; }
+.dshAcInviteStar { color: #e9be6d; font-size: 13px; line-height: 1; }
+.dshAcRepoLink { display: inline-flex; align-items: center; gap: 5px; color: var(--dsh-ac-text); text-decoration: none; }
+.dshAcRepoLink:hover { text-decoration: underline; }
+.dshAcRepoLink > svg:first-child { width: 14px; height: 14px; fill: currentColor; }
+.dshAcRepoLink > svg.dshAcExternal { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+.dshAcNativeFields { display: flex; flex-direction: column; min-width: 0; }
+.dshAcNativeField { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 12px 0; }
+.dshAcNativeHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
+.dshAcNativeLabel { color: var(--dsh-ac-text); font-size: 13px; font-weight: 500; line-height: 19.5px; }
+.dshAcNativeHint { color: var(--dsh-ac-muted); font-size: 12px; line-height: 18px; }
+.dshAcNativeToggleRow { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-width: 0; }
+.dshAcNativeActions { display: inline-flex; align-items: center; flex: none; gap: 10px; }
+.dshAcNativeReset { padding: 0; border: 0; background: none; color: var(--dsh-ac-muted); font-size: 11px; white-space: nowrap; }
+.dshAcNativeReset:hover:not(:disabled) { color: var(--dsh-ac-text); text-decoration: underline; }
+.dshAcNativeSegment { display: block; min-width: 0; }
+.dshAcNativeSegment[data-disabled=true] { opacity: .5; pointer-events: none; }
+.dshAcNativeTextarea { box-sizing: border-box; width: 100%; min-height: 66px; resize: vertical; padding: 8px 12px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 12px; background: var(--dsw-alias-bg-layer-2, #353638); color: var(--dsh-ac-text); font: inherit; font-size: 13px; line-height: 19.5px; }
+.dshAcNativeTextarea::placeholder { color: var(--dsh-ac-muted); opacity: .7; }
+.dshAcNativeTextarea[aria-invalid=true] { border-color: var(--dsw-alias-state-error-primary); }
+.dshAcReadOnly { padding: 10px 0; color: var(--dsh-ac-muted); }
+.dshAcLayout { display: grid; grid-template-columns: 164px minmax(0, 1fr); min-height: 462px; }
+.dshAcNav { display: flex; flex-direction: column; gap: 4px; padding: 16px 18px 16px 0; position: sticky; top: 16px; align-self: start; }
+.dshAcNav > button { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 37px; padding: 8px 11px; border: 0; border-radius: 6px; text-align: left; background: none; color: var(--dsw-alias-label-secondary); }
+.dshAcNav > button:hover, .dshAcNav > button[aria-selected=true] { color: var(--dsh-ac-text); background: var(--dsw-alias-interactive-bg-hover); }
+.dshAcNav > button[aria-selected=true] { font-weight: 600; }
+.dshAcInvalidMark { color: var(--dsw-alias-state-error-primary); font-weight: 600; }
+.dshAcCategory { min-width: 0; padding: 20px 0 16px 26px; border-left: 1px solid var(--dsh-ac-line); }
+.dshAcCategoryHeading { padding-bottom: 14px; }
+.dshAcCategoryHeading h3 { font-size: 15px; font-weight: 620; }
+.dshAcCategoryHeading p { color: var(--dsh-ac-muted); font-size: 12px; margin-top: 3px; }
+.dshAcField { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px 24px; padding: 18px 0; border-bottom: 1px solid var(--dsh-ac-line); }
+.dshAcField:last-child { border-bottom: 0; }
+.dshAcFieldCopy { min-width: 0; }
+.dshAcLabel { display: block; font-size: 14px; font-weight: 480; color: var(--dsh-ac-text); }
+.dshAcHint { color: var(--dsh-ac-muted); font-size: 12px; line-height: 1.6; }
+.dshAcFieldCopy p { margin-top: 4px; }
+.dshAcFieldControl { display: flex; align-items: center; justify-content: flex-end; gap: 14px; }
+.dshAcReset { padding: 0; border: 0; background: none; color: var(--dsh-ac-muted); font-size: 11px !important; white-space: nowrap; }
+.dshAcReset:hover:not(:disabled) { color: var(--dsh-ac-text); text-decoration: underline; }
+.dshAcInput { border: 1px solid var(--dsh-ac-line); border-radius: 6px; background: var(--dsh-ac-bg); color: var(--dsh-ac-text); padding: 8px 11px; }
+.dshAcInput::placeholder { color: var(--dsh-ac-muted); opacity: .7; }
+.dshAcInput[aria-invalid=true] { border-color: var(--dsw-alias-state-error-primary); }
+.dshAcNumber { width: 132px; min-width: 0; font-variant-numeric: tabular-nums; }
+.dshAcFieldText { display: block; }
+.dshAcFieldText .dshAcFieldControl { margin-top: 10px; flex-direction: column-reverse; align-items: flex-end; gap: 6px; }
+.dshAcTextArea { display: block; width: 100%; min-height: 66px; resize: vertical; line-height: 1.6; }
+.dshAcInvalid, .dshAcFailed { color: var(--dsw-alias-state-error-primary); font-size: 12px; }
+.dshAcFooter { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-top: 24px; padding: 13px 0; border-top: 1px solid var(--dsh-ac-line); background: var(--dsh-ac-bg); }
+.dshAcFooter[data-dirty=true] { position: sticky; z-index: 8; bottom: 0; }
+.dshAcFooter > div { display: flex; align-items: center; gap: 8px; }
+.dshAcDiscard, .dshAcSave { padding: 7px 13px; border: 1px solid var(--dsh-ac-line); border-radius: 6px; font-size: 12px !important; background: var(--dsh-ac-bg); color: var(--dsh-ac-text); white-space: nowrap; }
+.dshAcSave { background: var(--dsh-ac-text); color: var(--dsh-ac-bg); border-color: var(--dsh-ac-text); }
+.dshAcDiscard:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
+.dshAcSave:hover:not(:disabled) { opacity: .85; }
+.dshAcPanel { padding: 20px 0; border-top: 1px solid var(--dsh-ac-line); }
+.dshAcPanelHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.dshAcPanelTitle { font-weight: 550; }
+.dshAcStats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 18px 0; }
+.dshAcStats dt { font-size: 11px; color: var(--dsh-ac-muted); }
+.dshAcStats dd { margin: 4px 0 0; font-size: 19px; font-weight: 550; font-variant-numeric: tabular-nums; }
+.dshAcCodes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.dshAcCode { font: 11px ui-monospace, SFMono-Regular, monospace; border: 1px solid var(--dsh-ac-line); border-radius: 4px; padding: 3px 6px; }
+.dshAcPauseList { list-style: none; margin: 0; padding: 0; }
+.dshAcPauseList li { display: flex; align-items: center; gap: 12px; padding: 10px 0; }
+.dshAcPauseId { flex: 1; font: 12px ui-monospace, SFMono-Regular, monospace; }
+.dshAcRecovery { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+@container auto-continue-settings (max-width: 760px) {
+  .dshAcLayout { grid-template-columns: 136px minmax(0, 1fr); }
+  .dshAcCategory { padding-left: 20px; }
+  .dshAcFieldControl { flex-direction: column-reverse; align-items: flex-end; gap: 6px; }
 }
-.dshAcInput:focus-visible { border-color: var(--dsw-alias-brand-primary); outline: none; }
-.dshAcInput:disabled { color: var(--dsw-alias-label-tertiary); cursor: default; }
-.dshAcInputInvalid { border-color: var(--dsw-alias-label-error); }
-.dshAcTextArea { box-sizing: border-box; height: auto; min-height: 84px; padding: 8px 12px; resize: vertical; }
-.dshAcSelect {
-  box-sizing: border-box;
-  width: 100%;
-  border: 1px solid var(--dsw-alias-border-l2);
-  background: var(--dsw-alias-bg-layer-3);
-  height: 34px;
-  font: inherit;
-  color: var(--dsw-alias-label-primary);
-  border-radius: 8px;
-  padding: 0 8px;
-  font-size: 13px;
-  line-height: 1.5;
+@container auto-continue-settings (max-width: 560px) {
+  .dshAcLayout { display: block; min-height: 0; }
+  .dshAcNav { flex-direction: row; overflow-x: auto; position: static; padding: 12px 0; border-bottom: 1px solid var(--dsh-ac-line); }
+  .dshAcNav > button { flex: none; font-size: 12px; min-height: 34px; padding: 7px 10px; }
+  .dshAcCategory { border-left: 0; padding: 20px 0; }
+  .dshAcField { gap: 8px 14px; }
+  .dshAcLabel { font-size: 13px; }
+  .dshAcNumber { width: 98px; }
+  .dshAcFooter { align-items: flex-start; flex-direction: column; gap: 10px; }
+  .dshAcFooter > div { width: 100%; justify-content: flex-end; }
 }
-.dshAcSelect:focus-visible { border-color: var(--dsw-alias-brand-primary); outline: none; }
-.dshAcSelect:disabled { color: var(--dsw-alias-label-tertiary); cursor: default; }
-.dshAcInvalid { color: var(--dsw-alias-label-error); margin: 0; font-size: 12px; line-height: 1.5; }
-.dshAcHint { color: var(--dsw-alias-label-tertiary); margin: 0; font-size: 12px; line-height: 1.5; }
-.dshAcPanel { min-width: 0; flex-direction: column; gap: 8px; padding: 12px 0 14px; display: flex; }
-.dshAcPanel + .dshAcPanel { border-left: 1px solid var(--dsw-alias-border-l2); padding-left: 20px; }
-.dshAcPanelHead { align-items: center; gap: 8px; display: flex; }
-.dshAcPanelTitle { color: var(--dsw-alias-label-primary); flex: 1; font-size: 13px; font-weight: 600; line-height: 1.5; }
-.dshAcStats { gap: 4px 16px; margin: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); display: grid; }
-.dshAcStats > div { justify-content: space-between; gap: 8px; display: flex; }
-.dshAcStats dt { color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 1.5; }
-.dshAcStats dd { color: var(--dsw-alias-label-primary); margin: 0; font-size: 12px; font-weight: 600; line-height: 1.5; }
-.dshAcCodes { flex-wrap: wrap; align-items: center; gap: 6px; display: flex; }
-.dshAcCode {
-  white-space: nowrap;
-  background: var(--dsw-alias-bg-module-platform);
-  color: var(--dsw-alias-label-secondary);
-  border-radius: 999px;
-  padding: 1px 8px;
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 17px;
+/* DS-Bot can remove the query container with display: contents. */
+@media (max-width: 640px) {
+  .dshAcComposer { flex-direction: column; align-items: flex-start; width: min-content; }
+  .dshAcComposer > .dshAcComposerLabel { white-space: normal; }
 }
-.dshAcPauseList { flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; display: flex; }
-.dshAcPauseList li { align-items: center; gap: 8px; display: flex; }
-.dshAcPauseId {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: var(--dsw-alias-label-primary);
-  font-size: 12px;
-  line-height: 1.5;
-}
-@keyframes dshAcRelayTravel {
-  0% { opacity: 0; transform: translate(-19px, 18px) scale(.7); }
-  18% { opacity: 1; }
-  82% { opacity: 1; }
-  100% { opacity: 0; transform: translate(12px, 6px) scale(1.15); }
-}
-@keyframes dshAcSignalSweep {
-  from { background-position: 100% 0; }
-  to { background-position: -120% 0; }
-}
-@media (max-width: 820px) {
-  .dshAcSectionGrid { grid-template-columns: minmax(0, 1fr); }
-  .dshAcFieldWide { grid-column: auto; }
-  .dshAcPanel + .dshAcPanel {
-    border-top: 1px solid var(--dsw-alias-border-l2);
-    border-left: 0;
-    padding-left: 0;
-  }
-}
-@media (max-width: 560px) {
-  .dshAcHeader { align-items: flex-start; gap: 11px; padding: 15px 13px 10px; }
-  .dshAcRelayMark { width: 46px; height: 46px; border-radius: 14px; }
-  .dshAcRelayMark svg { width: 38px; height: 38px; }
-  .dshAcName { font-size: 16px; }
-  .dshAcDescription { font-size: 12px; }
-  .dshAcJourney { gap: 5px; }
-  .dshAcJourneyLine { width: 13px; }
-  .dshAcChevron { width: 27px; height: 27px; }
-  .dshAcPending { display: none; }
-  .dshAcGithub { margin: 0 13px 13px; }
-  .dshAcBody { margin-right: 13px; margin-left: 13px; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .dshAcCard, .dshAcGithub, .dshAcChevron { transition: none; }
-  .dshAcCard:hover, .dshAcGithub:hover { transform: none; }
-  .dshAcRelayPulse, .dshAcJourneyLine { animation: none !important; }
-}
+
 `;
 function injectStyles() {
   if (typeof document === "undefined") return;
@@ -1016,18 +1209,87 @@ function injectStyles() {
   document.head.appendChild(tag);
 }
 
+// src/client/settings-notifications.ts
+var pendingPermission;
+function prepareSettingsNotification(enabled) {
+  try {
+    if (typeof Notification === "undefined") return Promise.resolve("unsupported");
+    if (!enabled || Notification.permission !== "default") return Promise.resolve(Notification.permission);
+    if (!pendingPermission) {
+      pendingPermission = Notification.requestPermission().catch(() => "failed").finally(() => {
+        pendingPermission = void 0;
+      });
+    }
+    return pendingPermission;
+  } catch {
+    return Promise.resolve("failed");
+  }
+}
+function showSettingsNotification(notice, locale, permission) {
+  const message = `notification.${notice}`;
+  if (permission !== "granted") {
+    if (notice === "disabled") return message;
+    return permission === "unsupported" ? "notification.unsupported" : permission === "failed" ? "notification.failed" : "notification.blocked";
+  }
+  try {
+    const resolved = resolveLocale(locale);
+    const copy = resolved === "zh" ? zh : resolved === "ru" ? ru : en;
+    const notification = new Notification(copy["notification.title"], { body: copy[message] });
+    notification.onclick = () => {
+      try {
+        globalThis.focus?.();
+      } catch {
+      }
+    };
+    return message;
+  } catch {
+    return notice === "disabled" ? message : "notification.failed";
+  }
+}
+
 // src/client/settings-card.tsx
-var import_jsx_runtime = require("react/jsx-runtime");
+var import_jsx_runtime2 = require("react/jsx-runtime");
 injectStyles();
+var nativeSettings = (() => {
+  try {
+    return require("@deepseek-ai/dsh-client-ui-primitives");
+  } catch {
+    return {};
+  }
+})();
+var NativeSettingsForm = nativeSettings.SettingsForm;
+var NativeValueField = nativeSettings.SettingsValueField;
+var NativeSegmentedControl = nativeSettings.SegmentedControl;
+var hasNativeSettings = typeof NativeSettingsForm === "function" && typeof NativeValueField === "function";
 var AutoContinueSettingsCardController = class {
   /**
    * @param scope - the bound settings scope for the `auto-continue` namespace.
    */
-  constructor(scope) {
+  constructor(scope, getLocale) {
+    this.scope = scope;
+    this.getLocale = getLocale;
+    this.composerSaving = /* @__PURE__ */ new Set();
+    this.composerFailed = /* @__PURE__ */ new Set();
+    this.disposed = false;
+    this.saveSequence = 0;
     this.form = new CardForm(scope, [
       booleanField("paused"),
+      booleanField("showComposerToggle"),
+      booleanField("usePluginSource"),
       textField("continueText"),
       textField("continueTextMaxTokens"),
+      booleanField("resumeSilentTurns"),
+      booleanField("resumeSubagentSessions"),
+      booleanField("resumeCompletedTurns"),
+      booleanField("resumeInterruptedChildren"),
+      booleanField("resumeGoals"),
+      booleanField("resumePausedGoals"),
+      booleanField("pauseWhenOffline"),
+      numberField("offlineCheckMs", 1e3),
+      numberField("loopMaxIterations", 0),
+      textField("continueTextLoop"),
+      textField("continueTextSilent"),
+      textField("continueTextInterrupted"),
       booleanField("guardTools"),
       textField("guardPendingText"),
       textField("guardDoneText"),
@@ -1052,13 +1314,31 @@ var AutoContinueSettingsCardController = class {
       textField("loopText")
     ]);
     this.store = this.form.bind(() => this.projection(), createSnapshotStore);
+    this.composer = this.form.bind(() => this.composerProjection(), createSnapshotStore);
+    this.stopComposer = subscribeBridge(() => this.composer.set(this.composerProjection()));
   }
   projection() {
     return {
       ...this.form.shell(),
+      enabled: !(this.scope.getSnapshot().value?.paused ?? DEFAULT_CONFIG.paused),
+      notificationFeedback: this.notificationFeedback,
       paused: this.form.field("paused"),
+      showComposerToggle: this.form.field("showComposerToggle"),
+      usePluginSource: this.form.field("usePluginSource"),
       continueText: this.form.field("continueText"),
       continueTextMaxTokens: this.form.field("continueTextMaxTokens"),
+      resumeSilentTurns: this.form.field("resumeSilentTurns"),
+      resumeSubagentSessions: this.form.field("resumeSubagentSessions"),
+      resumeCompletedTurns: this.form.field("resumeCompletedTurns"),
+      resumeInterruptedChildren: this.form.field("resumeInterruptedChildren"),
+      resumeGoals: this.form.field("resumeGoals"),
+      resumePausedGoals: this.form.field("resumePausedGoals"),
+      pauseWhenOffline: this.form.field("pauseWhenOffline"),
+      offlineCheckMs: this.form.field("offlineCheckMs"),
+      loopMaxIterations: this.form.field("loopMaxIterations"),
+      continueTextLoop: this.form.field("continueTextLoop"),
+      continueTextSilent: this.form.field("continueTextSilent"),
+      continueTextInterrupted: this.form.field("continueTextInterrupted"),
       guardTools: this.form.field("guardTools"),
       guardPendingText: this.form.field("guardPendingText"),
       guardDoneText: this.form.field("guardDoneText"),
@@ -1088,194 +1368,223 @@ var AutoContinueSettingsCardController = class {
    * @returns the card's snapshot and its form actions.
    */
   inject() {
-    return { hooks: { autoContinueSettingsCard: this.store }, ...this.form.actions() };
+    return { hooks: { autoContinueSettingsCard: this.store }, ...this.form.actions(), save: () => void this.save() };
+  }
+  async save() {
+    const state2 = this.form.shell();
+    const snapshot = this.scope.getSnapshot();
+    if (this.disposed || !state2.available || !state2.writable || !state2.dirty || state2.invalid || state2.saving) return;
+    const sequence = ++this.saveSequence;
+    const before = snapshot.value?.notify ?? DEFAULT_CONFIG.notify;
+    const target = this.form.field("notify").text;
+    const permission = prepareSettingsNotification(target === "" ? DEFAULT_CONFIG.notify : target === "true");
+    this.notificationFeedback = void 0;
+    if (!await this.form.save() || this.disposed) return;
+    const after = this.scope.getSnapshot().value?.notify ?? DEFAULT_CONFIG.notify;
+    if (!before && !after) return;
+    const result = await permission;
+    if (this.disposed || sequence !== this.saveSequence || (this.scope.getSnapshot().value?.notify ?? DEFAULT_CONFIG.notify) !== after) return;
+    this.notificationFeedback = showSettingsNotification(before === after ? "saved" : after ? "enabled" : "disabled", this.getLocale(), result);
+    this.store.set(this.projection());
+  }
+  injectComposer(sessionId) {
+    return { hooks: { autoContinueComposer: this.composer }, sessionId, setMode: (mode) => void this.setMode(sessionId, mode) };
+  }
+  composerProjection() {
+    const snapshot = this.scope.getSnapshot();
+    const policy = readSessionPolicy();
+    const connected = isBridgeConnected();
+    return {
+      visible: snapshot.status === "ready" && (snapshot.value?.showComposerToggle ?? DEFAULT_CONFIG.showComposerToggle),
+      policy,
+      reconnecting: policy !== void 0 && !connected,
+      writable: connected && canWriteSettings(snapshot) && policy?.writable === true,
+      saving: new Set(this.composerSaving),
+      failed: new Set(this.composerFailed)
+    };
+  }
+  async setMode(sessionId, mode) {
+    if (this.disposed || !sessionId || this.composerSaving.has(sessionId) || !this.composerProjection().writable) return;
+    this.composerSaving.add(sessionId);
+    this.composerFailed.delete(sessionId);
+    this.composer.set(this.composerProjection());
+    try {
+      await setSessionMode(sessionId, mode);
+    } catch {
+      this.composerFailed.add(sessionId);
+    } finally {
+      this.composerSaving.delete(sessionId);
+      if (!this.disposed) this.composer.set(this.composerProjection());
+    }
+  }
+  /** Release this card's subscription to the provider-owned settings form. */
+  dispose() {
+    this.disposed = true;
+    this.stopComposer();
+    this.form.dispose();
   }
 };
+function AutoContinueSettingsPage(props) {
+  return /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("ul", { style: { listStyle: "none", margin: 0, padding: 0 }, children: /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(AutoContinueSettingsCard, { ...props }) });
+}
+var groups = [
+  { id: "general", fields: ["paused", "showComposerToggle", "usePluginSource", "resumeSilentTurns", "resumeSubagentSessions", "resumeCompletedTurns", "loopMaxIterations", "notify"] },
+  { id: "recovery", fields: ["graceMs", "cooldownMs", "maxConsecutive", "classify", "retryableErrorPatterns", "backoffFactor", "backoffMaxMs", "pauseWhenOffline", "offlineCheckMs", "resumeGoals", "resumePausedGoals"] },
+  { id: "startup", fields: ["scanOnBoot", "resumeInterruptedChildren", "scanLimit", "freshMs"] },
+  { id: "prompts", fields: ["continueText", "continueTextMaxTokens", "continueTextSilent", "continueTextInterrupted", "continueTextLoop", "guardPendingText", "guardDoneText", "loopText"] },
+  { id: "safety", fields: ["guardTools", "loopGuard", "loopShortChars", "loopWindowMs", "loopShortCount", "loopRepeatText", "loopToolRepeat"] },
+  { id: "status", fields: ["verbose"] }
+];
+var textDefaults = {
+  continueText: "default.continueText",
+  continueTextMaxTokens: "default.continueTextMaxTokens",
+  continueTextSilent: "default.continueTextSilent",
+  continueTextLoop: "default.continueTextLoop",
+  continueTextInterrupted: "default.continueTextInterrupted",
+  guardPendingText: "default.guardPendingText",
+  guardDoneText: "default.guardDoneText",
+  loopText: "default.loopText"
+};
 var REPOSITORY_URL = "https://github.com/HsiangNianian/dsh-auto-continue";
-var REPOSITORY_SLUG = "HsiangNianian/dsh-auto-continue";
-function RelayMark() {
-  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("svg", { viewBox: "0 0 48 48", "aria-hidden": "true", focusable: "false", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { className: "dshAcRelayArc", d: "M9 30c4-12 10-18 19-18 5 0 9 2 12 6" }),
-    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { className: "dshAcRelayArc dshAcRelayArcEcho", d: "M8 35c6 3 12 3 17 0 5-3 8-8 15-9" }),
-    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { className: "dshAcRelayNode dshAcRelayNodeStart", cx: "9", cy: "30", r: "3" }),
-    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { className: "dshAcRelayNode dshAcRelayNodeEnd", cx: "40", cy: "18", r: "3" }),
-    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { className: "dshAcRelayPulse", cx: "28", cy: "12", r: "2.5" })
-  ] });
-}
-function ChevronMark() {
-  return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("svg", { viewBox: "0 0 16 16", "aria-hidden": "true", focusable: "false", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "m3.5 6 4.5 4 4.5-4" }) });
-}
-function GitHubMark() {
-  return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("svg", { viewBox: "0 0 24 24", "aria-hidden": "true", focusable: "false", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M12 2.4a9.8 9.8 0 0 0-3.1 19.1c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.2-3.4-1.2-.5-1.1-1.1-1.4-1.1-1.4-.9-.6.1-.6.1-.6 1 0 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.6.4-1.1.6-1.3-2.2-.3-4.6-1.1-4.6-4.9 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.8 1a9.5 9.5 0 0 1 5 0c1.9-1.3 2.8-1 2.8-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.8-2.3 4.6-4.6 4.9.4.3.7.9.7 1.8V21c0 .3.2.6.7.5A9.8 9.8 0 0 0 12 2.4Z" }) });
-}
-function ExternalMark() {
-  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("svg", { viewBox: "0 0 16 16", "aria-hidden": "true", focusable: "false", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M6 3h7v7M13 3 7 9" }),
-    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: "M11 9v3a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h3" })
-  ] });
-}
-function RelayJourney(props) {
-  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "dshAcJourney", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "dshAcJourneyStep dshAcJourneyInterrupted", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "dshAcJourneyDot", "aria-hidden": "true" }),
-      props.t("flow.interrupted")
-    ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "dshAcJourneyLine", "aria-hidden": "true" }),
-    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "dshAcJourneyStep dshAcJourneyGrace", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "dshAcJourneyDot", "aria-hidden": "true" }),
-      props.t("flow.grace")
-    ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "dshAcJourneyLine", "aria-hidden": "true" }),
-    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "dshAcJourneyStep dshAcJourneyContinue", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "dshAcJourneyDot", "aria-hidden": "true" }),
-      props.t("flow.continue")
+function RepositoryInvite({ t }) {
+  return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("p", { className: "dshAcInvite", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "dshAcInviteStar", "aria-hidden": "true", children: "★" }),
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { children: t("repo.star") }),
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("a", { className: "dshAcRepoLink", href: REPOSITORY_URL, target: "_blank", rel: "noopener noreferrer", "aria-label": t("repo.aria"), children: [
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("svg", { viewBox: "0 0 24 24", "aria-hidden": "true", focusable: "false", children: /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("path", { d: "M12 2.4a9.8 9.8 0 0 0-3.1 19.1c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.2-3.4-1.2-.5-1.1-1.1-1.4-1.1-1.4-.9-.6.1-.6.1-.6 1 0 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.6.4-1.1.6-1.3-2.2-.3-4.6-1.1-4.6-4.9 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.8 1a9.5 9.5 0 0 1 5 0c1.9-1.3 2.8-1 2.8-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.8-2.3 4.6-4.6 4.9.4.3.7.9.7 1.8V21c0 .3.2.6.7.5A9.8 9.8 0 0 0 12 2.4Z" }) }),
+      t("repo.link"),
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("svg", { className: "dshAcExternal", viewBox: "0 0 16 16", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("path", { d: "M6 3h7v7M13 3 7 9M11 9v3a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h3" }) })
     ] })
   ] });
 }
-function SettingsCard(props) {
-  const [open, setOpen] = (0, import_react.useState)(false);
-  const { state: state2 } = props;
-  if (!state2.available) return null;
-  const title = props.t(props.titleKey);
-  const blocked = !state2.dirty || state2.invalid || state2.saving;
-  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { className: open ? "dshAcCard dshAcCardOpen" : "dshAcCard", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "dshAcHeaderFrame", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
-        "button",
-        {
-          type: "button",
-          className: "dshAcHeader",
-          "aria-expanded": open,
-          "aria-label": `${props.t(open ? "chrome.collapse" : "chrome.expand")}: ${title}`,
-          title: props.t(props.descriptionKey),
-          onClick: () => setOpen(!open),
-          children: [
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "dshAcRelayMark", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(RelayMark, {}) }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "dshAcHeadText", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "dshAcName", children: title }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "dshAcDescription", children: props.t(props.descriptionKey) }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(RelayJourney, { t: props.t })
-            ] }),
-            state2.dirty ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "dshAcPending", title: props.t("chrome.unsaved"), children: props.t("chrome.unsaved") }) : null,
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: open ? "dshAcChevron dshAcChevronOpen" : "dshAcChevron", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ChevronMark, {}) })
-          ]
-        }
-      ),
-      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
-        "a",
-        {
-          className: "dshAcGithub",
-          href: REPOSITORY_URL,
-          target: "_blank",
-          rel: "noreferrer",
-          "aria-label": props.t("repo.aria"),
-          children: [
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "dshAcGithubIcon", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(GitHubMark, {}) }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "dshAcGithubText", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "dshAcGithubAction", children: props.t("repo.star") }),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "dshAcGithubSlug", children: REPOSITORY_SLUG })
-            ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "dshAcExternal", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ExternalMark, {}) })
-          ]
-        }
-      )
+function SettingField({ name, id, state: state2, actions, disabled, t }) {
+  const boolean = typeof DEFAULT_CONFIG[name] === "boolean";
+  const numeric = typeof DEFAULT_CONFIG[name] === "number";
+  const label = t(`field.${name}`);
+  const hint = t(`field.${name}Hint`);
+  const value = state2.text === "" ? DEFAULT_CONFIG[name] : state2.text === "true";
+  const placeholderKey = textDefaults[name];
+  const placeholder = placeholderKey ? t(placeholderKey) : name === "retryableErrorPatterns" ? t("field.retryableErrorPatternsPlaceholder") : String(DEFAULT_CONFIG[name]);
+  const common = { id, disabled, "aria-describedby": `${id}-hint`, "aria-invalid": state2.invalid || void 0, value: state2.text, onChange: (event) => actions.edit(name, event.target.value) };
+  return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: `dshAcField${!boolean && !numeric ? " dshAcFieldText" : ""}`, "data-field": name, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "dshAcFieldCopy", children: [
+      boolean ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "dshAcLabel", children: label }) : /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("label", { className: "dshAcLabel", htmlFor: id, children: label }),
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { className: state2.invalid ? "dshAcInvalid" : "dshAcHint", id: `${id}-hint`, children: state2.invalid ? t("chrome.invalidNumber") : hint })
     ] }),
-    open ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "dshAcBody", children: [
-      !state2.writable ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "dshAcReadOnly", role: "status", children: props.t("chrome.readOnly") }) : null,
-      props.children,
-      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "dshAcFooter", children: [
-        state2.failed ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "dshAcFailed", role: "status", children: props.t("chrome.saveFailed") }) : null,
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-          "button",
-          {
-            type: "button",
-            className: "dshAcDiscard",
-            disabled: !state2.dirty || state2.saving,
-            onClick: props.onDiscard,
-            children: props.t("chrome.discard")
-          }
-        ),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "button", className: "dshAcSave", disabled: blocked, onClick: props.onSave, children: props.t(!state2.saving ? "chrome.save" : "chrome.saving") })
-      ] })
-    ] }) : null
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "dshAcFieldControl", children: [
+      state2.overridden && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("button", { type: "button", className: "dshAcReset", disabled, "aria-label": `${t("chrome.reset")}: ${label}`, onClick: () => actions.resetField(name), children: t("chrome.reset") }),
+      name === "resumeCompletedTurns" ? /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
+        "select",
+        {
+          id,
+          className: "dshAcMode",
+          "aria-label": label,
+          "aria-describedby": `${id}-hint`,
+          disabled,
+          value: String(value),
+          onChange: (event) => actions.edit(name, event.target.value),
+          children: [
+            /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("option", { value: "false", children: t("composer.recover") }),
+            /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("option", { value: "true", children: t("composer.loop") })
+          ]
+        }
+      ) : boolean ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "dshAcSwitchTarget", children: /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
+        NativeSwitch,
+        {
+          label,
+          title: hint,
+          disabled,
+          checked: name === "paused" ? !value : Boolean(value),
+          onChange: (checked) => actions.edit(name, String(name === "paused" ? !checked : checked))
+        }
+      ) }) : numeric ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("input", { ...common, className: "dshAcInput dshAcNumber", type: "text", inputMode: "numeric", placeholder }) : /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("textarea", { ...common, className: "dshAcInput dshAcTextArea", rows: name === "retryableErrorPatterns" ? 3 : 2, placeholder })
+    ] })
   ] });
 }
-function ValueField(props) {
-  const className = props.invalid ? "dshAcInput dshAcInputInvalid" : "dshAcInput";
-  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: props.wide === true ? "dshAcField dshAcFieldWide" : "dshAcField", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "dshAcHead", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", { className: "dshAcLabel", htmlFor: props.id, children: props.label }),
-      props.overridden ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "dshAcBadges", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "dshAcBadge", children: props.t("chrome.overridden") }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "button", className: "dshAcReset", disabled: props.disabled, onClick: props.onReset, children: props.t("chrome.reset") })
-      ] }) : null
+function NativeSettingField({ name, id, state: state2, actions, disabled, t }) {
+  const boolean = typeof DEFAULT_CONFIG[name] === "boolean";
+  const numeric = typeof DEFAULT_CONFIG[name] === "number";
+  const label = t(`field.${name}`);
+  const hint = t(`field.${name}Hint`);
+  const value = state2.text === "" ? DEFAULT_CONFIG[name] : state2.text === "true";
+  const placeholderKey = textDefaults[name];
+  const placeholder = placeholderKey ? t(placeholderKey) : name === "retryableErrorPatterns" ? t("field.retryableErrorPatternsPlaceholder") : String(DEFAULT_CONFIG[name]);
+  const reset = state2.overridden ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("button", { type: "button", className: "dshAcNativeReset", disabled, "aria-label": `${t("chrome.reset")}: ${label}`, onClick: () => actions.resetField(name), children: t("chrome.reset") }) : null;
+  if (name === "resumeCompletedTurns") {
+    const items = [{ value: "false", label: t("composer.recover") }, { value: "true", label: t("composer.loop") }];
+    return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "dshAcNativeField", "data-field": name, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "dshAcNativeHead", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("label", { className: "dshAcNativeLabel", htmlFor: id, children: label }),
+        reset
+      ] }),
+      NativeSegmentedControl ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(NativeSegmentedControl, { id, options: items, value: value ? "true" : "false", onChange: (next) => actions.edit(name, next), label, disabled }) : /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("select", { id, className: "dshAcMode", "aria-label": label, disabled, value: String(value), onChange: (event) => actions.edit(name, event.target.value), children: [
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("option", { value: "false", children: t("composer.recover") }),
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("option", { value: "true", children: t("composer.loop") })
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { className: "dshAcNativeHint", id: `${id}-hint`, children: hint })
+    ] });
+  }
+  if (boolean) {
+    return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "dshAcNativeField", "data-field": name, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "dshAcNativeToggleRow", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("label", { className: "dshAcNativeLabel", htmlFor: id, children: label }),
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("span", { className: "dshAcNativeActions", children: [
+          reset,
+          /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
+            NativeSwitch,
+            {
+              label,
+              title: hint,
+              disabled,
+              checked: name === "paused" ? !value : Boolean(value),
+              onChange: (checked) => actions.edit(name, String(name === "paused" ? !checked : checked))
+            }
+          )
+        ] })
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { className: "dshAcNativeHint", id: `${id}-hint`, children: hint })
+    ] });
+  }
+  if (numeric) {
+    const ValueField = NativeValueField;
+    return /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
+      ValueField,
+      {
+        id,
+        label,
+        hint,
+        overriddenLabel: t("chrome.overridden"),
+        resetLabel: t("chrome.reset"),
+        invalidLabel: t("chrome.invalidNumber"),
+        disabled,
+        numeric: true,
+        ...state2,
+        placeholder,
+        onEdit: (text) => actions.edit(name, text),
+        onReset: () => actions.resetField(name)
+      }
+    );
+  }
+  return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "dshAcNativeField", "data-field": name, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "dshAcNativeHead", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("label", { className: "dshAcNativeLabel", htmlFor: id, children: label }),
+      reset
     ] }),
-    props.multiline === true ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
       "textarea",
       {
-        id: props.id,
-        className: `${className} dshAcTextArea`,
-        "aria-invalid": props.invalid || void 0,
-        value: props.text,
-        placeholder: props.placeholder ?? "",
-        disabled: props.disabled,
-        rows: 4,
-        onChange: (event) => props.onEdit(event.target.value)
-      }
-    ) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-      "input",
-      {
-        id: props.id,
-        className,
-        type: "text",
-        inputMode: props.numeric === true ? "numeric" : void 0,
-        "aria-invalid": props.invalid || void 0,
-        value: props.text,
-        placeholder: props.placeholder ?? "",
-        disabled: props.disabled,
-        onChange: (event) => props.onEdit(event.target.value)
+        id,
+        className: "dshAcNativeTextarea",
+        rows: name === "retryableErrorPatterns" ? 3 : 2,
+        disabled,
+        value: state2.text,
+        placeholder,
+        "aria-invalid": state2.invalid || void 0,
+        "aria-describedby": `${id}-hint`,
+        onChange: (event) => actions.edit(name, event.target.value)
       }
     ),
-    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: props.invalid ? "dshAcInvalid" : "dshAcHint", children: props.invalid ? props.t("chrome.invalidNumber") : props.hint })
-  ] });
-}
-function BooleanField(props) {
-  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: props.wide === true ? "dshAcField dshAcFieldWide" : "dshAcField", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "dshAcHead", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", { className: "dshAcLabel", htmlFor: props.id, children: props.label }),
-      props.overridden ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "dshAcBadges", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "dshAcBadge", children: props.t("chrome.overridden") }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", { type: "button", className: "dshAcReset", disabled: props.disabled, onClick: props.onReset, children: props.t("chrome.reset") })
-      ] }) : null
-    ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
-      "select",
-      {
-        id: props.id,
-        className: "dshAcSelect",
-        value: props.text,
-        disabled: props.disabled,
-        onChange: (event) => props.onEdit(event.target.value),
-        children: [
-          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "", children: props.t("chrome.inherit") }),
-          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "true", children: props.t("chrome.on") }),
-          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", { value: "false", children: props.t("chrome.off") })
-        ]
-      }
-    ),
-    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "dshAcHint", children: props.hint })
-  ] });
-}
-function SettingsSection(props) {
-  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { className: `dshAcFormSection dshAcFormSection-${props.tone}`, children: [
-    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("header", { className: "dshAcSectionHead", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "dshAcSectionSignal", "aria-hidden": "true" }),
-      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "dshAcSectionCopy", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "dshAcSectionTitle", children: props.t(props.titleKey) }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "dshAcSectionDescription", children: props.t(props.descriptionKey) })
-      ] })
-    ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "dshAcSectionGrid", children: props.children })
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { className: "dshAcNativeHint", id: `${id}-hint`, children: state2.invalid ? t("chrome.invalidNumber") : hint })
   ] });
 }
 function LivePanels(props) {
@@ -1293,11 +1602,13 @@ function LivePanels(props) {
   const hasStats = stats.sent + stats.skipped + stats.recovered + stats.failed + stats.gaveUp + stats.looped > 0;
   const codes = Object.entries(stats.byCode).sort((a, b) => b[1] - a[1]).slice(0, 5);
   const paused = pausedSessions();
-  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
-    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { className: "dshAcPanel", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "dshAcPanelHead", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "dshAcPanelTitle", children: t("stats.title") }),
-        hasStats ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+  const attempts = readRecoveryAttempts();
+  const sessions = [...new Set(attempts.map((attempt) => attempt.sessionId))];
+  return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(import_jsx_runtime2.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("section", { className: "dshAcPanel", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "dshAcPanelHead", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "dshAcPanelTitle", children: t("stats.title") }),
+        hasStats ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
           "button",
           {
             type: "button",
@@ -1310,39 +1621,39 @@ function LivePanels(props) {
           }
         ) : null
       ] }),
-      !hasStats ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "dshAcHint", children: t("stats.empty") }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("dl", { className: "dshAcStats", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("dt", { children: t("stats.sent") }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("dd", { children: stats.sent })
+      !hasStats ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { className: "dshAcHint", children: t("stats.empty") }) : /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(import_jsx_runtime2.Fragment, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("dl", { className: "dshAcStats", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("dt", { children: t("stats.sent") }),
+            /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("dd", { children: stats.sent })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("dt", { children: t("stats.recovered") }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("dd", { children: stats.recovered })
+          /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("dt", { children: t("stats.recovered") }),
+            /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("dd", { children: stats.recovered })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("dt", { children: t("stats.failed") }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("dd", { children: stats.failed })
+          /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("dt", { children: t("stats.failed") }),
+            /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("dd", { children: stats.failed })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("dt", { children: t("stats.skipped") }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("dd", { children: stats.skipped })
+          /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("dt", { children: t("stats.skipped") }),
+            /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("dd", { children: stats.skipped })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("dt", { children: t("stats.gaveUp") }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("dd", { children: stats.gaveUp })
+          /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("dt", { children: t("stats.gaveUp") }),
+            /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("dd", { children: stats.gaveUp })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("dt", { children: t("stats.looped") }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("dd", { children: stats.looped })
+          /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("dt", { children: t("stats.looped") }),
+            /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("dd", { children: stats.looped })
           ] })
         ] }),
-        codes.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "dshAcCodes", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "dshAcHint", children: [
+        codes.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "dshAcCodes", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("span", { className: "dshAcHint", children: [
             t("stats.byCode"),
             ":"
           ] }),
-          codes.map(([code, count]) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "dshAcCode", children: [
+          codes.map(([code, count]) => /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("span", { className: "dshAcCode", children: [
             code,
             " ×",
             count
@@ -1350,10 +1661,36 @@ function LivePanels(props) {
         ] }) : null
       ] })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { className: "dshAcPanel", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "dshAcPanelHead", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "dshAcPanelTitle", children: t("pause.title") }),
-        paused.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("section", { className: "dshAcPanel", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "dshAcPanelHead", children: /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "dshAcPanelTitle", children: t("recovery.title") }) }),
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { className: "dshAcHint", children: t("recovery.hint") }),
+      sessions.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { className: "dshAcHint", children: t("recovery.empty") }) : /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("ul", { className: "dshAcPauseList", children: sessions.map((sessionId) => {
+        const recent = attempts.filter((attempt) => attempt.sessionId === sessionId);
+        const latest = recent[0];
+        return /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("li", { children: /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "dshAcRecovery", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "dshAcPauseId", children: sessionId }),
+          /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("span", { children: [
+            t("recovery.count"),
+            ": ",
+            recent.length,
+            " · ",
+            t("recovery.consecutive"),
+            ": ",
+            latest.consecutive
+          ] }),
+          /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("span", { children: [
+            t("recovery.latest"),
+            ": ",
+            t(`recovery.reason.${latest.reason}`)
+          ] }),
+          /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("time", { className: "dshAcHint", dateTime: new Date(latest.at).toISOString(), children: new Date(latest.at).toLocaleString() })
+        ] }) }, sessionId);
+      }) })
+    ] }),
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("section", { className: "dshAcPanel", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "dshAcPanelHead", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "dshAcPanelTitle", children: t("pause.title") }),
+        paused.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
           "button",
           {
             type: "button",
@@ -1366,17 +1703,17 @@ function LivePanels(props) {
           }
         ) : null
       ] }),
-      paused.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "dshAcHint", children: t("pause.none") }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("ul", { className: "dshAcPauseList", children: paused.map((item) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "dshAcPauseId", children: [
+      paused.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { className: "dshAcHint", children: t("pause.none") }) : /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("ul", { className: "dshAcPauseList", children: paused.map((item) => /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("li", { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("span", { className: "dshAcPauseId", children: [
           item.sessionId.slice(0, 8),
           "…"
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "dshAcHint", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("span", { className: "dshAcHint", children: [
           Math.max(1, Math.ceil((item.until - Date.now()) / 6e4)),
           " ",
           t("pause.minutes")
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
           "button",
           {
             type: "button",
@@ -1395,422 +1732,317 @@ function LivePanels(props) {
 function AutoContinueSettingsCard(props) {
   const { t } = props;
   const state2 = props.useAutoContinueSettingsCard((snapshot) => snapshot);
-  const disabled = !state2.writable;
-  const shared = { t, disabled };
-  return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-    SettingsCard,
-    {
-      t,
-      titleKey: "card.title",
-      descriptionKey: "card.description",
-      state: state2,
-      onSave: props.save,
-      onDiscard: props.discard,
-      children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "dshAcFormCanvas", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
-          SettingsSection,
+  const [active, setActive] = (0, import_react.useState)("general");
+  const prefix = (0, import_react.useId)();
+  const group = groups.find((item) => item.id === active);
+  const native = hasNativeSettings;
+  if (!state2.available) return null;
+  return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("li", { className: "dshAcCard", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(RepositoryInvite, { t }),
+    !native && !state2.writable && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { className: "dshAcReadOnly", role: "status", children: t("chrome.readOnly") }),
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "dshAcLayout", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "dshAcNav", role: "tablist", "aria-label": t("chrome.categories"), children: groups.map((item, index) => {
+        const invalid = item.fields.some((name) => state2[name].invalid);
+        const title = t(`category.${item.id}.title`);
+        return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
+          "button",
           {
-            t,
-            titleKey: "section.handoff.title",
-            descriptionKey: "section.handoff.description",
-            tone: "handoff",
+            type: "button",
+            role: "tab",
+            id: `${prefix}-tab-${item.id}`,
+            "data-category": item.id,
+            "aria-controls": `${prefix}-panel-${item.id}`,
+            "aria-selected": active === item.id,
+            tabIndex: active === item.id ? 0 : -1,
+            "aria-label": invalid ? `${title}: ${t("chrome.invalidNumber")}` : title,
+            onClick: () => setActive(item.id),
+            onKeyDown: (event) => {
+              const offset = ["ArrowRight", "ArrowDown"].includes(event.key) ? 1 : ["ArrowLeft", "ArrowUp"].includes(event.key) ? -1 : 0;
+              if (!offset && event.key !== "Home" && event.key !== "End") return;
+              event.preventDefault();
+              const next = event.key === "Home" ? 0 : event.key === "End" ? groups.length - 1 : (index + offset + groups.length) % groups.length;
+              setActive(groups[next].id);
+              const button = event.currentTarget.parentElement?.querySelectorAll('[role="tab"]')[next];
+              button?.focus();
+              button?.scrollIntoView({ block: "nearest", inline: "nearest" });
+            },
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                BooleanField,
-                {
-                  wide: true,
-                  id: "auto-continue-paused",
-                  label: t("field.paused"),
-                  hint: t("field.pausedHint"),
-                  ...shared,
-                  ...state2.paused,
-                  onEdit: (text) => props.edit("paused", text),
-                  onReset: () => props.resetField("paused")
-                }
-              ),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                ValueField,
-                {
-                  id: "auto-continue-continue-text",
-                  label: t("field.continueText"),
-                  hint: t("field.continueTextHint"),
-                  ...shared,
-                  ...state2.continueText,
-                  onEdit: (text) => props.edit("continueText", text),
-                  placeholder: t("default.continueText"),
-                  onReset: () => props.resetField("continueText")
-                }
-              ),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                ValueField,
-                {
-                  id: "auto-continue-continue-text-max-tokens",
-                  label: t("field.continueTextMaxTokens"),
-                  hint: t("field.continueTextMaxTokensHint"),
-                  ...shared,
-                  ...state2.continueTextMaxTokens,
-                  onEdit: (text) => props.edit("continueTextMaxTokens", text),
-                  placeholder: t("default.continueTextMaxTokens"),
-                  onReset: () => props.resetField("continueTextMaxTokens")
-                }
-              )
+              title,
+              invalid && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "dshAcInvalidMark", "aria-hidden": "true", children: "!" })
             ]
-          }
-        ),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
-          SettingsSection,
+          },
+          item.id
+        );
+      }) }),
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("section", { className: "dshAcCategory", role: "tabpanel", id: `${prefix}-panel-${active}`, "aria-labelledby": `${prefix}-tab-${active}`, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "dshAcCategoryHeading", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("h3", { children: t(`category.${active}.title`) }),
+          /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { children: t(`category.${active}.description`) })
+        ] }),
+        native ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(NativeSettingsForm, { labels: {
+          save: t("chrome.save"),
+          saving: t("chrome.saving"),
+          saveFailed: t("chrome.saveFailed"),
+          readOnly: t("chrome.readOnly"),
+          unavailable: t("chrome.unavailable")
+        }, state: state2, onSave: props.save, onDiscard: props.discard, children: /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "dshAcNativeFields", children: [
+          group.fields.map((name) => /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(NativeSettingField, { name, id: `${prefix}-${name}`, state: state2[name], actions: props, disabled: !state2.writable, t }, name)),
+          active === "status" && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(LivePanels, { t })
+        ] }) }) : /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(import_jsx_runtime2.Fragment, { children: [
+          group.fields.map((name) => /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(SettingField, { name, id: `${prefix}-${name}`, state: state2[name], actions: props, disabled: !state2.writable, t }, name)),
+          active === "status" && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(LivePanels, { t }),
+          /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("footer", { className: "dshAcFooter", "data-dirty": state2.dirty, children: [
+            /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { className: state2.failed || state2.invalid ? "dshAcInvalid" : "dshAcHint", role: "status", children: t(state2.failed ? "chrome.saveFailed" : state2.invalid ? "chrome.invalidNumber" : state2.saving ? "chrome.saving" : state2.dirty ? "chrome.unsaved" : state2.notificationFeedback ?? "chrome.saved") }),
+            /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { children: [
+              /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("button", { type: "button", className: "dshAcDiscard", disabled: !state2.dirty || state2.saving, onClick: props.discard, children: t("chrome.discard") }),
+              /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("button", { type: "button", className: "dshAcSave", disabled: !state2.dirty || state2.invalid || state2.saving || !state2.writable, onClick: props.save, children: t(state2.saving ? "chrome.saving" : "chrome.save") })
+            ] })
+          ] })
+        ] })
+      ] })
+    ] })
+  ] });
+}
+
+// src/client/composer-toggle.tsx
+var import_react3 = require("react");
+
+// src/client/mode-menu.tsx
+var import_react2 = require("react");
+var import_jsx_runtime3 = require("react/jsx-runtime");
+var primitives = (() => {
+  try {
+    return require("@deepseek-ai/dsh-client-ui-primitives");
+  } catch {
+    return {};
+  }
+})();
+var HostMenu = primitives.Menu;
+var HostChevron = primitives.IconChevronDownOutlineRegular;
+function ChevronDown() {
+  if (HostChevron) return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(HostChevron, {});
+  return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("svg", { className: "dshAcModeChevronFallback", viewBox: "0 0 16 16", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("path", { d: "m4.5 6.25 3.5 3.5 3.5-3.5" }) });
+}
+function ModeMenu(props) {
+  const [open, setOpen] = (0, import_react2.useState)(false);
+  const expanded = open && !props.disabled;
+  (0, import_react2.useEffect)(() => {
+    if (props.disabled) setOpen(false);
+  }, [props.disabled]);
+  const choose = (id) => {
+    setOpen(false);
+    if (isSessionMode(id) && id !== props.mode) props.onChange(id);
+  };
+  if (HostMenu) {
+    return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+      HostMenu,
+      {
+        open: expanded,
+        side: "top",
+        portal: true,
+        items: props.options,
+        selectedId: props.mode,
+        onSelect: choose,
+        onClose: () => setOpen(false),
+        anchor: /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(
+          "button",
           {
-            t,
-            titleKey: "section.safety.title",
-            descriptionKey: "section.safety.description",
-            tone: "safety",
+            type: "button",
+            className: "dshAcModeTrigger",
+            disabled: props.disabled,
+            "aria-label": props.ariaLabel,
+            "aria-haspopup": "menu",
+            "aria-expanded": expanded,
+            title: props.title,
+            onClick: () => setOpen((value) => !value),
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                BooleanField,
-                {
-                  wide: true,
-                  id: "auto-continue-guard-tools",
-                  label: t("field.guardTools"),
-                  hint: t("field.guardToolsHint"),
-                  ...shared,
-                  ...state2.guardTools,
-                  onEdit: (text) => props.edit("guardTools", text),
-                  onReset: () => props.resetField("guardTools")
-                }
-              ),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                ValueField,
-                {
-                  wide: true,
-                  id: "auto-continue-guard-pending-text",
-                  label: t("field.guardPendingText"),
-                  hint: t("field.guardPendingTextHint"),
-                  ...shared,
-                  ...state2.guardPendingText,
-                  onEdit: (text) => props.edit("guardPendingText", text),
-                  placeholder: t("default.guardPendingText"),
-                  onReset: () => props.resetField("guardPendingText")
-                }
-              ),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                ValueField,
-                {
-                  wide: true,
-                  id: "auto-continue-guard-done-text",
-                  label: t("field.guardDoneText"),
-                  hint: t("field.guardDoneTextHint"),
-                  ...shared,
-                  ...state2.guardDoneText,
-                  onEdit: (text) => props.edit("guardDoneText", text),
-                  placeholder: t("default.guardDoneText"),
-                  onReset: () => props.resetField("guardDoneText")
-                }
-              ),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                ValueField,
-                {
-                  id: "auto-continue-grace-ms",
-                  label: t("field.graceMs"),
-                  hint: t("field.graceMsHint"),
-                  numeric: true,
-                  ...shared,
-                  ...state2.graceMs,
-                  onEdit: (text) => props.edit("graceMs", text),
-                  onReset: () => props.resetField("graceMs")
-                }
-              ),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                ValueField,
-                {
-                  id: "auto-continue-cooldown-ms",
-                  label: t("field.cooldownMs"),
-                  hint: t("field.cooldownMsHint"),
-                  numeric: true,
-                  ...shared,
-                  ...state2.cooldownMs,
-                  onEdit: (text) => props.edit("cooldownMs", text),
-                  onReset: () => props.resetField("cooldownMs")
-                }
-              ),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                ValueField,
-                {
-                  id: "auto-continue-max-consecutive",
-                  label: t("field.maxConsecutive"),
-                  hint: t("field.maxConsecutiveHint"),
-                  numeric: true,
-                  ...shared,
-                  ...state2.maxConsecutive,
-                  onEdit: (text) => props.edit("maxConsecutive", text),
-                  onReset: () => props.resetField("maxConsecutive")
-                }
-              )
+              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "dshAcModeTriggerLabel", children: props.label }),
+              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "dshAcModeChevron", "data-open": expanded, "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(ChevronDown, {}) })
             ]
-          }
-        ),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
-          SettingsSection,
-          {
-            t,
-            titleKey: "section.recovery.title",
-            descriptionKey: "section.recovery.description",
-            tone: "recovery",
-            children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                BooleanField,
-                {
-                  id: "auto-continue-scan-on-boot",
-                  label: t("field.scanOnBoot"),
-                  hint: t("field.scanOnBootHint"),
-                  ...shared,
-                  ...state2.scanOnBoot,
-                  onEdit: (text) => props.edit("scanOnBoot", text),
-                  onReset: () => props.resetField("scanOnBoot")
-                }
-              ),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                BooleanField,
-                {
-                  id: "auto-continue-classify",
-                  label: t("field.classify"),
-                  hint: t("field.classifyHint"),
-                  ...shared,
-                  ...state2.classify,
-                  onEdit: (text) => props.edit("classify", text),
-                  onReset: () => props.resetField("classify")
-                }
-              ),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                ValueField,
-                {
-                  id: "auto-continue-scan-limit",
-                  label: t("field.scanLimit"),
-                  hint: t("field.scanLimitHint"),
-                  numeric: true,
-                  ...shared,
-                  ...state2.scanLimit,
-                  onEdit: (text) => props.edit("scanLimit", text),
-                  onReset: () => props.resetField("scanLimit")
-                }
-              ),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                ValueField,
-                {
-                  id: "auto-continue-fresh-ms",
-                  label: t("field.freshMs"),
-                  hint: t("field.freshMsHint"),
-                  numeric: true,
-                  ...shared,
-                  ...state2.freshMs,
-                  onEdit: (text) => props.edit("freshMs", text),
-                  onReset: () => props.resetField("freshMs")
-                }
-              ),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                ValueField,
-                {
-                  wide: true,
-                  id: "auto-continue-retryable-error-patterns",
-                  label: t("field.retryableErrorPatterns"),
-                  hint: t("field.retryableErrorPatternsHint"),
-                  multiline: true,
-                  ...shared,
-                  ...state2.retryableErrorPatterns,
-                  onEdit: (text) => props.edit("retryableErrorPatterns", text),
-                  placeholder: t("field.retryableErrorPatternsPlaceholder"),
-                  onReset: () => props.resetField("retryableErrorPatterns")
-                }
-              ),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                ValueField,
-                {
-                  id: "auto-continue-backoff-factor",
-                  label: t("field.backoffFactor"),
-                  hint: t("field.backoffFactorHint"),
-                  numeric: true,
-                  ...shared,
-                  ...state2.backoffFactor,
-                  onEdit: (text) => props.edit("backoffFactor", text),
-                  onReset: () => props.resetField("backoffFactor")
-                }
-              ),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                ValueField,
-                {
-                  id: "auto-continue-backoff-max",
-                  label: t("field.backoffMaxMs"),
-                  hint: t("field.backoffMaxMsHint"),
-                  numeric: true,
-                  ...shared,
-                  ...state2.backoffMaxMs,
-                  onEdit: (text) => props.edit("backoffMaxMs", text),
-                  onReset: () => props.resetField("backoffMaxMs")
-                }
-              ),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                BooleanField,
-                {
-                  id: "auto-continue-notify",
-                  label: t("field.notify"),
-                  hint: t("field.notifyHint"),
-                  ...shared,
-                  ...state2.notify,
-                  onEdit: (text) => props.edit("notify", text),
-                  onReset: () => props.resetField("notify")
-                }
-              ),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                BooleanField,
-                {
-                  id: "auto-continue-verbose",
-                  label: t("field.verbose"),
-                  hint: t("field.verboseHint"),
-                  ...shared,
-                  ...state2.verbose,
-                  onEdit: (text) => props.edit("verbose", text),
-                  onReset: () => props.resetField("verbose")
-                }
-              )
-            ]
-          }
-        ),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
-          SettingsSection,
-          {
-            t,
-            titleKey: "section.loop.title",
-            descriptionKey: "section.loop.description",
-            tone: "loop",
-            children: [
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                BooleanField,
-                {
-                  wide: true,
-                  id: "auto-continue-loop-guard",
-                  label: t("field.loopGuard"),
-                  hint: t("field.loopGuardHint"),
-                  ...shared,
-                  ...state2.loopGuard,
-                  onEdit: (text) => props.edit("loopGuard", text),
-                  onReset: () => props.resetField("loopGuard")
-                }
-              ),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                ValueField,
-                {
-                  id: "auto-continue-loop-short-chars",
-                  label: t("field.loopShortChars"),
-                  hint: t("field.loopShortCharsHint"),
-                  numeric: true,
-                  ...shared,
-                  ...state2.loopShortChars,
-                  onEdit: (text) => props.edit("loopShortChars", text),
-                  onReset: () => props.resetField("loopShortChars")
-                }
-              ),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                ValueField,
-                {
-                  id: "auto-continue-loop-window-ms",
-                  label: t("field.loopWindowMs"),
-                  hint: t("field.loopWindowMsHint"),
-                  numeric: true,
-                  ...shared,
-                  ...state2.loopWindowMs,
-                  onEdit: (text) => props.edit("loopWindowMs", text),
-                  onReset: () => props.resetField("loopWindowMs")
-                }
-              ),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                ValueField,
-                {
-                  id: "auto-continue-loop-short-count",
-                  label: t("field.loopShortCount"),
-                  hint: t("field.loopShortCountHint"),
-                  numeric: true,
-                  ...shared,
-                  ...state2.loopShortCount,
-                  onEdit: (text) => props.edit("loopShortCount", text),
-                  onReset: () => props.resetField("loopShortCount")
-                }
-              ),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                ValueField,
-                {
-                  id: "auto-continue-loop-repeat-text",
-                  label: t("field.loopRepeatText"),
-                  hint: t("field.loopRepeatTextHint"),
-                  numeric: true,
-                  ...shared,
-                  ...state2.loopRepeatText,
-                  onEdit: (text) => props.edit("loopRepeatText", text),
-                  onReset: () => props.resetField("loopRepeatText")
-                }
-              ),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                ValueField,
-                {
-                  id: "auto-continue-loop-tool-repeat",
-                  label: t("field.loopToolRepeat"),
-                  hint: t("field.loopToolRepeatHint"),
-                  numeric: true,
-                  ...shared,
-                  ...state2.loopToolRepeat,
-                  onEdit: (text) => props.edit("loopToolRepeat", text),
-                  onReset: () => props.resetField("loopToolRepeat")
-                }
-              ),
-              /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-                ValueField,
-                {
-                  wide: true,
-                  id: "auto-continue-loop-text",
-                  label: t("field.loopText"),
-                  hint: t("field.loopTextHint"),
-                  ...shared,
-                  ...state2.loopText,
-                  onEdit: (text) => props.edit("loopText", text),
-                  placeholder: t("default.loopText"),
-                  onReset: () => props.resetField("loopText")
-                }
-              )
-            ]
-          }
-        ),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-          SettingsSection,
-          {
-            t,
-            titleKey: "section.live.title",
-            descriptionKey: "section.live.description",
-            tone: "live",
-            children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(LivePanels, { t })
           }
         )
-      ] })
-    }
-  );
+      }
+    );
+  }
+  return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("span", { className: "dshAcModeMenu", "data-disabled": props.disabled, title: props.title, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "dshAcModeTriggerLabel", children: props.label }),
+    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "dshAcModeChevron", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(ChevronDown, {}) }),
+    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+      "select",
+      {
+        className: "dshAcComposerSelect",
+        "aria-label": props.selectLabel,
+        disabled: props.disabled,
+        value: props.mode,
+        onChange: (event) => {
+          if (isSessionMode(event.target.value)) props.onChange(event.target.value);
+        },
+        children: props.options.map((option) => /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("option", { value: option.id, children: option.label }, option.id))
+      }
+    )
+  ] });
+}
+
+// src/client/auto-continue-icon.tsx
+var import_jsx_runtime4 = require("react/jsx-runtime");
+function AutoContinueIcon() {
+  return /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("svg", { className: "dshAcGlyph", viewBox: "0 0 16 16", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("path", { d: "M8 8C7 5.6 6.1 4.6 4.8 4.6C3.1 4.6 2 6.1 2 8C2 9.9 3.1 11.4 4.8 11.4C6.1 11.4 7 10.4 8 8C9 5.6 9.9 4.6 11.2 4.6C12.9 4.6 14 6.1 14 8C14 9.9 12.9 11.4 11.2 11.4C9.9 11.4 9 10.4 8 8Z" }) });
+}
+
+// src/client/native-toast.tsx
+var import_jsx_runtime5 = require("react/jsx-runtime");
+var primitives2 = (() => {
+  try {
+    return require("@deepseek-ai/dsh-client-ui-primitives");
+  } catch {
+    return {};
+  }
+})();
+var NativeToast = primitives2.Toast;
+var hasNativeToast = typeof NativeToast === "function";
+function WarningIcon() {
+  const Icon = primitives2.IconWarningOutlineRegular;
+  if (Icon) return /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(Icon, {});
+  return /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("svg", { className: "dshAcToastIcon", viewBox: "0 0 16 16", "aria-hidden": "true", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("path", { d: "M8 2.3 14.3 13H1.7L8 2.3Z" }),
+    /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("path", { d: "M8 6.2v3.1M8 11.8v.1" })
+  ] });
+}
+
+// src/client/composer-toggle.tsx
+var import_jsx_runtime6 = require("react/jsx-runtime");
+var HOST_UNAVAILABLE_DELAY_MS = 3e3;
+function HostUnavailableToast({ text }) {
+  const [visible, setVisible] = (0, import_react3.useState)(false);
+  (0, import_react3.useEffect)(() => {
+    const timer = setTimeout(() => setVisible(true), HOST_UNAVAILABLE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, []);
+  if (!hasNativeToast || !visible) return null;
+  const Toast = NativeToast;
+  return /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(Toast, { text, icon: /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(WarningIcon, {}), onDone: () => setVisible(false) });
+}
+function SaveFailureToast({ text }) {
+  const [visible, setVisible] = (0, import_react3.useState)(true);
+  if (!hasNativeToast || !visible) return null;
+  const Toast = NativeToast;
+  return /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(Toast, { text, icon: /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(WarningIcon, {}), onDone: () => setVisible(false) });
+}
+function AutoContinueComposerToggle(props) {
+  const state2 = props.useAutoContinueComposer((snapshot) => snapshot);
+  if (!state2.visible || !props.sessionId) return null;
+  const failed = state2.failed.has(props.sessionId);
+  const saving = state2.saving.has(props.sessionId);
+  const policy = state2.policy;
+  const ownMode = sessionMode(policy?.modes ?? {}, props.sessionId);
+  const mode = ownMode === "default" ? policy?.inheritedModes?.[props.sessionId] ?? "default" : ownMode;
+  const disabled = !policy || !state2.writable || saving;
+  const title = props.t(!policy ? "composer.unavailable" : state2.reconnecting ? "composer.reconnecting" : !state2.writable ? "chrome.readOnly" : saving ? "composer.saving" : "composer.scope");
+  const modeName = props.t(`composer.${mode}`);
+  const defaultName = policy ? `${props.t("composer.default")} (${props.t(`composer.${policy.defaultMode}`)})` : props.t("composer.default");
+  const fullModeLabel = mode === "default" ? defaultName : modeName;
+  const modeTitle = `${props.t("composer.mode")}: ${fullModeLabel}`;
+  const options = [
+    { id: "default", label: defaultName },
+    { id: "off", label: props.t("composer.off") },
+    { id: "recover", label: props.t("composer.recover") },
+    { id: "loop", label: props.t("composer.loop") }
+  ];
+  const enabled = !!policy && mode !== "off";
+  const onMode = policy?.inheritedModes?.[props.sessionId] === "off" ? "recover" : "default";
+  return /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "dshAcComposer", title, "aria-busy": saving || void 0, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("span", { className: "dshAcComposerCore", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
+        "button",
+        {
+          type: "button",
+          role: "switch",
+          className: "dshAcIconBtn",
+          "data-state": enabled ? "on" : "off",
+          "data-stale": state2.reconnecting || void 0,
+          "aria-checked": enabled,
+          "aria-label": `${props.t("composer.label")}: ${fullModeLabel}`,
+          title: `${modeTitle}
+${title}`,
+          disabled,
+          onClick: () => props.setMode(enabled ? "off" : onMode),
+          children: /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(AutoContinueIcon, {})
+        }
+      ),
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
+        ModeMenu,
+        {
+          mode,
+          options,
+          label: modeName,
+          ariaLabel: modeTitle,
+          selectLabel: props.t("composer.mode"),
+          title: modeTitle,
+          disabled,
+          onChange: props.setMode
+        }
+      )
+    ] }),
+    policy?.paused && /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { className: "dshAcComposerLabel", children: props.t("composer.paused") }),
+    !policy && hasNativeToast && /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(HostUnavailableToast, { text: props.t("composer.unavailable") }),
+    failed && hasNativeToast && /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(SaveFailureToast, { text: props.t("composer.saveFailed") }),
+    failed && !hasNativeToast && /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { className: "dshAcComposerError", role: "status", children: props.t("composer.saveFailed") })
+  ] });
 }
 
 // src/client/index.ts
 var NS = "auto-continue";
 var SETTINGS_NS = "auto-continue";
-var inject = ["slots", "locale", "settingsScope"];
+var inject = ["slots", "locale"];
 function apply(ctx) {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), "auto-continue: dictionaries");
-  const scope = ctx.settingsScope.bind({ namespace: SETTINGS_NS });
+  ctx.effect(() => ctx.locale.register(NS, "ru", ru), "auto-continue: russian dictionary");
+  ctx.effect(() => startBridge(), "auto-continue: host bridge");
+  // dsh-vscode: 0.2.2 removed the client `settingsScope` service; the inject
+  // this replaces never resolved and left a permanently pending child fiber
+  // (silent - the settings card still mounted through configForms). The
+  // configForms branch below is 0.2.2's client settings API and carries every
+  // mount.
+  ctx.inject(["configForms"], (settingsCtx) => {
+    const forms = settingsCtx.configForms;
+    mountSettings(settingsCtx, forms.get(SETTINGS_NS));
+  });
+}
+function mountSettings(ctx, scope) {
+  const MAX_MIRROR_ATTEMPTS = 3;
+  let mirroredLocale;
+  let mirrorAttempts = 0;
   const syncLocale = () => {
     const active = ctx.locale.getLocale().active;
+    const target = resolveLocale(active);
     const snapshot = scope.getSnapshot();
-    if (snapshot.status !== "ready" || !snapshot.writable || snapshot.mode !== "host") return;
-    if (snapshot.value?.locale === active) return;
-    void scope.set("locale", active);
+    if (!canWriteSettings(snapshot)) return;
+    if (mirroredLocale !== active) {
+      mirroredLocale = active;
+      mirrorAttempts = 0;
+    }
+    if (snapshot.value?.locale === target) return;
+    if (mirrorAttempts >= MAX_MIRROR_ATTEMPTS) return;
+    mirrorAttempts += 1;
+    void scope.set("locale", target);
   };
   ctx.effect(() => scope.subscribe(syncLocale), "auto-continue: locale settings sync");
   ctx.on("locale/change", syncLocale);
   syncLocale();
-  ctx.effect(() => startBridge(), "auto-continue: host bridge");
-  const controller = new AutoContinueSettingsCardController(scope);
+  const controller = new AutoContinueSettingsCardController(scope, () => ctx.locale.getLocale().active);
+  ctx.effect(() => () => controller.dispose(), "auto-continue: settings form");
+  ctx.slots.inject(
+    "conversation.input.left",
+    () => ctx.slots.register(
+      {
+        name: "conversation.input.left",
+        id: "auto-continue",
+        locale: NS,
+        inject: (sessionId) => controller.injectComposer(sessionId)
+      },
+      AutoContinueComposerToggle
+    )
+  );
   ctx.slots.inject(
     "settings.plugin.item",
     () => ctx.slots.register(
@@ -1821,6 +2053,18 @@ function apply(ctx) {
         inject: () => controller.inject()
       },
       AutoContinueSettingsCard
+    )
+  );
+  ctx.slots.inject(
+    "plugins.bundle.config",
+    () => ctx.slots.register(
+      {
+        name: "plugins.bundle.config",
+        key: "dsh-client-auto-continue",
+        locale: NS,
+        inject: () => controller.inject()
+      },
+      AutoContinueSettingsPage
     )
   );
 }

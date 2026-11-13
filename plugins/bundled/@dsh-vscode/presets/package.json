@@ -1,0 +1,12 @@
+{
+  "name": "@dsh-vscode/presets",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Baked agent presets (router-standard, router-spec, ppt-master) as 0.2.2 bundle declarations",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

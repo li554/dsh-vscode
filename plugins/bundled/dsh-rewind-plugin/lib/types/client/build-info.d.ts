@@ -15,5 +15,11 @@
  */
 /** Plugin version baked in at build time (from `package.json`). */
 export declare const PLUGIN_VERSION: string;
+/**
+ * The bundle's package name — one identity for the client entry id, the
+ * `plugins.bundle.config` key and the `<style data-plugin>` marker the
+ * harness's owned-style fallback matches; a test pins it to `package.json`.
+ */
+export declare const PLUGIN_PACKAGE = "dsh-rewind-plugin";
 /** Short content hash of the client source, for stale-bundle detection. */
 export declare const BUILD_HASH: string;

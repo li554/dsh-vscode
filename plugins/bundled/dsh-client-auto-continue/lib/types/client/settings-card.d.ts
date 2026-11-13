@@ -1,12 +1,32 @@
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots';
+import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots';
 import { type AutoContinueSettings } from './engine.ts';
+import type { ComposerToggleFace } from './composer-toggle.tsx';
 import { type SettingsScope, type SnapshotStore } from './dsh-store-compat.ts';
+import type { SettingsCardKey } from './locales.ts';
 import { type CardActions, type CardFieldState, type CardShell } from './settings-form.ts';
 /** What the auto-continue card renders. */
 export interface AutoContinueSettingsCardState extends CardShell {
+    /** Committed global state; a staged edit does not pause the engine yet. */
+    enabled: boolean;
+    /** Feedback for the last local save, including browser permission problems. */
+    notificationFeedback: SettingsCardKey | undefined;
     paused: CardFieldState;
+    showComposerToggle: CardFieldState;
+    usePluginSource: CardFieldState;
     continueText: CardFieldState;
     continueTextMaxTokens: CardFieldState;
+    resumeSilentTurns: CardFieldState;
+    resumeSubagentSessions: CardFieldState;
+    resumeCompletedTurns: CardFieldState;
+    resumeInterruptedChildren: CardFieldState;
+    resumeGoals: CardFieldState;
+    resumePausedGoals: CardFieldState;
+    pauseWhenOffline: CardFieldState;
+    offlineCheckMs: CardFieldState;
+    loopMaxIterations: CardFieldState;
+    continueTextLoop: CardFieldState;
+    continueTextSilent: CardFieldState;
+    continueTextInterrupted: CardFieldState;
     guardTools: CardFieldState;
     guardPendingText: CardFieldState;
     guardDoneText: CardFieldState;
@@ -39,24 +59,37 @@ export interface AutoContinueSettingsCardFace extends CardActions {
 }
 /** Bridges the `auto-continue` scope onto the card's staged form. */
 export declare class AutoContinueSettingsCardController {
+    private readonly scope;
+    private readonly getLocale;
     private readonly form;
     private readonly store;
+    private readonly composer;
+    private readonly composerSaving;
+    private readonly composerFailed;
+    private readonly stopComposer;
+    private disposed;
+    private saveSequence;
+    private notificationFeedback;
     /**
      * @param scope - the bound settings scope for the `auto-continue` namespace.
      */
-    constructor(scope: SettingsScope<AutoContinueSettings>);
+    constructor(scope: SettingsScope<AutoContinueSettings>, getLocale: () => string);
     private projection;
     /**
      * Build the face the card's slot registration injects.
      * @returns the card's snapshot and its form actions.
      */
     inject(): AutoContinueSettingsCardFace;
+    private save;
+    injectComposer(sessionId: string): ComposerToggleFace;
+    private composerProjection;
+    private setMode;
+    /** Release this card's subscription to the provider-owned settings form. */
+    dispose(): void;
 }
 /** Props the renderer binds for the auto-continue plugin-configuration card. */
-export type AutoContinueSettingsCardProps = PropsRuntime<'settings.plugin.item'> & PropsLocale<'auto-continue'> & InjectFace<AutoContinueSettingsCardFace>;
-/**
- * Render the auto-continue card.
- * @param props - locale copy, the card snapshot, and its form actions.
- * @returns the card.
- */
-export declare function AutoContinueSettingsCard(props: AutoContinueSettingsCardProps): import("react").JSX.Element;
+export type AutoContinueSettingsCardProps = PropsLocale<'auto-continue'> & InjectFace<AutoContinueSettingsCardFace>;
+/** The bundle page supplies no list container, unlike the legacy settings slot. */
+export declare function AutoContinueSettingsPage(props: AutoContinueSettingsCardProps): import("react").JSX.Element;
+/** Native category layout; the plugin manager above already owns the title, version and status. */
+export declare function AutoContinueSettingsCard(props: AutoContinueSettingsCardProps): import("react").JSX.Element | null;

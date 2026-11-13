@@ -3824,9 +3824,16 @@ function browserCommentsPresentationOf(snapshot) {
 }
 //#endregion
 //#region src/annotation-context.ts
-/** Plugin provenance recorded on every injected context message. */
+/** Plugin provenance recorded on every injected context message.
+ *
+ * dsh-vscode local patch: dsh 0.2.2 format v4 admits only producer-owned source
+ * kinds — `kind: 'plugin'` is rejected at durable encode with "format v4 message
+ * requires a producer-owned source kind" (dsh-session-format-v3-to-v4
+ * `source()`), and the v3→v4 migration rewrites an unknown plugin to
+ * `plugin:<name>`. Use that same spelling here so new context and migrated
+ * history agree. */
 const ANNOTATION_SOURCE = {
-	kind: "plugin",
+	kind: "plugin:dsh-web-review",
 	plugin: "dsh-web-review"
 };
 function recordOf(value) {

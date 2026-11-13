@@ -1,0 +1,36 @@
+/** Deployment-owned preset choices for one delegation tool. */
+import type { SubagentProvider } from '@deepseek-ai/dsh-subagent';
+/** Optional default and model-selectable preset ids for a spawn tool. */
+export interface PresetSelectionConfig {
+    /** Default independent preset; omission inherits the parent when the model makes no selection. */
+    agentPreset?: string;
+    /** Non-empty allowlist exposing agent_preset to the model; omission disables model selection. */
+    allowedAgentPresets?: string[] | undefined;
+}
+/** Untrusted preset selection from model/tool JSON. */
+export interface PresetSelectionRequest {
+    readonly agent_preset?: unknown;
+}
+/** Validates configured choices and resolves model input against the allowlist. */
+export declare class SubagentPresetSelection {
+    private readonly config;
+    constructor(config: PresetSelectionConfig);
+    /** Whether this tool requires the preset service and an independently composing provider. */
+    get configured(): boolean;
+    /** Preset ids advertised in the model parameter. */
+    get choices(): readonly string[] | undefined;
+    /** Model-visible selection and default guidance. */
+    get description(): string;
+    /**
+     * Reject independent selection for providers that inherit conversation history or lack support.
+     * @param provider - Currently registered delegation provider.
+     */
+    assertProvider(provider: SubagentProvider): void;
+    /**
+     * Validate model input and apply the deployment default.
+     * @param request - Model-supplied tool arguments.
+     * @returns Selected preset id, or omission to inherit the parent.
+     */
+    resolve(request: PresetSelectionRequest): string | undefined;
+}
+//# sourceMappingURL=preset-selection.d.ts.map

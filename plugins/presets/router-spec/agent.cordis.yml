@@ -34,10 +34,11 @@
 
 # The router plugin replaces `sections` and clears `contexts` on the first
 # assembly, so this row is the fallback persona only (never `complete`).
+# 0.2.2: the persona key is `prefix` (0.1.5's `text` is no longer read).
 - id: persona
   name: '@deepseek-ai/dsh-persona'
   config:
-    text: You are a helpful software engineer assistant.
+    prefix: You are a helpful software engineer assistant.
 
 - id: agent-instructions
   name: '@deepseek-ai/dsh-agent-instructions'
@@ -54,8 +55,14 @@
 #     loops (measured: 25 steps / 24 tool calls in a real session).
 #   spec — 深度思考优先: classified persona + full prompt sections; the long
 #     first-turn reasoning chain (101K chars) is a feature, not a defect.
+# 0.2.2: a preset's CHILD rows resolve from the profile (the registry mounts the
+# child tree with the profile's base URL), so `./router-bootstrap-v10.mjs`
+# would look for `<profile>/router-bootstrap-v10.mjs`. The module ships as a
+# real package under plugins/bundled/ (transplanted into the profile's
+# node_modules) whose `main` is that entry file and which carries the whole
+# .mjs set, so its `./router-core-v10.mjs` import still resolves.
 - id: router-bootstrap
-  name: ./router-bootstrap-v10.mjs
+  name: dsh-preset-router-spec-bootstrap
   config:
     routerMode: spec
 
@@ -216,25 +223,30 @@
   isolate:
     workflowEngine: true
   config:
+    # 0.2.2: this one row registers send_message, interrupt_agent and
+    # list_agents together; the `/list-agents` subpath export is gone, so the
+    # old list-agents row was removed (a row naming a removed module fails the
+    # whole preset). `interrupt: false` matches the shipped Web presets.
     - id: tool-subagent-control
       name: '@deepseek-ai/dsh-tool-subagent-control'
+      config:
+        interrupt: false
 
-    - id: tool-subagent-list-agents
-      name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
-
+    # 0.2.2 removed `backgroundMode` / `enableRunInBackground` / the
+    # `run_in_background` argument: every delegation returns a managed
+    # activation and the runtime delivers its completion notice, so the keys
+    # are dropped here (no 0.2.2 equivalent).
     - id: tool-subagent
       name: '@deepseek-ai/dsh-tool-subagent'
       config:
         provider: spawn
         toolName: subagent
-        backgroundMode: continuable
 
     - id: tool-subagent-fork
       name: '@deepseek-ai/dsh-tool-subagent'
       config:
         provider: fork
         toolName: subagent_fork
-        backgroundMode: continuable
 
     # Product providers are host-plane singletons. Copy this preset, then
     # remove `disabled` from either ordinary tool row to expose that product
@@ -245,7 +257,6 @@
       config:
         provider: codex
         toolName: subagent_codex
-        enableRunInBackground: false
         maxDepth: provider-managed
 
     - id: tool-subagent-claude-code
@@ -254,11 +265,15 @@
       config:
         provider: claude-code
         toolName: subagent_claude_code
-        enableRunInBackground: false
         maxDepth: provider-managed
 
-    - id: workflow-worker-thread
-      name: '@deepseek-ai/dsh-workflow-worker-thread'
+    # `@deepseek-ai/dsh-workflow-worker-thread` is not shipped by 0.2.2. The
+    # workflowEngine provider is `@deepseek-ai/dsh-workflow-ptc` (its default
+    # export extends WorkflowEngine); the host plane disables its own copy for
+    # the Web surface, so the preset mounts one. `provider` keeps the spawn
+    # backend this router used.
+    - id: workflow-ptc
+      name: '@deepseek-ai/dsh-workflow-ptc'
       config:
         provider: spawn
 

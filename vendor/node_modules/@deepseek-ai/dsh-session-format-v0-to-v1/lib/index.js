@@ -1,6 +1,7 @@
 import { SessionFormatError, SessionFormatUnsupportedMigrationError, defineSessionFormatMigration, isSessionFormatJsonObject, sessionFormatCount, sessionFormatSafeInteger, snapshotSessionFormatJson } from "@deepseek-ai/dsh-session-format";
 import { isAbsolute } from "node:path";
 import { deepEqualJson, isJsonValue } from "@deepseek-ai/dsh-util-values";
+import { fourDigitYearEpoch } from "@deepseek-ai/dsh-util-time";
 //#region lib/types/dispositions.js
 /**
 * Freeze one exact released payload-member disposition for adjacent format validators.
@@ -143,11 +144,8 @@ const RELEASED_V0_EVENT_DISPOSITIONS = Object.freeze({
 	]),
 	"step/end": disposition(["turn", "step"]),
 	"step/start": disposition(["turn", "step"]),
-	"subagent/descriptor": disposition([
+	"subagent/descriptor": disposition(["version", "provider"], [
 		"mode",
-		"version",
-		"provider"
-	], [
 		"label",
 		"agentProvider",
 		"agentModel",
@@ -277,29 +275,25 @@ function assertReleasedV0Keys(record, required, optional = [], label) {
  *   tool/result 29150 message content[0] content[1] has unexpected member
  *   "dshFileReview"
  *
- * Measured on one real 30-session history, the strict validators refused 1251
- * events across 21 sessions, in four shapes:
+ * Measured on one real 30-session history against 0.1.5, the strict validators
+ * refused 1251 events across 21 sessions, in three shapes (a fourth shape, a
+ * `subagent/descriptor` at version 2, is now accepted natively by 0.2.2 — see
+ * SUBAGENT_DESCRIPTOR_VERSIONS):
  *   1. a content block carrying a plugin annotation (dsh-file-review's
  *      `dshFileReview`, on an empty text block appended to a tool result);
  *   2. a `kind:"plugin"` message source carrying an extra member
  *      (dsh-web-review's `snapshotId` on a snapshot source);
  *   3. a `kind:"plugin"` source pairing `summary` with a form other than
- *      `notice` (dsh-mnemon's `instructions` + summary);
- *   4. a `subagent/descriptor` at version 2 (the `sidechat` plugin) where the
- *      released spec froze on version 3.
+ *      `notice` (dsh-mnemon's `instructions` + summary).
  *
  * WHAT IS NOT RELAXED. Required members are still enforced, missing members and
  * unknown block/source KINDS still refuse, and every relaxation is logged once
  * per distinct shape so it is visible rather than silent. Only data whose author
- * is a plugin, and which the v1 target could not carry verbatim, is dropped or
- * coerced:
+ * is a plugin, and which the v1 target could not carry verbatim, is dropped:
  *   - unknown members are DROPPED (the annotation belongs to a plugin with no v1
  *     rendering path, and the v1 target validator would reject it anyway);
  *   - a `summary` on a non-notice plugin form is DROPPED (it is a one-line UI
- *     label; keeping it would violate the v1 contract);
- *   - `subagent/descriptor` version 2 is COERCED to 3, because the rest of the
- *     payload validates unchanged under the continuable branch — the version
- *     field is the only difference.
+ *     label; keeping it would violate the v1 contract).
  *
  * The source v0 artifact is never modified, so nothing here is destructive.
  */
@@ -1365,7 +1359,7 @@ function scheduleIdValue(value, label) {
 	if (value.trim() !== value) throw new SessionFormatError(`${label} must not have surrounding whitespace`);
 }
 function instantValue(value, label) {
-	if (typeof value !== "string" || !/^(?!0000)\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d\.\d{3}Z$/u.test(value) || !Number.isFinite(Date.parse(value)) || new Date(Date.parse(value)).toISOString() !== value) throw new SessionFormatError(`${label} must be a canonical UTC instant`);
+	if (typeof value !== "string" || fourDigitYearEpoch(value).kind !== "accepted") throw new SessionFormatError(`${label} must be a canonical UTC instant`);
 }
 function titleSourceValue(value, label) {
 	const source = releasedV0Record(value, label);
@@ -1383,19 +1377,27 @@ function modelRouteValue(value, label) {
 	nonEmptyString(route["provider"], `${label} provider`);
 	nonEmptyString(route["model"], `${label} model`);
 }
+/** `subagent/descriptor` versions that format v0 logs contain. */
+const SUBAGENT_DESCRIPTOR_VERSIONS = [
+	1,
+	2,
+	3
+];
 function subagentDescriptorValue(data, label) {
-	// Plugin tolerance: see lib/types/plugin-compat.js. The released spec froze on
-	// descriptor version 3, but the `sidechat` plugin wrote version 2 — and every
-	// other member of those descriptors validates unchanged under the continuable
-	// branch below, so the version field is the only difference and is bumped
-	// rather than refusing the Session.
-	if (data["version"] === 2) {
-		data["version"] = 3;
-		reportPluginTolerance("coerced subagent/descriptor version 2 to 3", label);
-	}
-	literalValue(data["version"], [3], `${label} version`);
+	literalValue(data["version"], SUBAGENT_DESCRIPTOR_VERSIONS, `${label} version`);
 	nonEmptyString(data["provider"], `${label} provider`);
-	if (data["mode"] === "one-shot") {
+	const composition = [
+		"agentProvider",
+		"agentModel",
+		"persona",
+		"toolFilter"
+	];
+	if (data["version"] === 1) assertReleasedV0Keys(data, [
+		"version",
+		"provider",
+		"label"
+	], composition, `${label} data`);
+	else if (data["mode"] === "one-shot") {
 		assertReleasedV0Keys(data, [
 			"mode",
 			"version",
@@ -1403,21 +1405,30 @@ function subagentDescriptorValue(data, label) {
 		], ["label"], `${label} data`);
 		if (data["label"] !== void 0) stringValue(data["label"], `${label} label`);
 		return;
+	} else {
+		literalValue(data["mode"], ["continuable"], `${label} mode`);
+		assertReleasedV0Keys(data, [
+			"mode",
+			"version",
+			"provider",
+			"label"
+		], data["version"] === 3 ? [...composition, "agentReasoningEffort"] : composition, `${label} data`);
 	}
-	literalValue(data["mode"], ["continuable"], `${label} mode`);
-	nonEmptyString(data["label"], `${label} label`);
+	const strict = data["version"] === 3;
+	const stringField = strict ? nonEmptyString : stringValue;
+	stringField(data["label"], `${label} label`);
 	for (const key of [
 		"agentProvider",
 		"agentModel",
 		"agentReasoningEffort",
 		"persona"
-	]) if (data[key] !== void 0) nonEmptyString(data[key], `${label} ${key}`);
-	if (data["agentProvider"] === void 0 !== (data["agentModel"] === void 0)) throw new SessionFormatError(`${label} agentProvider and agentModel must be paired`);
+	]) if (data[key] !== void 0) stringField(data[key], `${label} ${key}`);
+	if (strict && data["agentProvider"] === void 0 !== (data["agentModel"] === void 0)) throw new SessionFormatError(`${label} agentProvider and agentModel must be paired`);
 	if (data["toolFilter"] !== void 0) {
 		const filter = exactRecord(data["toolFilter"], `${label} toolFilter`, [], ["allow", "deny"]);
 		if (filter["allow"] === void 0 && filter["deny"] === void 0) throw new SessionFormatError(`${label} toolFilter requires allow or deny`);
-		if (filter["allow"] !== void 0) arrayValue(filter["allow"], `${label} allow`, nonEmptyString);
-		if (filter["deny"] !== void 0) arrayValue(filter["deny"], `${label} deny`, nonEmptyString);
+		if (filter["allow"] !== void 0) arrayValue(filter["allow"], `${label} allow`, stringField);
+		if (filter["deny"] !== void 0) arrayValue(filter["deny"], `${label} deny`, stringField);
 	}
 }
 function allowedModelsValue(value, label) {
@@ -1649,11 +1660,11 @@ function assertReleasedArtifactCoordinates(artifact, allowLegacySteering, knownE
 * @param record - exact event envelope.
 * @param seq - event position used for earlier-reference checks.
 * @param type - surface event type used in diagnostics.
-* @param assistantSources - whether this generation admits empty Assistant chunk provenance.
+* @param assistantSources - whether this generation admits empty Assistant chunk references.
 */
 function assertReleasedSurfaceMetadata(record, seq, type, assistantSources) {
 	const sources = record["sourceEventSeqs"];
-	if (type === "assistant/message" && sources !== void 0 && assistantSources === "forbid-assistant") throw new SessionFormatError(`assistant/message ${seq} retains obsolete chunk provenance`);
+	if (type === "assistant/message" && sources !== void 0 && assistantSources === "forbid-assistant") throw new SessionFormatError(`assistant/message ${seq} retains obsolete chunk references`);
 	if (sources !== void 0) {
 		if (!Array.isArray(sources)) throw new SessionFormatError(`${type} ${seq} sourceEventSeqs must be an array`);
 		const seen = /* @__PURE__ */ new Set();
@@ -1687,7 +1698,7 @@ function assertReleasedEventPayload(event, version) {
 	/* v8 ignore next -- artifact coordinate validation admits only the frozen inventory before payload validation. */
 	if (disposition === void 0) throw new SessionFormatUnsupportedMigrationError(`format v0 contains unknown historical event type ${JSON.stringify(event.type)} at seq ${event.seq}; migration refuses unknown historical events even when ignorable`);
 	const data = releasedV0Record(event.data, `${event.type} ${event.seq} data`);
-	if (event.type === "subagent/descriptor" && data["version"] !== 3) {
+	if (event.type === "subagent/descriptor" && !SUBAGENT_DESCRIPTOR_VERSIONS.some((known) => known === data["version"])) {
 		const descriptorVersion = sessionFormatCount(data["version"], `${event.type} ${event.seq} version`);
 		if (version === 0) throw new SessionFormatUnsupportedMigrationError(`${event.type} ${event.seq} uses unsupported descriptor version ${descriptorVersion}`);
 		return;
@@ -1969,6 +1980,7 @@ function decodeSeqRanges(value, maxEntries) {
 }
 //#endregion
 //#region lib/types/migration.js
+const LEGACY_ASSISTANT_SOURCE_KEY = ["pro", "venance"].join("");
 /** Identity format edge that promotes released v0 into released v1. */
 const sessionFormatV0ToV1 = defineSessionFormatMigration({
 	name: "@deepseek-ai/dsh-session-format-v0-to-v1",
@@ -2292,9 +2304,12 @@ function normalizeLegacyMessage(event, sessionId, messageIds) {
 				}
 			};
 		case "assistant/message": {
-			if (Object.hasOwn(data, "message") || !Object.hasOwn(data, "content") || !Object.hasOwn(data, "provenance")) return event;
-			const { content, provenance, ...eventData } = data;
-			const source = releasedV0Record(provenance, `assistant/message ${event.seq} provenance`);
+			if (Object.hasOwn(data, "message") || !Object.hasOwn(data, "content") || !Object.hasOwn(data, LEGACY_ASSISTANT_SOURCE_KEY)) return event;
+			const content = data["content"];
+			const eventData = { ...data };
+			delete eventData["content"];
+			const source = releasedV0Record(eventData[LEGACY_ASSISTANT_SOURCE_KEY], `assistant/message ${event.seq} legacy source`);
+			Reflect.deleteProperty(eventData, LEGACY_ASSISTANT_SOURCE_KEY);
 			return {
 				...event,
 				data: {

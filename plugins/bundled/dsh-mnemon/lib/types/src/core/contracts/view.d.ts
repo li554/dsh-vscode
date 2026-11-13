@@ -110,25 +110,60 @@ export interface MemorySourceManifest {
     actions?: MemorySourceActionManifest[];
     management?: MemoryManagementDescriptor;
 }
+/** Background work a Host runs for the turns of a Strategy that declares it. */
+export declare const MEMORY_STRATEGY_WORKFLOWS: readonly ["idle-review", "runtime-capacity"];
+export type MemoryStrategyWorkflow = typeof MEMORY_STRATEGY_WORKFLOWS[number];
 export interface MemoryStrategyManifest {
     apiVersion: typeof COMPOSABLE_MEMORY_API_VERSION;
     kind: 'strategy';
     typeId: string;
     packageName: string;
     deterministic: true;
+    /** Source roles this Strategy may select; [ANY_MEMORY_SOURCE_ROLE] accepts every role. */
     supportedSourceRoles: string[];
     maxSources: number;
     maxRoutes: number;
     maxActions: number;
-    /** Exclusive contribution slots owned by this Strategy, not Core vocabulary. */
+    /** Exclusive contribution slots this Strategy accepts; standard slots follow Core's value contracts. */
     extensionSlots?: string[];
+    /**
+     * Background work the Host runs for the turns this Strategy composes: `idle-review` reviews an idle
+     * conversation, `runtime-capacity` archives older Runtime entries before a write would overflow it.
+     * A Host ignores workflows it does not know.
+     */
+    workflows?: MemoryStrategyWorkflow[];
 }
-/** An additive plugin targets one explicit Strategy contract, never replaces it. */
+/** Extension target for every selected Strategy that declares the extension's standard slot. */
+export declare const ANY_MEMORY_STRATEGY: "*";
+/** Strategy role list entry for a role-agnostic Strategy that may select any Source. */
+export declare const ANY_MEMORY_SOURCE_ROLE: "*";
+/** Standard View extension slots, each with one public value contract any Strategy may accept. */
+export declare const MEMORY_VIEW_EXTENSION_SLOTS: readonly ["selection", "projection", "capture"];
+export type MemoryViewExtensionSlot = typeof MEMORY_VIEW_EXTENSION_SLOTS[number];
+export interface MemoryViewExtensionValues {
+    /** Admitted Source instances in priority order; writableSourceKeys keeps actions on a subset. */
+    selection: {
+        sourceKeys: string[];
+        writableSourceKeys?: string[];
+    };
+    /** Ceiling for resident projection characters within the Host budget. */
+    projection: {
+        maxProjectionCharacters: number;
+    };
+    /** Asks the current model to record qualified durable facts through Source-local actions. */
+    capture: {
+        instruction: string;
+        actionIds: string[];
+        sourceKeys?: string[];
+    };
+}
+/** An additive plugin targets one Strategy contract, or any Strategy through a standard slot; it never replaces the Strategy. */
 export interface MemoryStrategyExtensionManifest {
     apiVersion: typeof COMPOSABLE_MEMORY_API_VERSION;
     kind: 'strategy-extension';
     typeId: string;
     packageName: string;
+    /** One Strategy typeId, or ANY_MEMORY_STRATEGY with a standard slot. */
     strategyTypeId: string;
     slot: string;
     deterministic: true;
@@ -195,6 +230,12 @@ export interface MemoryViewSpec {
     explanation: string;
     /** Trusted Strategy instructions, separate from quoted Source data. */
     guidance?: MemoryViewGuidance;
+    /**
+     * Why this composition deliberately left an installed Source out (#504).
+     * The Host validates each entry and merges it into `view.diagnostics`; a
+     * diagnostic explains an absence, never grants a Source projection or routes.
+     */
+    diagnostics?: MemoryCompositionDiagnostic[];
 }
 export interface MemoryViewGuidance {
     system?: string;
@@ -353,7 +394,12 @@ export interface MemorySourceRuntimeContext {
     /** Immutable, JSON-only Host/scope defaults; never business objects or clients. */
     configuration?: Readonly<Record<string, MemoryJsonValue>>;
 }
-/** Operation identity only; never the complete View or another Source's data. */
+/**
+ * Operation identity only; never the complete View or another Source's data.
+ * The object is stable for this Source within one execution, and can key weak
+ * execution-local state. Independent executions never share it, even when they
+ * pin the exact same immutable View. Requires dsh-mnemon 0.5.40 or later.
+ */
 export interface MemorySourceViewContext {
     id: string;
     scope: MemoryOperationScope;

@@ -175,7 +175,7 @@ const definition = defineMemorySpaceProviderDefinition({
 		kind: "provider",
 		typeId: descriptor.id,
 		packageName: "dsh-mnemon-provider-supermemory",
-		version: "0.5.4",
+		version: "0.5.5",
 		label: descriptor.label,
 		icon: descriptor.icon,
 		summary: descriptor.summary,

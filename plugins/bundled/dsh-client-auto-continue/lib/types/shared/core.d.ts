@@ -5,13 +5,36 @@
  * 以及回显识别。引擎迁入 host 后(0.8.0), 浏览器半侧只 re-export 本模块。
  */
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types';
-/** Supported UI/config locales. Any unknown browser locale falls back to Chinese. */
-export type AutoContinueLocale = 'en' | 'zh';
+export declare const AUTO_CONTINUE_SOURCE_KIND = "plugin:dsh-client-auto-continue";
+declare module '@deepseek-ai/dsh-llm' {
+    interface MessageSourceMap {
+        'plugin:dsh-client-auto-continue': {
+            kind: typeof AUTO_CONTINUE_SOURCE_KIND;
+        };
+    }
+}
+/** Supported UI/config locales; missing and unsupported values use English. */
+export type AutoContinueLocale = 'en' | 'zh' | 'ru';
+export declare function resolveLocale(locale: unknown): AutoContinueLocale;
+export type SessionMode = 'default' | 'off' | 'recover' | 'loop';
+export interface SessionPolicy {
+    modes: Record<string, SessionMode>;
+    /** Modes a child inherits from its main conversation, keyed by child id. */
+    inheritedModes?: Record<string, SessionMode>;
+    defaultMode: 'recover' | 'loop';
+    paused: boolean;
+    writable: boolean;
+}
+export declare const isSessionMode: (value: unknown) => value is SessionMode;
+export declare function sessionMode(modes: Record<string, SessionMode>, sessionId: string): SessionMode;
 /** Locale-owned defaults for the user-editable text fields. */
 export declare const LOCALIZED_TEXT_DEFAULTS: {
     readonly zh: {
         readonly continueText: "继续";
         readonly continueTextMaxTokens: "继续";
+        readonly continueTextSilent: "继续。你上一轮只输出了内部推理, 既没有回复也没有调用工具, 用户什么都没看到。每一轮都要以工具调用或可见回复结束。";
+        readonly continueTextLoop: "继续";
+        readonly continueTextInterrupted: "继续。宿主在你上一轮运行期间重启了; 重启时未完成的工具调用已按「结果未知」收尾。从中断处继续, 重试可能有副作用的操作前先核实外部状态。";
         readonly guardPendingText: "(上一步工具「{tool}」可能未完成, 先确认状态再继续, 不要重复执行)";
         readonly guardDoneText: "(上一步工具「{tool}」已完成, 结果: {result}; 不要重复执行, 直接继续)";
         readonly loopText: "(检测到你可能陷入循环, 请停止重复刚才的动作, 换一种方式继续)";
@@ -19,19 +42,46 @@ export declare const LOCALIZED_TEXT_DEFAULTS: {
     readonly en: {
         readonly continueText: "Continue";
         readonly continueTextMaxTokens: "Continue";
+        readonly continueTextSilent: "Continue. Your previous turn ended with internal reasoning only, with no message and no tool call, so nothing reached the user. Always finish a turn with a tool call or a visible answer.";
+        readonly continueTextLoop: "Continue";
+        readonly continueTextInterrupted: "Continue. The harness was restarted while your previous turn was still running; tool calls pending at the restart are recorded with unknown outcomes. Resume where you left off, verifying external state before retrying anything that may have side effects.";
         readonly guardPendingText: "(The previous tool \"{tool}\" may not have completed. Check its state before continuing and do not run it again.)";
         readonly guardDoneText: "(The previous tool \"{tool}\" completed successfully. Result: {result}; do not run it again. Continue from there.)";
         readonly loopText: "(You may be stuck in a loop. Stop repeating the last action and continue with a different approach.)";
+    };
+    readonly ru: {
+        readonly continueText: "Продолжай";
+        readonly continueTextMaxTokens: "Продолжай";
+        readonly continueTextSilent: "Продолжай. Предыдущий ход закончился только внутренним рассуждением: ни ответа, ни вызова инструмента, поэтому пользователь ничего не увидел. Каждый ход должен заканчиваться вызовом инструмента или видимым ответом.";
+        readonly continueTextLoop: "Продолжай";
+        readonly continueTextInterrupted: "Продолжай. Хост перезапустился, пока предыдущий ход ещё выполнялся; вызовы инструментов, незавершённые на момент перезапуска, записаны с неизвестным результатом. Продолжай с места остановки, проверяя внешнее состояние перед повтором действий с возможными побочными эффектами.";
+        readonly guardPendingText: "(Предыдущий инструмент «{tool}», возможно, не завершился. Проверь его состояние перед продолжением и не запускай его повторно.)";
+        readonly guardDoneText: "(Предыдущий инструмент «{tool}» завершился успешно. Результат: {result}; не запускай его повторно, продолжай с этого места.)";
+        readonly loopText: "(Похоже, ты застрял в цикле. Перестань повторять последнее действие и продолжай другим способом.)";
     };
 };
 /** The `auto-continue` settings section (all fields optional on the wire; the host schema carries defaults). */
 export interface AutoContinueSettings {
     /** Active browser/UI locale mirrored by the client. */
     locale?: AutoContinueLocale;
+    /** Send continue messages with the plugin source instead of the legacy user source. */
+    usePluginSource?: boolean;
     /** Text automatically sent after an interruption. */
     continueText?: string;
     /** Text sent when the output token ceiling is reached (same placeholders as `continueText`). */
     continueTextMaxTokens?: string;
+    /** Resume observed model activity that completes without visible output. */
+    resumeSilentTurns?: boolean;
+    /** Resume interrupted subagent sessions when their main conversation has auto-continue enabled. Subagents never enter the autonomous loop. */
+    resumeSubagentSessions?: boolean;
+    /** Autonomous mode: hand the thread back to the agent after every completed turn, looping until the user stops it. The consecutive-failure cap only throttles failures, never successful completions. */
+    resumeCompletedTurns?: boolean;
+    /** Text sent to resume a silent turn (same placeholders as `continueText`). */
+    continueTextSilent?: string;
+    /** Text sent for each autonomous-loop continuation (same placeholders as `continueText`). */
+    continueTextLoop?: string;
+    /** Text sent when a turn is recovered after a harness restart closed it as interrupted. */
+    continueTextInterrupted?: string;
     /** Idempotency guard: inspect the last tool call before resuming and steer the model. */
     guardTools?: boolean;
     /** Guard text appended when the last tool call has no confirmed result (it may have partially executed). */
@@ -44,11 +94,11 @@ export interface AutoContinueSettings {
     cooldownMs?: number;
     /** Max consecutive auto-continues per session before stopping. */
     maxConsecutive?: number;
-    /** Scan recently interrupted sessions on page load / reconnect. */
+    /** Recover delayed interrupted sessions during the host startup window. */
     scanOnBoot?: boolean;
-    /** Max sessions the scan checks (most recently updated). */
+    /** Max eligible recoveries per scan pass (most recently active first). */
     scanLimit?: number;
-    /** Scan only considers interruptions inside this window (ms). */
+    /** Interruption freshness and duration of startup polling (ms). */
     freshMs?: number;
     /** Log `[auto-continue]` lines to the browser console. */
     verbose?: boolean;
@@ -64,6 +114,10 @@ export interface AutoContinueSettings {
     notify?: boolean;
     /** Globally pause auto-continue: no live or scan send, queued pending sends cancelled. */
     paused?: boolean;
+    /** Persistent per-session overrides; default explicitly inherits the profile default. */
+    sessionModes?: Record<string, SessionMode>;
+    /** Show the session mode selector in the conversation composer. */
+    showComposerToggle?: boolean;
     /** Loop guard: detect a running turn spinning in place (short talk without tools, or the same tool repeating) and restart it. */
     loopGuard?: boolean;
     /** A model message shorter than this many chars counts as a "short sentence" (loop signal). */
@@ -78,17 +132,29 @@ export interface AutoContinueSettings {
     loopRepeatText?: number;
     /** Text sent after the loop guard cancels and restarts a turn (supports {tool}). */
     loopText?: string;
+    /** Recover child (subagent / Agent Teams) sessions that a restart interrupted by waking their root session once. */
+    resumeInterruptedChildren?: boolean;
+    /** Re-arm a goal that a restart left `active` but `disarmed`, when its own session is resumed. */
+    resumeGoals?: boolean;
+    /** Also resume goals the user explicitly paused. Off by default: pausing is a human decision. */
+    resumePausedGoals?: boolean;
+    /** Hold network-error recoveries while the host is offline; waiting does not consume the retry budget. */
+    pauseWhenOffline?: boolean;
+    /** How often (ms) a held recovery re-checks connectivity. */
+    offlineCheckMs?: number;
+    /** Autonomous-loop round cap per session; 0 means unlimited. Resets when the user sends a message or turns the loop back on. */
+    loopMaxIterations?: number;
 }
 /** Fully resolved configuration (built-in defaults + user overrides). */
 export type AutoContinueConfig = Required<AutoContinueSettings>;
-/** Effective built-in defaults; localized text fields use Chinese until a browser locale is mirrored. */
+/** Effective built-in defaults; localized text fields use English until a browser locale is mirrored. */
 export declare const DEFAULT_CONFIG: AutoContinueConfig;
 /** Resolve a (possibly partial / not-yet-loaded) settings section to a full config. */
 export declare function resolveConfig(section: AutoContinueSettings | undefined): AutoContinueConfig;
 /**
  * 视为「非人为中断」的回合结束原因, 用于启动/重连扫描。
  * - `interrupted` 只由崩溃修复在宿主重载时写入(loop 永不实时发出), 因此仅在扫描路径处理;
- * - 实时事件路径只对 `error` / `max-tokens` 自动续跑;
+ * - 实时事件路径只对 `error` / `max-tokens` 自动续跑; 另外续跑没有可见输出的 `completed` / `no-visible-output` 回合(不属于本类型);
  * - `aborted`(用户停止)与 `blocked`(策略拒绝)永不自动继续。
  */
 type NonHumanReason = 'error' | 'interrupted' | 'max-tokens';
@@ -115,6 +181,11 @@ export declare function isTransientFailure(failure: FailureFacts, retryableError
  * 序列化失败(如 Windows 下 abort 的 DOMException reason)绝不能自动续跑。
  */
 export declare function isTransientAgentError(message: string): boolean;
+/**
+ * 失败是否属于连接层(断网/DNS/连接被拒/传输超时)。只有这类失败值得先做连通性
+ * 检测: 断网时续跑必然再失败一次, 白白消耗连续上限。5xx/429 等服务端错误不在此列。
+ */
+export declare function isNetworkFailure(failure: FailureFacts): boolean;
 /** 通知上的一个操作按钮(action 标识 + 显示文案)。 */
 export interface NotifyAction {
     /** 稳定动作标识, 点击时经 onAction 回调传出。 */
@@ -241,6 +312,13 @@ export declare class ToolInvocationTracker {
 /** 自适应退避: 同一会话连续失败时的有效冷却间隔。 */
 export declare function effectiveCooldown(consecutive: number, base: number, factor: number, max: number): number;
 export declare function sleep(ms: number): Promise<void>;
+/** A sent recovery prompt, not proof that the following turn succeeded. */
+export interface RecoveryAttempt {
+    sessionId: string;
+    at: number;
+    reason: 'error' | 'max-tokens' | 'silent' | 'interrupted' | 'loop-guard' | 'manual';
+    consecutive: number;
+}
 /** 一天的自动继续统计(host 单实例内存态)。 */
 export interface DayStats {
     /** 本地日期 YYYY-MM-DD。 */
@@ -273,11 +351,12 @@ export interface SessionState {
     pendingEchoMessageIds: Map<string, number>;
     /** 宽限期定时器(进行中的待发送)。 */
     pendingTimer: ReturnType<typeof setTimeout> | undefined;
+    pendingReason?: string;
     /** 宿主权威 running 位(来自 host/session-status 与回合事件)。 */
     running: boolean | undefined;
     /** 当前排队消息数(来自 session/queue 帧)。 */
     queued: number;
-    /** 子代理会话(host/session-added 带 parentSessionId)。 */
+    /** 子代理会话(session header origin is `subagent`). */
     subagent: boolean;
     /** 最近一次回合失败的事实(用于分类与模板填充)。 */
     lastFailure: FailureFacts | undefined;
@@ -289,6 +368,12 @@ export interface SessionState {
     lastTurn: number | undefined;
     /** 我们最近一次自动发送的时间戳; 0 = 没有待确认的恢复。 */
     pendingRecoveryAt: number;
+    /** unknown: no observed start; empty: no model activity; silent: activity without visible output. */
+    turnOutput: 'unknown' | 'empty' | 'silent' | 'visible';
+    outputTurn: number | undefined;
+    outputStartSeq: number;
+    /** message-ops maintenance window, which must not enter model recovery or loop accounting. */
+    maintenanceTurn?: number;
     /** 当前连续短句数(loop guard 信号 1: 空转)。 */
     shortRun: number;
     /** 最后一条短句的时间(时间窗判定用)。 */
@@ -307,6 +392,20 @@ export interface SessionState {
     loopFired: boolean;
     /** loop 重启的延迟定时器(冷却结束后再 schedule)。 */
     loopRetryTimer: ReturnType<typeof setTimeout> | undefined;
+    /** 冷却期恢复的延迟定时器(等到冷却结束再 schedule, 而不是丢弃这次恢复)。 */
+    cooldownRetryTimer: ReturnType<typeof setTimeout> | undefined;
+    /** 断网挂起: 进行中的连通性检测令牌(取消时置空, 迟到的检测结果据此作废)。 */
+    offlineWait: object | undefined;
+    /** 断网挂起: 下一次连通性复检的定时器。 */
+    offlineTimer: ReturnType<typeof setTimeout> | undefined;
+    /** 本次断网挂起开始的时间; 0 = 未挂起(只在挂起开始/结束时各记一次日志)。 */
+    offlineSince: number;
+    /** 自主循环已续跑的轮数(用户发消息或重新开启循环时清零)。 */
+    loopIterations: number;
+    /** 本轮循环上限提示已发出(每次触顶只提示一次)。 */
+    loopCapNotified: boolean;
+    /** 上次观察到的循环开关; 由关到开时清零轮数。 */
+    loopEnabled: boolean | undefined;
 }
 export declare const freshState: () => SessionState;
 export declare const RECOVERY_WINDOW_MS: number;

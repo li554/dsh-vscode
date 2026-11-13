@@ -15,10 +15,10 @@ export interface PlanChipInjected {
      */
     exitPlanMode: () => Promise<string | null>;
 }
-/** Required services: the seat's slot registry, commands Remote, and locale registry. */
+/** Services for plan controls, Conversation projection, and resource navigation. */
 export declare const inject: string[];
 /**
- * Client plugin body: register the plan chip over the command channel.
+ * Register plan controls, permanent Chat cards, and sidebar document reading.
  * @param ctx - client root context.
  */
 export declare function apply(ctx: ClientContext): void;

@@ -5,287 +5,376 @@
   </picture>
 </p>
 
-<h1 align="center">dsh-auto-continue</h1>
-
 <p align="center">
-  <em>DSH Web UI 插件 —— 当请求因为网络错误等非人为因素中断时, 自动替你输入「继续」并发送。</em>
+  <a href="https://github.com/deepseek-ai/deepseek-harness">DeepSeek Harness</a> 插件：会话意外中断时替你接着跑，也可以开启自主循环。
 </p>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/dsh-client-auto-continue"><img src="https://img.shields.io/npm/v/dsh-client-auto-continue?logo=npm&label=npm" alt="npm version"></a>
   <a href="https://www.npmjs.com/package/dsh-client-auto-continue"><img src="https://img.shields.io/npm/dm/dsh-client-auto-continue?label=downloads" alt="npm downloads"></a>
   <a href="https://github.com/HsiangNianian/dsh-auto-continue/stargazers"><img src="https://img.shields.io/github/stars/HsiangNianian/dsh-auto-continue?logo=github&label=Stars" alt="GitHub stars"></a>
-  <a href="https://github.com/HsiangNianian/dsh-auto-continue/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-65a30d?style=flat" alt="MIT license"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-65a30d" alt="MIT license"></a>
   <a href="https://awesome-dsh-plugin.com"><img src="https://awesome-dsh-plugin.com/badge.svg" alt="awesome · DSH plugin"></a>
   <a href="https://www.dsh.so/artifact/dsh-auto-continue/"><img src="https://www.dsh.so/badge/install/dsh-auto-continue.svg" alt="dsh.so install"></a>
-  <br>
-  <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=fff" alt="TypeScript">
-  <img src="https://img.shields.io/badge/esbuild-FFCF00?style=flat&logo=esbuild&logoColor=000" alt="esbuild">
-  <img src="https://img.shields.io/badge/GUI--configurable-0ea5e9?style=flat" alt="GUI configurable">
 </p>
 
 <p align="center">
-  <a href="README.md">English</a> · <b>中文</b>
+  <a href="README.md">English</a> · <b>中文</b> · <a href="README.ru.md">Русский</a> · <a href="CHANGELOG.md">更新日志</a>
 </p>
 
----
+## 目录
 
-## 它做什么
+- [功能](#功能)
+- [安装](#安装)
+- [使用](#使用)
+- [配置](#配置)
+- [工作原理](#工作原理)
+- [常见问题](#常见问题)
+- [隐私与权限](#隐私与权限)
+- [开发](#开发)
+- [链接](#链接)
+- [许可证](#许可证)
 
-适用于 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)(`dsh web`): 当 webui 里的请求因为**非人为因素**中断时, 插件模拟用户输入 **「继续」** 并自动发送, 让 Agent 继续干活, 无需手动干预。消息与手动输入完全等价——进入会话日志、对模型可见, 中断的任务随即恢复。自 0.8.0 起引擎跑在**宿主进程内**(单实例): 浏览器标签全关掉也在值守, 多标签页同时打开也不可能重复发送。
+## 功能
 
-![demo](docs/demo-zh.svg)
+回合因可恢复的错误失败、触到输出上限、结束时没有可见输出，或者被宿主重启打断时，插件会等几秒，然后替你发一条继续消息。引擎运行在 DSH 宿主进程里，关掉浏览器标签页也照常工作，所有标签页共用同一个引擎。
 
-**智能恢复**(全部可配置):
+<p align="center">
+  <picture>
+    <source media="(prefers-reduced-motion: reduce)" srcset="docs/demo-zh-static.svg">
+    <img src="docs/demo-zh.svg" alt="自动恢复示意：网络错误打断助手，插件等待 3 秒后发送继续，助手恢复工作。" width="720">
+  </picture>
+</p>
 
-- **错误分类** — 临时性错误(网络 / 超时 / 5xx / 429 等)自动续跑; 永久性错误跳过并通知, 因为重试也没用。判定为永久性的条件: HTTP 状态码 401/403, 或 code/message 命中认证、凭据/API Key、余额/配额、模型不存在、上下文长度/超限等关键词。provider 专属例外可由用户显式填写普通文本匹配; 关闭分类后则全部自动继续
-- **自适应退避** — 连续失败时等待时间递增(冷却 × 系数: 20s → 40s → 80s…), 有上限, 不再对故障上游狂轰滥炸
-- **中英文本地化** — 设置卡片、内置续跑 / 护栏 / 循环文案以及浏览器通知都跟随 DSH 当前界面语言(初始值来自浏览器语言)。只支持 `en` 和 `zh`, 其他语言回落中文; 切换语言只会替换内置默认值, 不会覆盖用户自定义文本
-- **模板化继续文本** — `continueText` 支持 `{code}` `{message}` `{status}` `{tool}` `{turn}` `{errorCount}` `{sessionTitle}` `{elapsed}` 占位符, 续跑消息可携带失败上下文(如「继续 (git push 失败: UPSTREAM)」); 达到 `max-tokens` 时使用**另一套模板**(如「继续输出, 不要重复已生成的内容」)
-- **幂等护栏** — 续跑前检查上一步工具调用: 结果未确认(回合在工具执行中途夭折, 如 `git push` 可能已经推上去了)时, 续跑消息会提示模型先确认状态、不要重复执行; 工具已确认成功时说明已完成、请勿重复; 工具失败则不加护栏(重试本来就是目的)。两段护栏文本都可配置(支持 `{tool}` / `{result}` 占位符)
-- **暂停** — 设置卡片里的全局 **暂停自动继续** 开关可立即停掉一切(实时 + 扫描); 会话级暂停(如通过通知按钮)只挂起单个会话, 到期自动恢复。唯一的显式例外是通知里的 **立即续跑** 按钮——按下它等于用户明确要求发送这一次, 不受暂停限制
-- **通知按钮** — 通知带 **立即续跑**(无视冷却、连续上限与暂停, 马上发送)和 **暂停该会话 1 小时** 按钮
-- **循环守卫** — 连**运行中的回合**也盯着, 四个信号都会触发守卫(取消当前回合并用可配置的循环提示文本重启, 「停止重复, 换一种方式」): 模型**连续输出完全相同的消息**(不限长度, 如 "Let me test variants of the regex…" 连续 7 遍)、单条流式 assistant 消息内部出现连续近似重复段落、短时间内连续多条短句且期间无工具调用(典型的「Let me read…」空转)、或同一工具被连续反复调用且**参数与结果都相同**(参数或结果有变化视为有进展)。取消带有内部来源标记, 绝不会与用户手动停止混淆——只有守卫发起的取消才会重启。阈值、时间窗与提示文本都可配置
-- **统计面板** — 设置卡片展示今日自动继续次数、恢复成功、继续后失败、永久性跳过、达上限停止、循环打断, 按错误码统计, 可一键清零
-- **浏览器通知** — 可选: 自动继续成功 / 放弃 / 遇到永久性错误时弹出提醒; 首次使用时请求权限, 被拒绝后不再打扰
+- **错误恢复。** 网络错误、超时、5xx 和 429 会自动重试：先等宽限期，冷却时间随失败次数递增，连续次数有上限。认证、余额、模型不存在、上下文超长这类永久性错误直接跳过。
+- **断网挂起。** 网络类失败会等网络恢复再发，不白白消耗重试次数。
+- **启动恢复。** 宿主重启后，最近 15 分钟内被打断的会话会继续，包括你还没重新打开的会话。
+- **会话模式。** 输入框旁的开关可以把每个会话单独设为跟随默认、关闭、仅故障恢复或自主循环。
+- **自主循环(需手动开启)。** 正常完成后也继续跑，可以设轮数上限。
+- **安全保护。** 幂等护栏告诉模型上一步工具调用是否完成；循环守卫会打断原地打转的回合。
+- **可观察。** 设置页能看到今日统计、最近的恢复记录和暂停中的会话；可选的浏览器通知带有 **立即续跑** 和 **暂停该会话 1 小时** 按钮。
 
-插件监听实时事件流, 对以下情况作出反应:
+## 安装
 
-| 事件 | 含义 |
-| --- | --- |
-| `turn/end` → `error` | 回合失败(模型 / 网络 / 超时等) |
-| `turn/end` → `interrupted` | 宿主崩溃重启后遗留的中断回合(由启动扫描恢复) |
-| `turn/end` → `max-tokens` | 达到输出 token 上限 |
-| `host/agent-error` | 无回合位置的 Agent 失败(仅网络/超时类消息自动续跑) |
-
-**绝不自动继续:** 用户主动停止(`aborted`)或策略拒绝(`blocked`); 实时流里的 `interrupted` 同样不自动继续——该标记只在宿主重载时由崩溃修复写入, 孤儿回合由启动扫描恢复, 不走实时路径; 宿主已自行恢复的会话; 正在运行或已有排队消息的会话; 子代理会话; 处于冷却期 / 连续次数上限内的会话(可在设置卡片中调整, 见下)。
-
----
-
-## 工作原理
-
-宿主侧引擎在 dsh 宿主进程内订阅会话事件 firehose——**全局只有一个引擎**, 无论开多少个标签页(重复发送这类 bug 从构造上不可能存在)。检测到中断后先等待一个**宽限期**(默认 3 秒)——若宿主自行开启了新回合(`turn/start`), 自动继续即取消——然后经 agent 注册表(`agent.followup`, 与「发送」按钮同一个排队通道)发送配置的文本。
-
-宿主启动时还会扫描存活会话: 最后一个回合在**扫描时间窗**(默认 15 分钟)内以非人为原因结束、且其后没有新回合或用户消息的会话, 会被自动续跑(例如浏览器关闭期间宿主崩溃——agent-loop 恢复会话后引擎接着接手)。
-
-浏览器半侧是瘦壳: 设置卡片 + 一条状态桥(展示通知, 带「立即续跑 / 暂停该会话 1 小时」按钮并把动作回传给宿主引擎; 驱动卡片里的统计与暂停面板)。
-
-### 恢复流程
-
-下图汇总了自动恢复主链、循环守卫重启路径和等待人工介入的出口。点击图片可查看原尺寸版本。
-
-[![dsh-auto-continue 恢复流程](docs/auto-continue-workflow.svg)](docs/auto-continue-workflow.svg)
-
-## 快速开始
-
-DSH 插件安装进 **profile**(`dsh web` 对应 `web` profile)。安装后重启 `dsh web` 即可。
-
-> **请使用最新 DSH(推荐 0.1.2-alpha.4 或更高版本)。** 安装前先运行 `dsh --version`。插件 v0.11.1 已支持 DSH 0.1.2-alpha.2+ 使用的设置 API(包括 alpha.3 和 alpha.4), 同时继续兼容 DSH 0.1.0-rc.7 至 0.1.1; rc.6 及更早版本仍不支持(`list slot ... requires options.id`)。预览版可能先发布在 [DSH 官方 Releases](https://github.com/deepseek-ai/deepseek-harness/releases), 公开 npm 标签会稍后跟进。
+DSH 插件装在 profile 里；`dsh web` 用的是 `web` profile。桌面应用请在应用自己的 **插件** 页面安装，不要用 CLI。
 
 ### 从 npm 安装(推荐)
 
-已发布为 [`dsh-client-auto-continue`](https://www.npmjs.com/package/dsh-client-auto-continue):
-
 ```bash
-dsh plugin --profile web add dsh-client-auto-continue
+dsh plugin --profile web add dsh-client-auto-continue@latest
 dsh web
 ```
 
-### 直接从 GitHub 安装(无需克隆)
+装好后重启 DSH 并刷新浏览器，然后从主侧边栏打开 **插件 → dsh-client-auto-continue**，确认状态是 **运行中**。
 
-直接从仓库默认分支安装——构建产物已提交入库, 无需本地克隆或构建:
+更新时，先等进行中的工作结束并停止 DSH，再执行一遍上面的命令，然后重启 DSH、刷新浏览器。原有设置会保留在 profile 中。桌面应用使用独立的 profile，需要在应用的 **插件** 页面更新。
+
+### 版本兼容
+
+| DSH 内核 | 插件版本 | 设置入口 |
+| --- | --- | --- |
+| 0.2.2-rc.1、0.2.1-rc.2、0.2.1-alpha.1 | 0.19.0 已验证 | **插件 → dsh-client-auto-continue** |
+| 0.2.0-rc.1 | 0.12.1 及以上 | **插件 → dsh-client-auto-continue** |
+| 0.1.7-rc.2 | 0.11.9 及以上 | **插件 → dsh-client-auto-continue** |
+| 仅有旧版设置 API 的宿主 | 旧版界面 | **设置 → 插件 → 插件配置** |
+
+不支持 DSH 0.1.0-rc.6 及更早版本。插件 0.11.9 和 0.12.0 会被 DSH 0.2.0-rc.1 的版本检查拦下([#50](https://github.com/HsiangNianian/dsh-auto-continue/issues/50))。桌面应用的版本号不是 DSH 内核版本，请以内核版本为准(CLI 可运行 `dsh --version`)。
+
+<details>
+<summary>从 GitHub 安装(跟随 <code>main</code> 分支)</summary>
+
+构建产物已提交到仓库，不需要克隆或构建：
 
 ```bash
 dsh plugin --profile web add github:HsiangNianian/dsh-auto-continue
 dsh web
 ```
 
-> 该方式跟踪 `main` 分支而不是发布 tag——适合尝鲜最新改动, 稳定性首选上面的 npm 方式。切换安装来源只需重新执行 `dsh plugin --profile web add <其他来源>`, profile 依赖会被就地替换。
+这种方式跟随 `main` 分支而不是正式版本。想换安装来源，再执行一次 `dsh plugin --profile web add <其他来源>` 即可，profile 里的依赖会被原地替换。
 
-### 从本仓库安装
+</details>
 
-需要 Node.js ≥ 18。
+<details>
+<summary>从本地仓库安装</summary>
+
+需要 Node.js 22。
 
 ```bash
 git clone https://github.com/HsiangNianian/dsh-auto-continue.git
 cd dsh-auto-continue
-npm install
+npm ci
 npm run build
-
-# 包自带 cordis.patch.yml(通过 dsh.bundle.patch 声明),
-# 插件行会自动注册
-dsh plugin --profile web add link:$(pwd)
-
+dsh plugin --profile web add "link:$(pwd)"
 dsh web
 ```
 
-### 手动安装(无需 pnpm / dsh plugin)
+包里自带 `cordis.patch.yml`(通过 `dsh.bundle.patch` 声明)，插件会自动注册。改完代码后运行 `npm run build`，再重启 DSH、刷新浏览器。
+
+</details>
+
+<details>
+<summary>迁移旧的手动安装</summary>
+
+早期的安装方式是软链接加手写的 `insert` 加载行。这样引擎可能能启动，但 **插件** 页面里看不到它。
+
+1. 等进行中的工作结束，停止 `dsh web`。备份 `~/.dsh/profiles/web/` 下的 `package.json`、`cordis.patch.yml` 和 `pnpm-lock.yaml`，如果有 `~/.dsh/settings.yaml` 也一并备份(设置了 `$DSH_HOME` 的话用它代替 `~/.dsh`)。
+2. 在 `cordis.patch.yml` 中，只删除 `insert` 列表里手写的 `auto-continue` 行(列表空了就连列表一起删)。顶层带 `config:` 的 `- id: auto-continue` 是你的设置，要保留。
+3. 用上面的 npm 或 GitHub 命令安装。之后 profile 的 `package.json` 中 `dsh.profile.bundles` 应包含 `dsh-client-auto-continue`。
+4. 如果旧的 `settings.yaml` 里有 `auto-continue` 段落，把其中的值合并到 profile 的 `cordis.patch.yml` 条目：
+
+   ```yaml
+   - id: auto-continue
+     config:
+       cooldownMs: 45000 # 换成你自己保存的值
+   ```
+
+5. 启动 `dsh web`，刷新浏览器，打开 **插件 → dsh-client-auto-continue** 检查各项设置。
+
+对于同时提供 profile 配置和旧版设置 API 的宿主([#64](https://github.com/HsiangNianian/dsh-auto-continue/issues/64))，插件会为每个 profile 从 `$DSH_HOME/settings-legacy.yaml` 的 `auto-continue` 段落导入一次旧值。profile 里已有的值优先，旧文件保持不变。导入完成前自动恢复会等待；导入失败时宿主会记录错误并一直等待，修好文件或权限后重启即可。
+
+**内置插件** 里显示的 `include:auto-continue` 是正常的加载前缀，不代表重复安装。
+
+</details>
+
+<details>
+<summary>验证与卸载</summary>
 
 ```bash
-ln -sfn "$(pwd)" ~/.dsh/profiles/node_modules/dsh-client-auto-continue
-# 然后在 ~/.dsh/profiles/web/cordis.patch.yml 追加:
-#   - insert:
-#       - id: auto-continue
-#         name: 'dsh-client-auto-continue'
-dsh web
+# 合成后的配置里应当只有一个 auto-continue 条目
+dsh --profile web --dump-config | grep -A 4 'id: auto-continue'
+
+# 卸载
+dsh plugin --profile web remove dsh-client-auto-continue
 ```
 
-> 从手动安装切换到 `dsh plugin add` 时, 请先删掉手动加的 `insert` 条目——包自带的 bundle patch 会注册插件行, 重复注册会冲突。
+如果 profile 的 `cordis.patch.yml` 里还有 `- id: auto-continue` 条目，也一并删除，然后重启 DSH。
 
-> **设置暴露:** DSH 0.1.0-rc.7 起 webui 设置区是**注册表驱动**的——插件注册的命名空间直接可见, 设置卡片开箱即用, 无需任何供应商补丁(插件要求 rc.7+, 见快速开始)。
+</details>
 
-### 验证与卸载
+## 使用
 
-```bash
-dsh --profile web --dump-config | grep auto-continue   # 确认配置层已挂载
-```
+故障恢复默认开启，不需要额外设置。
 
-浏览器控制台(Ctrl/Cmd+Shift+I)中应看到 `[auto-continue] 已启动(文本="继续", …)`; 每次检测到中断和自动发送都会打日志。
+### 会话模式
 
-```bash
-dsh plugin --profile web remove dsh-client-auto-continue   # npm / 仓库安装
-# 或删除软链 + insert 条目                                  # 手动安装
-dsh web
-```
+输入框旁的 **自动继续** 开关只作用于当前会话，旁边的菜单用来选择模式：
 
----
+| 模式 | 行为 |
+| --- | --- |
+| 跟随默认 | 使用设置里的 **默认会话模式**(未修改时为仅故障恢复) |
+| 关闭 | 这个会话不自动发消息，循环守卫也不打断 |
+| 仅故障恢复 | 恢复错误、输出超限、无输出回合和重启中断；正常完成的回合不动 |
+| 自主循环 | 每次正常完成后也继续，使用自主循环的继续文本 |
+
+关掉开关即选择“关闭”，再打开即回到“跟随默认”。选择会立即保存在宿主上(`sessionModes`)，在标签页之间同步，重启后依然有效。把会话切到“关闭”会取消所有待发送的继续消息，但不会中断正在运行的回合。
+
+<p align="center">
+  <img src="docs/screenshots/08-composer-toggle.zh.png" alt="输入框旁的自动继续开关与模式菜单" width="560">
+</p>
+
+窗口较窄时，文字和菜单会收成图标。DS-Bot 和 dsh-pocket 在 640 CSS 像素以内也使用这种紧凑布局。想隐藏这组控件，在 **常规** 中关闭 **在会话区显示自动继续开关** 并保存；这不会改变任何会话的模式。
+
+### 暂停与手动控制
+
+- **常规** 里的 **全局启用自动继续** 是总开关。关闭后停止所有自动消息，但会保留各会话的选择。循环守卫仍会运行；如果完全不想被打断，把 **循环守卫** 也关掉。
+- **暂停该会话 1 小时**(通知按钮)让单个会话暂停一小时。
+- **立即续跑**(通知按钮)马上发送一次继续消息，不受冷却、连续上限和暂停限制，但不会解除暂停。
+- 你自己发消息，或者有新回合开始，都会取消还在等待的继续消息。
+
+### 状态与日志
+
+**状态与日志** 分类显示今日统计(继续消息、恢复成功、失败、跳过的错误、放弃、循环打断，按错误码细分，可一键清零)、按会话分组的最近 20 次恢复记录，以及当前暂停的会话。这些数据保存在宿主内存中，插件重启后清零。开启 **详细日志** 后，每个决定都会以 `[auto-continue]` 前缀写入 DSH 日志(CLI 用户可在运行 `dsh web` 的终端里看到)。
 
 ## 配置
 
-所有参数都可以在 GUI 里配置——无需改文件或控制台。打开 **设置 → 插件 → 插件配置**, **自动继续**会像其他插件一样显示为列表中的折叠卡片; 点击卡片或右侧箭头即可在当前位置展开完整配置。除了下面的字段, 展开后的卡片还带一个**统计面板**(今日活动, 可一键清零)和**已暂停会话**列表(每个都可单独解除)。
+从主侧边栏打开 **插件 → dsh-client-auto-continue**，选择一个分类。(**设置 → 内置插件** 只列出组件状态，不能编辑。)修改会先暂存，点击 **保存** 后生效；切换分类不会丢失草稿，非法值会阻止保存，**恢复默认** 会移除覆盖值。
 
-新版配置卡会按接力方式、安全节奏、恢复雷达、循环断路器与现场状态组织配置; 卡片顶部也直接放出了开源仓库和 **Star on GitHub** 入口。
+![插件设置的常规分类](docs/screenshots/01-settings-section.zh.png)
 
-**或者跳过 GUI, 直接编辑配置文件** — 引擎从 `~/.dsh/settings.yaml` 读取插件段落(所有插件的设置都在这一个文件里), 因此无论是否打过补丁都能用。文件被监听、自动重读, 改动即时生效; 若已打开的页面没反应, 重启 `dsh web` 即可。没填写的字段会回落到下表中的默认值。
-
-浏览器会把 DSH 当前语言同步到内部 `locale` 字段。下面五个本地化文本字段保持留空或直接省略时, 会自动跟随语言; 任何非空值都视为用户自己的模板, 切换语言时不会改写:
+设置保存在当前 profile 补丁的 `auto-continue` 条目中，默认 web profile 是 `~/.dsh/profiles/web/cordis.patch.yml`(旧版宿主为 `~/.dsh/settings.yaml` 的 `auto-continue:` 段落)。也可以直接编辑文件，省略的键使用默认值：
 
 ```yaml
-auto-continue:
-  locale: 'zh' # 通常由浏览器自动维护
-  paused: false
-  continueText: ''
-  continueTextMaxTokens: ''
-  guardTools: true
-  guardPendingText: ''
-  guardDoneText: ''
-  graceMs: 3000
-  cooldownMs: 20000
-  maxConsecutive: 3
-  scanOnBoot: true
-  scanLimit: 8
-  freshMs: 900000
-  verbose: true
-  classify: true
-  retryableErrorPatterns: ''
-  backoffFactor: 2
-  backoffMaxMs: 300000
-  notify: false
-  loopGuard: true
-  loopShortChars: 40
-  loopWindowMs: 30000
-  loopShortCount: 12
-  loopRepeatText: 4
-  loopToolRepeat: 5
-  loopText: ''
+- id: auto-continue
+  config:
+    cooldownMs: 45000
+    resumeCompletedTurns: true
+    loopMaxIterations: 20
 ```
 
-**卡片操作说明:**
+时间单位均为毫秒。文本类字段留空时使用当前语言的内置文本。
 
-![插件配置列表中的自动继续折叠卡片](docs/screenshots/02-settings-card.png)
+### 常规
 
-- 修改是**暂存式**的——点「保存」之前不会写入磁盘; 有待保存草稿时卡片显示「未保存」徽章, 「放弃」可丢弃草稿
-- 改动过的字段会带「已覆盖」徽章, 并有逐字段的「恢复默认」按钮(回到内置默认值)
-- 布尔字段是三态:**继承**(用默认)/ 开 / 关
-- 非法输入(非数字、小于最小值)会阻止保存并给出提示
-- 只读部署中卡片只显示已存值, 所有控件禁用
-- 保存后立即生效, 持久化在 `~/.dsh/settings.yaml`(卸载插件会留下该段落, 无害, 想清理可手动删除)
+| 设置项 | 键 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| 全局启用自动继续 | `paused` | `false` | 存储时取反：`paused: true` 停止所有自动消息并取消已排队的发送 |
+| 在会话区显示自动继续开关 | `showComposerToggle` | `true` | 只控制显示与隐藏 |
+| 以插件来源发送继续消息 | `usePluginSource` | `false` | 关闭时以 `user` 来源发送；开启后标记为 `plugin:dsh-client-auto-continue` |
+| 续跑无输出回合 | `resumeSilentTurns` | `true` | 有模型活动但没有可见输出的回合也继续；仍计入 **最大连续次数** |
+| 续跑子代理会话 | `resumeSubagentSessions` | `false` | 子代理还在加载时，失败、被截断或无输出的回合按主会话的模式续跑。DSH 通常会在后台子代理失败后立即关闭它，所以主要对仍保持加载的子代理有用 |
+| 默认会话模式 | `resumeCompletedTurns` | `false` | 用于“跟随默认”的会话：`false` 为仅故障恢复，`true` 为自主循环 |
+| 自主循环轮数上限 | `loopMaxIterations` | `0` | 每个会话的循环轮数，`0` 为不限。你发消息或重新开启循环后重新计数 |
+| 浏览器通知 | `notify` | `false` | 发送、跳过、放弃以及设置保存时通知；首次开启时浏览器会请求权限 |
 
-| 字段 | 默认 | 说明 |
+### 重试策略
+
+| 设置项 | 键 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| 宽限期 (ms) | `graceMs` | `3000` | 发送前的等待；期间有新回合或你发了消息就取消 |
+| 冷却时间 (ms) | `cooldownMs` | `20000` | 同一会话两次恢复尝试的最小间隔；冷却期内的失败会等冷却结束 |
+| 最大连续次数 | `maxConsecutive` | `3` | 达到后放弃。你发消息或回合有可见输出后清零；正常完成后的循环续跑不计入 |
+| 错误分类 | `classify` | `true` | 只重试临时性错误，跳过永久性错误；关闭则所有错误都重试 |
+| 自定义可恢复错误 | `retryableErrorPatterns` | `''` | 每行一个文本片段，忽略大小写，匹配错误码、HTTP 状态和消息；优先于内置分类 |
+| 退避系数 | `backoffFactor` | `2` | 每次连续失败后冷却时间的倍数(20 秒 → 40 秒 → 80 秒) |
+| 最大退避间隔 (ms) | `backoffMaxMs` | `300000` | 冷却时间的上限 |
+| 断网时暂停续跑 | `pauseWhenOffline` | `true` | 宿主断网时挂起网络类错误的重试，不消耗次数 |
+| 断网复检间隔 (ms) | `offlineCheckMs` | `15000` | 挂起期间多久检测一次网络，最小 1000 |
+| 重新武装被重启失活的 goal | `resumeGoals` | `false` | 发出继续消息后，把重启时被 disarm 的 `active` goal 重新 arm。这相当于替你授权，所以默认关闭 |
+| 恢复被暂停的 goal | `resumePausedGoals` | `false` | 连你手动暂停的 goal 也恢复；需同时开启 `resumeGoals` |
+
+### 启动恢复
+
+| 设置项 | 键 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| 启动恢复扫描 | `scanOnBoot` | `true` | 宿主启动后查找被打断的会话，包括已打开和已存储的 |
+| 重启后唤醒子代理会话 | `resumeInterruptedChildren` | `false` | 给根会话发一条消息，列出被打断的子代理或团队成员会话 |
+| 扫描会话数 | `scanLimit` | `8` | 每轮扫描最多恢复的会话数，最近活动的优先 |
+| 扫描时间窗 (ms) | `freshMs` | `900000` | 只恢复这段时间内的中断；扫描也在这段时间后结束 |
+
+### 继续文本
+
+| 设置项 | 键 | 使用时机 |
 | --- | --- | --- |
-| 暂停自动继续 | 关 | 全局暂停: 实时与扫描都不再自动发送, 已排队的待发送也会取消 |
-| 继续文本 | `继续` | 中断后自动发送的消息内容 |
-| 超限时的继续文本 | `继续` | 达到输出 token 上限时自动发送的文本(支持相同占位符) |
-| 幂等护栏 | 开 | 续跑前检查上一步工具调用并给出指引(见「它做什么」) |
-| 循环守卫 | 开 | 检测运行中的回合空转并重启(见「它做什么」) |
-| 短句长度上限 (字符) | `40` | 模型消息文本短于该值计为一条短句(空转信号) |
-| 短句时间窗 (ms) | `30000` | 连续短句必须落在这个时间窗内; 正常思考的短文本散布在长时间里不会被误判 |
-| 连续短句阈值 | `12` | 时间窗内连续多少条短句且期间无工具调用时判定空转循环 |
-| 相同消息重复次数 | `4` | 连续输出多少条完全相同的消息时判定空转(不限长度, 最强信号); 同一阈值也用于单条流式消息内连续近似重复段落 |
-| 同工具重复次数 | `5` | 同工具+同参数+同结果的连续调用多少次时判定死循环 |
-| 循环提示文本 | `(检测到你可能陷入循环, 请停止重复刚才的动作, 换一种方式继续)` | 打断后重启回合时发送的文本; 支持 {tool} 占位符 |
-| 结果未确认时的护栏文本 | `(上一步工具「{tool}」可能未完成, 先确认状态再继续, 不要重复执行)` | 上一步工具可能已部分执行时附加; 支持 {tool} 占位符 |
-| 工具已成功时的护栏文本 | `(上一步工具「{tool}」已完成, 结果: {result}; 不要重复执行, 直接继续)` | 上一步工具已确认成功时附加; 支持 {tool} / {result} 占位符 |
-| 宽限期 (ms) | `3000` | 中断后等待的时长; 期间宿主自行恢复则取消 |
-| 冷却时间 (ms) | `20000` | 同一会话两次自动「继续」的最小间隔(失败尝试也计入) |
-| 最大连续次数 | `3` | 同一会话连续自动「继续」上限; 超过后停止, 直到用户介入或成功回合 |
-| 启动/重连扫描 | 开 | 页面启动 / 重连时扫描最近中断的会话 |
-| 扫描会话数 | `8` | 扫描最多检查的会话数(不含运行中 / 子代理会话) |
-| 扫描时间窗 (ms) | `900000` | 扫描只处理该时间窗内的中断 |
-| 详细日志 | 开 | 控制台输出 `[auto-continue]` 日志 |
-| 错误分类 | 开 | 仅自动恢复临时性错误; 认证 / 余额 / 模型等永久性错误跳过并通知 |
-| 自定义可恢复错误 | 空 | 每行一个大小写不敏感的普通文本片段; 命中错误码、HTTP 状态或消息时显式覆盖内置分类 |
-| 退避系数 | `2` | 连续失败时冷却间隔的倍率(2 = 20s → 40s → 80s…) |
-| 最大退避间隔 (ms) | `300000` | 自适应退避的上限 |
-| 浏览器通知 | 关 | 自动继续成功 / 放弃 / 遇到永久性错误时弹通知 |
+| 继续文本 | `continueText` | 回合因错误失败 |
+| 超限时的继续文本 | `continueTextMaxTokens` | 触到输出 token 上限 |
+| 无输出回合的继续文本 | `continueTextSilent` | 回合只输出了推理 |
+| 宿主重启后恢复的继续文本 | `continueTextInterrupted` | 启动扫描恢复被重启打断的回合 |
+| 自主循环的继续文本 | `continueTextLoop` | 自主循环的每一轮 |
+| 结果未确认时的护栏文本 | `guardPendingText` | 上一步工具调用可能没完成时附加 |
+| 工具已成功时的护栏文本 | `guardDoneText` | 上一步工具调用已成功时附加 |
+| 循环提示文本 | `loopText` | 循环守卫重启回合时发送 |
 
-遇到确认可以安全续跑的 provider 专属错误时(先确认手动发送「继续」确实能恢复), 应添加足够具体、稳定的片段, 而不是全局关闭错误分类:
+默认值都是 `''`，即使用内置文本。继续文本支持 `{code}`、`{message}`、`{status}`、`{tool}`、`{turn}`、`{errorCount}` 和 `{elapsed}` 占位符，例如 `继续({tool}: {code})` 会变成 `继续(git push: UPSTREAM)`。护栏文本和循环提示文本支持 `{tool}`，`guardDoneText` 还支持 `{result}`(工具输出的简短摘录)。
+
+内置文本有英文、中文和俄文三套，跟随 DSH 的界面语言：`zh` 和 `zh-*` 用中文，`ru` 和 `ru-*` 用俄文，其他语言一律用英文。你自己填写的非空文本不会因切换语言被替换。
+
+<details>
+<summary>内置中文文本</summary>
+
+| 键 | 文本 |
+| --- | --- |
+| `continueText`、`continueTextMaxTokens`、`continueTextLoop` | `继续` |
+| `continueTextSilent` | `继续。你上一轮只输出了内部推理, 既没有回复也没有调用工具, 用户什么都没看到。每一轮都要以工具调用或可见回复结束。` |
+| `continueTextInterrupted` | `继续。宿主在你上一轮运行期间重启了; 重启时未完成的工具调用已按「结果未知」收尾。从中断处继续, 重试可能有副作用的操作前先核实外部状态。` |
+| `guardPendingText` | `(上一步工具「{tool}」可能未完成, 先确认状态再继续, 不要重复执行)` |
+| `guardDoneText` | `(上一步工具「{tool}」已完成, 结果: {result}; 不要重复执行, 直接继续)` |
+| `loopText` | `(检测到你可能陷入循环, 请停止重复刚才的动作, 换一种方式继续)` |
+
+</details>
+
+### 安全保护
+
+| 设置项 | 键 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| 幂等护栏 | `guardTools` | `true` | 继续前告诉模型上一步工具调用是否完成，避免重复执行 |
+| 循环守卫 | `loopGuard` | `true` | 打断原地打转的回合，并用循环提示文本重新开始 |
+| 短句长度上限 (字符) | `loopShortChars` | `40` | 短于此长度的消息计为短句 |
+| 短句时间窗 (ms) | `loopWindowMs` | `30000` | 统计短句的时间窗，最小 1000 |
+| 连续短句阈值 | `loopShortCount` | `12` | 时间窗内连续多少条短句且没有工具调用时打断 |
+| 相同消息重复次数 | `loopRepeatText` | `4` | 连续相同消息(或单条流式消息内的重复段落)达到此数时打断 |
+| 同工具重复次数 | `loopToolRepeat` | `5` | 工具、参数和结果都相同的连续调用达到此数时打断 |
+
+### 状态与日志
+
+| 设置项 | 键 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| 详细日志 | `verbose` | `true` | 以 `[auto-continue]` 前缀记录各项决定 |
+
+另有两个键由插件自己写入：`locale`(同步 DSH 的界面语言，默认 `en`)和 `sessionModes`(输入框旁选择的会话模式，默认 `{}`)。一般不需要手动修改。
+
+### 错误分类
+
+开启 **错误分类** 时，网络错误、超时、HTTP 5xx 和 429 会重试。HTTP 401、403，以及错误码或消息涉及认证、凭据或 API key、余额或额度、模型不存在、上下文长度的错误视为永久性错误，直接跳过(开启通知时会提醒)。`MALFORMED_RESPONSE` 总是可重试，除非带有明确的 401 或 403。
+
+如果某个服务商的错误你确认可以安全重试(先手动发一次“继续”试试)，请添加一个具体、稳定的片段，而不是关闭整个分类：
 
 ```yaml
-auto-continue:
-  retryableErrorPatterns: |-
-    Upstream rejected the request as invalid
+- id: auto-continue
+  config:
+    retryableErrorPatterns: |-
+      Upstream rejected the request as invalid
 ```
 
-匹配项是普通子串, 不是正则表达式。空行会被忽略; 任一行命中后会优先于内置永久错误规则。冷却与最大连续次数仍然生效。
+匹配按普通子串进行，不是正则表达式。冷却时间和 **最大连续次数** 依然生效。
 
-`continueText`(以及 `continueTextMaxTokens`)支持占位符 `{code}`、`{message}`、`{status}`、`{tool}`(失败前最后一次工具调用)、`{turn}`、`{errorCount}`(连续失败次数, 含本次)、`{sessionTitle}`(来自会话列表)和 `{elapsed}`(距失败经过的时间, 如 `1m5s`)——例如 `继续 ({tool}: {code})` 会变成 `继续 (git push: UPSTREAM)`。护栏文本支持 `{tool}` 与 `{result}`(上一步工具输出的截断摘要)。
+## 工作原理
 
----
+[![自动继续的决策流程](docs/auto-continue-workflow.svg)](docs/auto-continue-workflow.html)
+
+1. **触发。** 引擎在宿主中监听会话事件。`turn/end` 的原因是 `error`、`max-tokens`、无可见输出，或 `completed`(仅自主循环)时进入流程。宿主重启后，启动扫描每 3 秒检查一次已打开和已存储的会话，直到扫描时间窗结束。循环守卫监视正在运行的回合，发现原地打转就打断。
+2. **会话检查。** 全局暂停、会话设为“关闭”或暂停了 1 小时、会话是子代理且 **续跑子代理会话** 关闭时，不发送任何内容。子代理沿用主会话的模式(除非它有自己的模式)，从不进入自主循环，也不受循环守卫影响。
+3. **结束原因。** 手动停止和策略拦截(`blocked`)不处理，永久性错误也不处理。其余可恢复的情况进入恢复流程。正常完成只在自主循环模式下继续：不受冷却和连续上限约束，但受 `loopMaxIterations` 限制。
+4. **重试预算。** 达到 **最大连续次数** 就停止。冷却期内的发送会延后，而不是丢弃；每次失败后冷却时间乘以退避系数，直到上限。
+5. **宽限期。** 等待 `graceMs`。期间有新回合或你发了消息，就取消这次发送。
+6. **断网挂起。** 对网络类错误，宿主会检查是否有非回环网卡，以及能否解析任一公共域名。断网时等待，每隔 `offlineCheckMs` 复检，恢复后重新经过宽限期和冷却。设置了 `HTTP(S)_PROXY` 或 `ALL_PROXY` 时只检查网卡。
+7. **发送。** 按原因选择继续文本，附上幂等护栏提示，用会话原有的 preset 和模型通过 `agent.followup` 发出。如果已有排队的用户回合，继续消息会排到它们前面，用户回合之间的顺序不变。开启 `resumeGoals` 时，会重新 arm 被重启 disarm 的 goal。
+
+**子会话。** 除了 **续跑子代理会话**(只管仍在加载的子代理)之外，子代理和团队成员会话从不直接续跑。重启后，开启 **重启后唤醒子代理会话** 后，启动扫描会收集被重启打断的子会话(每轮最多读取 8 个子会话日志)，给它们的根会话发一条清单消息，同一批只发一次，由根会话决定继续还是收尾。根会话自己还在运行时交给常规恢复；你手动停止的根会话不会被唤醒。
+
+**无法读取的会话。** 启动扫描时如果某个会话的历史读不出来，会跳过它并记录错误，其他会话照常恢复([#58](https://github.com/HsiangNianian/dsh-auto-continue/issues/58))。修复后在扫描时间窗内重启 DSH 即可重试。
+
+## 常见问题
+
+| 现象 | 排查 |
+| --- | --- |
+| “Skipping profile bundle” 或 “incompatible with dsh 0.2.0-rc.1” | 在应用实际使用的 profile 中把插件升级到 0.12.1 或更新版本，然后重启 |
+| 插件已启用，但没有设置项 | 打开主侧边栏的 **插件** 页面(不是 **设置 → 内置插件**)，选择 **常规** |
+| `/api/auto-continue-bridge` 返回 404 | 宿主组件没有加载。检查 DSH 启动日志和 `--dump-config`，再刷新页面 |
+| 出错后没有自动继续 | 检查总开关和会话模式。查看 `[auto-continue]` 日志：会写明错误被判为永久性、已达到 **最大连续次数**，还是正在断网挂起 |
+| 重启后会话没有恢复 | 需要开启 **启动恢复扫描**，且中断发生在扫描时间窗内(默认 15 分钟) |
+| 迁移后设置不生效 | 确认 `cordis.patch.yml` 里只有一个顶层 `- id: auto-continue` 条目，且没有残留的 `insert` 行；参见 [安装](#安装) 中的迁移说明 |
+| 手机上没有紧凑布局 | 更新插件后重启 DSH，并刷新远程页面 |
 
 ## 隐私与权限
 
-插件是纯浏览器端, **不触碰任何文件、凭据, 也不访问 dsh 宿主以外的网络**:
-
-- 只复用 webui 本身就在用的两条只读事件流(无额外服务、无第三方端点)
-- 引擎**唯一会自动执行的写入**是 `sessions.prompt`——与点「发送」按钮完全相同的调用, 内容为你配置的文本(设置卡片里保存配置会通过常规设置 API 写入 `~/.dsh/settings.yaml` 的 `auto-continue` 段落, 与任何其他设置一样)
-- 不使用任何浏览器存储: 宿主侧单实例引擎的冷却、发送上限、暂停与统计全部保存在进程内存里
-- 浏览器通知是可选开启的(`notify` 设置), 仅在首次使用时请求一次权限
-
----
+- 引擎运行在 DSH 宿主中，通过 DSH 的服务读取会话事件和历史。不连接任何第三方服务，也不保存凭据。
+- 继续消息通过 `agent.followup` 发送；循环守卫可能先调用 `agent.cancel`。续跑的代理沿用会话已有的工具和权限。
+- 断网检测读取本机网卡信息，并对 `api.deepseek.com`、`www.baidu.com` 和 `one.one.one.one` 做 DNS 解析。不建立连接，也不发送请求。
+- 设置通过 DSH 的设置 API 保存到当前 profile(旧版宿主为 `~/.dsh/settings.yaml`)。重试计数、冷却、1 小时暂停和统计只保存在内存中。
+- 浏览器通知需要手动开启。只有在你开启并保存时才会请求权限。
 
 ## 开发
 
+需要 Node.js 22。
+
 ```bash
-npm run typecheck   # tsc --noEmit
-npm run build       # lib/client.js + lib/index.js + lib/types
-npm run watch       # 监听变更自动重建; 宿主 HMR 免刷新热重载
-npm run test        # node tests/simulate-host.mjs — 15 个 host 侧行为场景
+npm ci
+npm run typecheck
+npm run build
+npm test
 ```
 
-`npm run watch` 运行时, profile 的 client-hmr 行每 500ms 轮询 `lib/client.js` 并在浏览器中热重载插件——改代码无需重启服务。
+`npm run test:runtime` 会用已发布的 DSH 包运行设置、启动恢复和重启测试。先安装锁定版本的测试环境：
 
-CI 会按锁文件安装依赖, 执行类型检查、重新构建并核对已提交产物, 跑 host 与双模块布局 client 模拟测试, 最后运行 [dsh-plugin-check](https://github.com/omdsh-dev/dsh-plugin-check); 发布也受同一体检门禁约束。
+```bash
+for v in 0.1.7 0.2.0 0.2.0-rc.2 0.2.1 0.2.1-rc.2; do npm ci --prefix "tests/fixtures/dsh-$v"; done
+npm run test:runtime
+```
 
----
+运行时测试驱动真实的 DSH 服务，模型适配器是确定性的，不会向模型服务商发请求。CI 还会检查提交的 `lib/` 与重新构建的结果一致，并运行 [dsh-plugin-check](https://github.com/omdsh-dev/dsh-plugin-check)。
 
-## 活跃度
-
-[![HsiangNianian/dsh-auto-continue GitStock K-Line Chart](https://gitstock.org/HsiangNianian/dsh-auto-continue/stock.svg)](https://gitstock.org/HsiangNianian/dsh-auto-continue)
-
----
+横幅和社交预览图由 `npm run docs:assets` 生成，流程图是 [Archify](https://github.com/tt-a1i/archify) 导出的(`docs/auto-continue-workflow.*`，源文件为 `*.archify.json`)(PNG 用 `rsvg-convert -w 1280 -h 640 docs/social-preview.svg -o docs/social-preview.png` 渲染)。截图的采集方法见 [docs/screenshots/README.md](docs/screenshots/README.md)。
 
 ## 链接
 
-- **仓库**: [github.com/HsiangNianian/dsh-auto-continue](https://github.com/HsiangNianian/dsh-auto-continue)
-- **LINUX DO**: [linux.do](https://linux.do)
-- **DeepSeek Harness**: [github.com/deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)
-- **dsh-plugin-check**: [github.com/omdsh-dev/dsh-plugin-check](https://github.com/omdsh-dev/dsh-plugin-check) — 给自己的 DSH 插件仓库做健康体检
+- 仓库：[github.com/HsiangNianian/dsh-auto-continue](https://github.com/HsiangNianian/dsh-auto-continue)
+- npm：[dsh-client-auto-continue](https://www.npmjs.com/package/dsh-client-auto-continue)
+- DeepSeek Harness：[github.com/deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)
+- dsh-plugin-check：[github.com/omdsh-dev/dsh-plugin-check](https://github.com/omdsh-dev/dsh-plugin-check)
+- LINUX DO：[linux.do](https://linux.do)
 
----
+[![HsiangNianian/dsh-auto-continue 的 GitStock 图表](https://gitstock.org/HsiangNianian/dsh-auto-continue/stock.svg)](https://gitstock.org/HsiangNianian/dsh-auto-continue)
 
-## License
+## 许可证
 
-[![MIT](https://img.shields.io/badge/license-MIT-65a30d)](LICENSE)
-
-MIT © Hsiang Nianian
+[MIT](LICENSE) © Hsiang Nianian

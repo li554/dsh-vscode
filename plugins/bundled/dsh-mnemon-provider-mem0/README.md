@@ -6,7 +6,7 @@ Configure the deployment mode and user/Agent scope. Extraction may complete asyn
 
 ## Use
 
-The default `dsh-mnemon` Starter already installs this package. Enable and configure the service in **Settings → Memory System**, then inspect its synchronized Memory Spaces.
+The default `dsh-mnemon` Starter already installs this package. Enable and configure the service on the `dsh-mnemon` page under **Plugins**, then inspect its synchronized Memory Spaces.
 
 For a custom composition, install this package alongside `dsh-mnemon-source-memory-spaces` and include it in that Source's `config.providers`:
 

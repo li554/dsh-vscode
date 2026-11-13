@@ -3,7 +3,9 @@ import { EdgeType, HttpMemoryProvider, HttpProviderOptions, Insight, JsonValue, 
 //#region src/driver.d.ts
 declare class HindsightProvider extends HttpMemoryProvider implements MemoryProviderAdapter {
   readonly id: "hindsight";
-  readonly scoreSemantics: import("dsh-mnemon-source-memory-spaces/provider-sdk").ProviderScoreSemantics;
+  readonly scoreSemantics: Readonly<{
+    kind: "provider-native";
+  }>;
   constructor(memorySpaces: MemorySpaceAuthority, options?: HttpProviderOptions);
   discover(connection: Record<string, string | number | boolean>, signal?: AbortSignal): Promise<ProviderMemorySpace[]>;
   status(body: MemoryBody, signal?: AbortSignal): Promise<ProviderBodyStatus>;

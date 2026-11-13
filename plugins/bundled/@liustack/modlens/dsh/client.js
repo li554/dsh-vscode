@@ -122,7 +122,9 @@ window.__ModuleLoader__.load({
     // vision model (keeps its thumbnail) and a text-only one (keeps only its
     // old error message, once). A 404 means the route is off (pasteToPath:
     // false, or no host half), so the client stands down entirely instead of
-    // swallowing pastes into a dead endpoint.
+    // swallowing pastes into a dead endpoint. A 403 means the route refuses
+    // this page's origin (non-loopback Host, or cross-site), which is just as
+    // permanent for this page, so it stands down the same way.
     var routeAvailable = true
     var verdicts = {}
     // A verdict older than this is UNKNOWN again, even while a refresh is in
@@ -144,7 +146,7 @@ window.__ModuleLoader__.load({
       verdicts[label] = entry
       fetch(`/modlens/paste?model=${encodeURIComponent(label)}`)
         .then((res) => {
-          if (res.status === 404) {
+          if (res.status === 404 || res.status === 403) {
             routeAvailable = false
             entry.pending = false
             return null
@@ -186,28 +188,33 @@ window.__ModuleLoader__.load({
       // with it the host-side image admission a text-only model fails).
       event.preventDefault()
       event.stopImmediatePropagation()
-      Promise.all(files.map(uploadOne))
-        .then((results) => {
-          var text = results
-            .map((r) => r.path)
-            .filter(Boolean)
-            .join(' ')
-          if (!text) return
-          if (!insertText(target, `${text} `)) {
-            console.error(`[modlens] paste-to-path: could not insert into the composer (${text})`)
+      // Settle each upload on its own: the paste is already taken, so one
+      // failed image must not take the ones that landed down with it (#111).
+      Promise.allSettled(files.map(uploadOne)).then((outcomes) => {
+        var paths = []
+        outcomes.forEach((outcome) => {
+          if (outcome.status === 'fulfilled') {
+            if (outcome.value.path) paths.push(outcome.value.path)
+            return
           }
-        })
-        .catch((error) => {
+          var error = outcome.reason
           // A 404 here means the route vanished AFTER a verdict confirmed it
-          // (plugin disposed mid-session): that race can cost this one paste
-          // — preventDefault already ran — but never another. Stand down and
+          // (plugin disposed mid-session), and a 403 that it refuses this
+          // page's origin: either way that race can cost this one paste —
+          // preventDefault already ran — but never another. Stand down and
           // forget every verdict, so the next paste goes native immediately.
-          if (error && error.status === 404) {
+          if (error && (error.status === 404 || error.status === 403)) {
             routeAvailable = false
             verdicts = {}
           }
           console.error(`[modlens] paste-to-path failed: ${error?.message ? error.message : error}`)
         })
+        var text = paths.join(' ')
+        if (!text) return
+        if (!insertText(target, `${text} `)) {
+          console.error(`[modlens] paste-to-path: could not insert into the composer (${text})`)
+        }
+      })
     }
 
     // The settings card (issue #39). dsh renders a fixed set of plugin cards
@@ -255,6 +262,7 @@ window.__ModuleLoader__.load({
         autoHint: 'Reuse the vision engines already on this machine.',
         notLoggedIn: 'found, not signed in',
         loadFailed: 'load failed',
+        retry: 'Retry',
         saveFailed: 'save failed',
         envSourced:
           'These come from environment variables. Saving copies them into the config file, which then becomes this engine’s only source.',
@@ -291,6 +299,7 @@ window.__ModuleLoader__.load({
         autoHint: '自动复用本机已有视觉引擎。',
         notLoggedIn: '已找到，未登录',
         loadFailed: '加载失败',
+        retry: '重试',
         saveFailed: '保存失败',
         envSourced: '这些值来自环境变量。保存会把它们写进配置文件，此后该引擎只认配置文件。',
       },
@@ -454,11 +463,6 @@ window.__ModuleLoader__.load({
     function ConfigCard(react, ui, localeRef) {
       var h = react.createElement
       var Input = ui.Input
-      // Each load claims a generation. Collapsing before the config arrives
-      // invalidates that load because reopening starts a fresh one. Once the
-      // form exists, its in-flight discovery stays relevant across collapse.
-      // The counter survives renders because ConfigCard is built once.
-      var gen = 0
 
       // Built once per card so useSyncExternalStore is not handed a new
       // subscribe on every render, which would resubscribe every render.
@@ -499,7 +503,7 @@ window.__ModuleLoader__.load({
           }),
         )
 
-      return function ModlensCard() {
+      return function ModlensCard(props) {
         // Subscribed, not sampled: the language is a live setting, and a card
         // sitting open while the user switches has to follow. getSnapshot and
         // subscribe are the pair dsh documents as useSyncExternalStore-safe.
@@ -512,11 +516,21 @@ window.__ModuleLoader__.load({
             ? react.useSyncExternalStore(subscribeLocale, readLocale)
             : readLocale(),
         )
+        // The 0.1.7 Plugins page draws the title and the crumb itself and
+        // passes view: 'page', so there the card is only its form, open from
+        // the start (#113). The Settings card before 0.1.7 keeps its header.
+        var page = props.view === 'page'
         var openState = react.useState(false)
         var summaryState = react.useState(null)
         var draftState = react.useState(null)
         var noteState = react.useState('')
-        var open = openState[0]
+        // Each load claims a generation. Collapsing before the config arrives
+        // invalidates that load because reopening starts a fresh one. Once the
+        // form exists, its in-flight discovery stays relevant across collapse.
+        // The counter belongs to this mounted card: one built card serves two
+        // slots, and a shared counter let one mount void the other's load.
+        var gen = react.useRef(0)
+        var open = page || openState[0]
         var summary = summaryState[0]
         var draft = draftState[0]
         var note = noteState[0]
@@ -527,7 +541,7 @@ window.__ModuleLoader__.load({
           // Config first, so the engine form can render. Discovery is the
           // self-check probing which local harnesses exist to be borrowed,
           // paid after the form is up, cached host-side.
-          var id = ++gen
+          var id = ++gen.current
           fetch('/modlens/config')
             .then((r) =>
               r.json().then((body) => {
@@ -536,7 +550,7 @@ window.__ModuleLoader__.load({
               }),
             )
             .then((next) => {
-              if (id !== gen) return
+              if (id !== gen.current) return
               summaryState[1](next)
               draftState[1](seed(next, next.provider))
               noteState[1]('')
@@ -548,7 +562,7 @@ window.__ModuleLoader__.load({
                   }),
                 )
                 .then((discovered) => {
-                  if (id !== gen) return
+                  if (id !== gen.current) return
                   summaryState[1]((prev) => {
                     if (!prev) return prev
                     var merged = Object.assign({}, prev)
@@ -557,7 +571,7 @@ window.__ModuleLoader__.load({
                   })
                 })
                 .catch(() => {
-                  if (id !== gen) return
+                  if (id !== gen.current) return
                   summaryState[1]((prev) => {
                     if (!prev) return prev
                     var merged = Object.assign({}, prev)
@@ -567,7 +581,7 @@ window.__ModuleLoader__.load({
                 })
             })
             .catch((error) => {
-              if (id !== gen) return
+              if (id !== gen.current) return
               noteState[1](noteFrom(error, t.loadFailed))
             })
         }, [])
@@ -612,6 +626,36 @@ window.__ModuleLoader__.load({
                 },
               },
               note || t.loading,
+              // A failed load needs a way back that is not collapse-and-expand:
+              // the Plugins page has no header to collapse. The gap is a plain
+              // space, so a long error that wraps the control onto its own line
+              // does not leave it indented.
+              note ? ' ' : null,
+              note
+                ? h(
+                    'button',
+                    {
+                      type: 'button',
+                      onClick: () => {
+                        noteState[1]('')
+                        load()
+                      },
+                      style: {
+                        appearance: 'none',
+                        font: 'inherit',
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                        border: 0,
+                        padding: 0,
+                        background: 'none',
+                        color: 'var(--dsw-alias-label-secondary, inherit)',
+                        textDecoration: 'underline',
+                        textUnderlineOffset: '2px',
+                      },
+                    },
+                    t.retry,
+                  )
+                : null,
             )
           } else {
             var keyless = (summary.keyless || []).indexOf(draft.provider) >= 0
@@ -1000,6 +1044,8 @@ window.__ModuleLoader__.load({
           }
         }
 
+        if (page) return h('div', null, body)
+
         return h(
           'div',
           {
@@ -1018,7 +1064,7 @@ window.__ModuleLoader__.load({
               type: 'button',
               'aria-expanded': open,
               onClick: () => {
-                if (open && summary === null) gen += 1
+                if (open && summary === null) gen.current += 1
                 openState[1](!open)
               },
               style: {
@@ -1091,10 +1137,12 @@ window.__ModuleLoader__.load({
         // off (settingsCard: false, or no web profile) a card would only
         // render an error, which is not what turning a feature off means.
         // Any response at all proves the route exists; only a 404 or a
-        // network failure reads as absent.
+        // network failure reads as absent. A 403 is the route's same-origin
+        // loopback fence turning this page away, which is just as permanent,
+        // so the card stays away there too.
         fetch('/modlens/config')
           .then((response) => {
-            if (response.status === 404) return
+            if (response.status === 404 || response.status === 403) return
             try {
               mountCard(scope, localeRef)
             } catch (error) {
@@ -1117,6 +1165,13 @@ window.__ModuleLoader__.load({
       var Card = ConfigCard(react, ui, localeRef)
       ctx.slots.inject('settings.plugin.item', function* () {
         yield ctx.slots.register({ name: 'settings.plugin.item', id: 'modlens', key: 'modlens', order: 30 }, Card)
+      })
+      // dsh 0.1.7 moved plugin configuration to the Plugins page, which shows
+      // a bundle's form from plugins.bundle.config keyed by its package name
+      // (#113). slots.inject waits for a slot to be declared, so each host
+      // mounts the card in the one place its settings UI declares.
+      ctx.slots.inject('plugins.bundle.config', function* () {
+        yield ctx.slots.register({ name: 'plugins.bundle.config', key: '@liustack/modlens' }, Card)
       })
     }
 

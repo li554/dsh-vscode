@@ -1,0 +1,21 @@
+import type { JSX } from 'react';
+import { type MemorySpaceMetadataUpdate, type MemorySpaceView } from '../contracts.ts';
+import type { MemorySpacesPageClient } from './api.ts';
+export declare function OverviewPage(props: {
+    client: MemorySpacesPageClient;
+    active?: boolean;
+    metadataClient: MemorySpacesPageClient;
+    revision: number;
+    reloadKey?: number;
+    activationEnabled: boolean;
+    writeEnabled: boolean;
+    agentAvailable: boolean;
+    fallbackBodies: MemorySpaceView[];
+    fallbackDirectory: string | undefined;
+    catalogKnown: boolean;
+    onMutate: () => void;
+    onAgentRefresh: () => void;
+    onBodyReconnect: (body: MemorySpaceView) => void;
+    onBodyMetadata: (updates: readonly MemorySpaceMetadataUpdate[]) => void;
+    onExplore: (query: string) => void;
+}): JSX.Element;

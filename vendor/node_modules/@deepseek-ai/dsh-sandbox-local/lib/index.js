@@ -5,8 +5,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { LAUNCHER_BIN, LAUNCHER_FAILURE_EXIT, grantArgs, launcherPath, probe } from "@deepseek-ai/node-addon-system/landlock-run";
 import z from "@deepseek-ai/schemastery";
-import { SandboxProvider, SandboxUnavailableError, writableRoots } from "@deepseek-ai/dsh-sandbox";
-import { AclWriteGrant, assertTempRootOutsideWorkspace, tempWriteSid, workspaceWriteSid } from "@deepseek-ai/dsh-sandbox-windows-acl";
+import { SandboxPreparationError, SandboxProvider, SandboxUnavailableError, canonicalPath, workspaceWritableRoots, writableRoots } from "@deepseek-ai/dsh-sandbox";
+import { AclWriteGrant, isTempRootInsideWorkspace, registerAclDiagnosisSkill, tempWriteSid, workspaceWriteSid } from "@deepseek-ai/dsh-sandbox-windows-acl";
 import { assertNever } from "@deepseek-ai/dsh-util-values";
 //#region lib/types/profiles.js
 /**
@@ -33,7 +33,7 @@ function bwrapProfileArgs(policy) {
 	];
 	if (policy.mode === "workspace-write") {
 		args.push("--tmpfs", "/tmp");
-		args.push("--bind", policy.workspaceRoot, policy.workspaceRoot);
+		for (const root of workspaceWritableRoots(policy)) args.push("--bind", root, root);
 	}
 	return args;
 }
@@ -44,7 +44,7 @@ function bwrapProfileArgs(policy) {
 */
 function landlockProfileArgs(policy) {
 	const readWrite = ["/dev/null"];
-	if (policy.mode === "workspace-write") readWrite.push("/tmp", policy.workspaceRoot);
+	if (policy.mode === "workspace-write") readWrite.push("/tmp", ...workspaceWritableRoots(policy));
 	return grantArgs({
 		readOnly: ["/"],
 		readWrite
@@ -56,9 +56,11 @@ function sbplString(path) {
 }
 /**
 * Build the sandbox-exec arguments and SBPL profile for one policy. The
-* writable roots come from the shared {@link writableRoots} helper (canonical,
-* deduplicated) so the Seatbelt grant and the in-process fs fence
-* (`@deepseek-ai/dsh-fs-sandbox`) can never drift apart.
+* workspace-owned writable roots (workspace plus explicit extra directories)
+* come from the shared {@link writableRoots} helper (canonical, deduplicated)
+* so the Seatbelt grant and the in-process fs fence
+* (`@deepseek-ai/dsh-fs-sandbox`) can never drift apart; the helper adds the
+* documented Seatbelt temp areas.
 * @param policy - file-effect policy to express as an SBPL profile.
 * @returns sandbox-exec arguments before the trailing separator and command argv.
 */
@@ -92,10 +94,23 @@ function seatbeltProfileArgs(policy) {
 * session); the private-temp ACEs are revoked on dispose. The runner
 * receives both SIDs (their presence marks the seam-managed contract) and
 * stops managing DACLs itself. The rung reports partial enforcement because
-* WRITE_RESTRICTED must retain Everyone in its
-* restricting list and NTFS hard links alias one file object across paths.
+* NTFS hard links alias one file object across paths, reads stay unconfined,
+* and a tree another AppContainer tool has ACL'd with a package SID is not
+* readable by the Low-integrity child.
 * @module @deepseek-ai/dsh-sandbox-local
 */
+/**
+* Classify one failed Windows ACL preparation step; the platform failure, or an
+* `AggregateError` of it and its cleanup failures, becomes the `cause`.
+* @param step - the preparation step, as the message names it.
+* @param error - the step's own failure, typically a `Win32Error` or Node errno error.
+* @param cleanupFailures - rollback failures that followed it.
+* @returns the coded preparation failure.
+*/
+function aclPreparationFailure(step, error, cleanupFailures = []) {
+	const failed = cleanupFailures.length === 0 ? `${step} failed` : `${step} failed and its cleanup also failed`;
+	return new SandboxPreparationError(`sandbox-local: windows-acl ${failed}: ${String(error)}. The command did not run; check that the current user can change permissions on the workspace and temp directories, or run with danger-full-access.`, "SANDBOX_PREPARATION_FAILED", { cause: cleanupFailures.length === 0 ? error : new AggregateError([error, ...cleanupFailures], `sandbox-local windows-acl ${failed}`) });
+}
 /** Probe whether `bwrap` can create the profile; the provider caches the bounded result. */
 function defaultProbeBwrap(timeoutMs) {
 	return spawnSync("bwrap", [
@@ -158,6 +173,11 @@ function defaultProbeWindowsAcl(runnerInvocation, timeoutMs) {
 	], {
 		timeout: timeoutMs,
 		stdio: "ignore",
+		// LOCAL PATCH for dsh-vscode. This one-time windows-acl capability probe
+		// spawns the confinement runner around `cmd /c exit 0`; without windowsHide
+		// Windows gives that runner a console, so the first host start can flash a
+		// terminal window exactly like the per-command spawns did. Same omission,
+		// same fix: ignored off Windows.
 		windowsHide: true
 	}).status === 0;
 }
@@ -210,7 +230,8 @@ const DENIAL_SIGNATURES = {
 	"windows-acl": [
 		"access is denied",
 		"access to the path",
-		"permission denied"
+		"permission denied",
+		"operation not permitted"
 	],
 	runnerCommand: ["read-only file system", "permission denied"]
 };
@@ -281,6 +302,10 @@ var LocalSandboxProvider = class extends SandboxProvider {
 		this.configuredRunnerFailureSignatures = runnerFailureSignatures;
 		this.probeTimeoutMs = config.probeTimeoutMs;
 		assertPositiveFinite("probeTimeoutMs", this.probeTimeoutMs);
+		/* v8 ignore next 3 -- Windows-only registration; the Linux coverage lane cannot take this branch */
+		if (process.platform === "win32" && this.runnerCommand === void 0) ctx.inject(["skills"], (skillsCtx) => {
+			registerAclDiagnosisSkill(skillsCtx);
+		});
 		ctx.effect(() => () => {
 			this.revokeAclGrants();
 		});
@@ -292,12 +317,18 @@ var LocalSandboxProvider = class extends SandboxProvider {
 	*
 	* @param argv - the exact argv the caller is about to spawn.
 	* @param policy - the file-effect policy this execution runs under.
+	* @param signal - cancellation before policy resolution or grant creation.
 	* @returns the wrapped argv plus the selected backend's enforcement completeness, denial
 	*   signatures, and structured runner-failure rules; throws the fail-closed
 	*   `SANDBOX_UNAVAILABLE` error when the platform has no usable runner.
 	*/
-	confine(argv, policy) {
-		if (this.runnerCommand !== void 0) return {
+	async confine(argv, policy, signal) {
+		signal?.throwIfAborted();
+		policy = {
+			...policy,
+			workspaceRoot: canonicalPath(policy.workspaceRoot)
+		};
+		if (this.runnerCommand !== void 0) return Promise.resolve({
 			argv: [
 				...this.runnerCommand,
 				...bwrapProfileArgs(policy),
@@ -307,18 +338,19 @@ var LocalSandboxProvider = class extends SandboxProvider {
 			enforcement: "full",
 			denialSignatures: DENIAL_SIGNATURES.runnerCommand,
 			runnerFailureRules: [{ fatalSignatures: this.configuredRunnerFailureSignatures }]
-		};
+		});
 		const selected = this.selectRunner(policy.mode);
-		return {
+		const runnerArgv = this.runnerArgv(selected.runner, policy);
+		return Promise.resolve({
 			argv: [
-				...this.runnerArgv(selected.runner, policy),
+				...runnerArgv,
 				"--",
 				...argv
 			],
 			enforcement: selected.enforcement,
 			denialSignatures: DENIAL_SIGNATURES[selected.runner],
 			runnerFailureRules: RUNNER_FAILURE_RULES[selected.runner]
-		};
+		});
 	}
 	/** The selected rung's runner invocation (program + profile arguments) for one policy. */
 	runnerArgv(runner, policy) {
@@ -339,6 +371,8 @@ var LocalSandboxProvider = class extends SandboxProvider {
 	* `--temp-write-sid` and grants nothing itself. Agentless workspace-write
 	* calls pass the ambient temp ROOT and no SID flags: the runner creates and
 	* removes a random private child directory for that one invocation.
+	* Additional directory grants apply only to harness filesystem operations
+	* on Windows; process confinement keeps the workspace and private temp grants.
 	* @param policy - the resolved per-call policy.
 	* @returns the runner invocation.
 	*/
@@ -376,32 +410,51 @@ var LocalSandboxProvider = class extends SandboxProvider {
 	* SID to enter it. A fresh provider always chooses a new path; crash
 	* residue therefore cannot collide with or authorize a resumed session.
 	* Fail-closed: a half-materialized temp grant is revoked and its directory
-	* removed before the error propagates.
+	* removed before the error propagates. A temp root inside the workspace
+	* throws `SandboxPreparationError` `SANDBOX_INVALID_TEMP_ROOT` before any ACL
+	* change; any other failure throws `SANDBOX_PREPARATION_FAILED` with the
+	* platform error as `cause`.
 	* @param sessionId - the policy's calling-session identity.
 	* @param workspaceRoot - the resolved policy root.
 	* @returns the pair's private temp directory and write capability.
 	*/
 	materializeAclGrant(sessionId, workspaceRoot) {
-		assertTempRootOutsideWorkspace(workspaceRoot, tmpdir());
+		let tempInsideWorkspace;
+		try {
+			tempInsideWorkspace = isTempRootInsideWorkspace(workspaceRoot, tmpdir());
+		} catch (error) {
+			throw aclPreparationFailure("workspace and temp directory resolution", error);
+		}
+		if (tempInsideWorkspace) throw new SandboxPreparationError(`sandbox-local: windows-acl temp root must be outside the workspace: workspace=${workspaceRoot}; temp=${tmpdir()}. A private temp directory there would inherit the workspace grant, so the command did not run. Set TEMP and TMP to a directory outside the workspace, or open a workspace that does not contain the temp directory.`, "SANDBOX_INVALID_TEMP_ROOT");
 		const writeSid = workspaceWriteSid(workspaceRoot);
 		if (!this.workspaceGrants.has(workspaceRoot)) {
-			const grant = AclWriteGrant.create(writeSid);
+			let grant;
+			try {
+				grant = AclWriteGrant.create(writeSid);
+			} catch (error) {
+				throw aclPreparationFailure("workspace grant", error);
+			}
 			try {
 				grant.add(workspaceRoot, true);
 			} catch (error) {
 				try {
 					grant.dispose();
 				} catch (cleanupError) {
-					throw new AggregateError([error, cleanupError], "sandbox-local windows-acl workspace grant failed and its cleanup also failed");
+					throw aclPreparationFailure("workspace grant", error, [cleanupError]);
 				}
-				throw error;
+				throw aclPreparationFailure("workspace grant", error);
 			}
 			this.workspaceGrants.set(workspaceRoot, grant);
 		}
 		const key = JSON.stringify([String(sessionId), workspaceRoot]);
 		const existing = this.tempCapabilities.get(key);
 		if (existing !== void 0) return existing;
-		const tempDir = mkdtempSync(join(tmpdir(), "dsh-"));
+		let tempDir;
+		try {
+			tempDir = mkdtempSync(join(tmpdir(), "dsh-"));
+		} catch (error) {
+			throw aclPreparationFailure("private temp directory creation", error);
+		}
 		const tempSid = tempWriteSid(tempDir);
 		let grant;
 		try {
@@ -419,8 +472,7 @@ var LocalSandboxProvider = class extends SandboxProvider {
 			} catch (cleanupError) {
 				cleanupFailures.push(cleanupError);
 			}
-			if (cleanupFailures.length > 0) throw new AggregateError([error, ...cleanupFailures], "sandbox-local windows-acl temp grant materialization failed and its cleanup also failed");
-			throw error;
+			throw aclPreparationFailure("temp grant materialization", error, cleanupFailures);
 		}
 		const capability = {
 			dir: tempDir,
@@ -519,6 +571,8 @@ var LocalSandboxProvider = class extends SandboxProvider {
 	/**
 	* The windows-acl runner argv prefix: the built lib/runner.js entry when
 	* present (production), else the package source through tsx (development).
+	* Pin the source loader and TypeScript paths to this installation, independently
+	* of target cwd or environment overrides.
 	* The prefix stays `[node, runner, ...]` — a future native-exe runner keeps
 	* the same argv contract and only swaps these entries.
 	*/
@@ -528,10 +582,12 @@ var LocalSandboxProvider = class extends SandboxProvider {
 		const builtEntry = this.internals.windowsAclRunnerEntry ?? fileURLToPath(import.meta.resolve("@deepseek-ai/dsh-sandbox-windows-acl/runner"));
 		if (existsSync(builtEntry)) return [process.execPath, builtEntry];
 		const sourceEntry = fileURLToPath(import.meta.resolve("@deepseek-ai/dsh-sandbox-windows-acl/src/runner.ts"));
+		const sourceConfig = fileURLToPath(new URL("../../../../tsconfig.base.json", import.meta.url));
+		const registration = `import { register } from ${JSON.stringify(import.meta.resolve("tsx/esm/api"))}; register({ tsconfig: ${JSON.stringify(sourceConfig)} });`;
 		return [
 			process.execPath,
 			"--import",
-			"tsx/esm",
+			`data:text/javascript,${encodeURIComponent(registration)}`,
 			sourceEntry
 		];
 	}

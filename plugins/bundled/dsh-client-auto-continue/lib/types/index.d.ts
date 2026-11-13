@@ -1,8 +1,9 @@
 /**
  * Host half of the auto-continue plugin.
  *
- * - Registers the `auto-continue` settings namespace (the browser half's
- *   settings card edits it; the host engine reads it).
+ * - Configuration is this entry's own Loader config: `apply(ctx, config)`
+ *   injects it into the engine, where `resolveConfig` merges it with the
+ *   schema defaults (the browser half's settings card writes the same values).
  * - Runs the single-instance auto-continue engine: listens to the session
  *   event firehose, sends via `agent.followup`, cancels via `agent.cancel`.
  * - Serves a status bridge the browser half subscribes to: notifications and
@@ -11,16 +12,31 @@
  */
 import type { Context } from '@deepseek-ai/cordis';
 import z from '@deepseek-ai/schemastery';
+import { type EntrySettings, type LiveEntrySettings } from './host/settings-migration.ts';
+import { type AutoContinueSettings } from './shared/core.ts';
 /** Settings namespace of the auto-continue plugin (lowercase kebab-case). */
 export declare const AUTO_CONTINUE_NS = "auto-continue";
-/** Wire schema; blank localized text fields tell resolveConfig() to select the active locale's defaults. */
 export declare const AutoContinueSchema: z<Schemastery.ObjectS<{
     /** Active browser/UI locale mirrored by the client. */
     locale: z<string, string>;
+    /** Send continue messages with the plugin source instead of the legacy user source. */
+    usePluginSource: z<boolean, boolean>;
     /** Text automatically sent after an interruption. */
     continueText: z<string, string>;
     /** Text sent when the output token ceiling is reached (same placeholders as `continueText`). */
     continueTextMaxTokens: z<string, string>;
+    /** Resume observed model activity that completes without visible output. */
+    resumeSilentTurns: z<boolean, boolean>;
+    /** Resume interrupted subagent sessions when their main conversation has auto-continue enabled. Subagents never enter the autonomous loop. */
+    resumeSubagentSessions: z<boolean, boolean>;
+    /** Autonomous mode: hand the thread back to the agent after every completed turn, looping until the user stops it. The consecutive-failure cap only throttles failures, never successful completions. */
+    resumeCompletedTurns: z<boolean, boolean>;
+    /** Text sent to resume a silent turn (same placeholders as `continueText`). */
+    continueTextSilent: z<string, string>;
+    /** Text sent for each autonomous-loop continuation (same placeholders as `continueText`). */
+    continueTextLoop: z<string, string>;
+    /** Text sent when a turn is recovered after a harness restart closed it as interrupted. */
+    continueTextInterrupted: z<string, string>;
     /** Idempotency guard: inspect the last tool call before resuming and steer the model. */
     guardTools: z<boolean, boolean>;
     /** Guard text appended when the last tool call has no confirmed result (it may have partially executed). */
@@ -33,11 +49,11 @@ export declare const AutoContinueSchema: z<Schemastery.ObjectS<{
     cooldownMs: z<number, number>;
     /** Max consecutive auto-continues per session before stopping. */
     maxConsecutive: z<number, number>;
-    /** Scan recently interrupted sessions on page load / reconnect. */
+    /** Recover delayed interrupted sessions during the host startup window. */
     scanOnBoot: z<boolean, boolean>;
-    /** Max sessions the scan checks (most recently updated). */
+    /** Max eligible recoveries per scan pass (most recently active first). */
     scanLimit: z<number, number>;
-    /** Scan only considers interruptions inside this window (ms). */
+    /** Interruption freshness and duration of startup polling (ms). */
     freshMs: z<number, number>;
     /** Log `[auto-continue]` lines to the browser console. */
     verbose: z<boolean, boolean>;
@@ -53,6 +69,10 @@ export declare const AutoContinueSchema: z<Schemastery.ObjectS<{
     notify: z<boolean, boolean>;
     /** Globally pause auto-continue: no live or scan send. */
     paused: z<boolean, boolean>;
+    /** Persist choices by session, including an explicit return to the profile default. */
+    sessionModes: z<import("@deepseek-ai/cosmokit").Dict<"default" | "off" | "recover" | "loop", string>, import("@deepseek-ai/cosmokit").Dict<"default" | "off" | "recover" | "loop", string>>;
+    /** Show the session mode selector in the conversation composer. */
+    showComposerToggle: z<boolean, boolean>;
     /** Loop guard: detect a running turn spinning in place and restart it. */
     loopGuard: z<boolean, boolean>;
     /** A model message shorter than this many chars counts as a short sentence (loop signal). */
@@ -67,13 +87,39 @@ export declare const AutoContinueSchema: z<Schemastery.ObjectS<{
     loopToolRepeat: z<number, number>;
     /** Text sent after the loop guard cancels and restarts a turn (supports {tool}). */
     loopText: z<string, string>;
+    /** Recover child (subagent / Agent Teams) sessions a restart interrupted by waking their root session once. */
+    resumeInterruptedChildren: z<boolean, boolean>;
+    /** Re-arm a goal a restart left `active` but `disarmed`, when its own session is resumed. */
+    resumeGoals: z<boolean, boolean>;
+    /** Also resume goals the user explicitly paused. Off by default: pausing is a human decision. */
+    resumePausedGoals: z<boolean, boolean>;
+    /** Hold network-error recoveries while the host is offline; waiting does not consume the retry budget. */
+    pauseWhenOffline: z<boolean, boolean>;
+    /** How often (ms) a held recovery re-checks connectivity. */
+    offlineCheckMs: z<number, number>;
+    /** Autonomous-loop round cap per session; 0 means unlimited. */
+    loopMaxIterations: z<number, number>;
 }>, Schemastery.ObjectT<{
     /** Active browser/UI locale mirrored by the client. */
     locale: z<string, string>;
+    /** Send continue messages with the plugin source instead of the legacy user source. */
+    usePluginSource: z<boolean, boolean>;
     /** Text automatically sent after an interruption. */
     continueText: z<string, string>;
     /** Text sent when the output token ceiling is reached (same placeholders as `continueText`). */
     continueTextMaxTokens: z<string, string>;
+    /** Resume observed model activity that completes without visible output. */
+    resumeSilentTurns: z<boolean, boolean>;
+    /** Resume interrupted subagent sessions when their main conversation has auto-continue enabled. Subagents never enter the autonomous loop. */
+    resumeSubagentSessions: z<boolean, boolean>;
+    /** Autonomous mode: hand the thread back to the agent after every completed turn, looping until the user stops it. The consecutive-failure cap only throttles failures, never successful completions. */
+    resumeCompletedTurns: z<boolean, boolean>;
+    /** Text sent to resume a silent turn (same placeholders as `continueText`). */
+    continueTextSilent: z<string, string>;
+    /** Text sent for each autonomous-loop continuation (same placeholders as `continueText`). */
+    continueTextLoop: z<string, string>;
+    /** Text sent when a turn is recovered after a harness restart closed it as interrupted. */
+    continueTextInterrupted: z<string, string>;
     /** Idempotency guard: inspect the last tool call before resuming and steer the model. */
     guardTools: z<boolean, boolean>;
     /** Guard text appended when the last tool call has no confirmed result (it may have partially executed). */
@@ -86,11 +132,11 @@ export declare const AutoContinueSchema: z<Schemastery.ObjectS<{
     cooldownMs: z<number, number>;
     /** Max consecutive auto-continues per session before stopping. */
     maxConsecutive: z<number, number>;
-    /** Scan recently interrupted sessions on page load / reconnect. */
+    /** Recover delayed interrupted sessions during the host startup window. */
     scanOnBoot: z<boolean, boolean>;
-    /** Max sessions the scan checks (most recently updated). */
+    /** Max eligible recoveries per scan pass (most recently active first). */
     scanLimit: z<number, number>;
-    /** Scan only considers interruptions inside this window (ms). */
+    /** Interruption freshness and duration of startup polling (ms). */
     freshMs: z<number, number>;
     /** Log `[auto-continue]` lines to the browser console. */
     verbose: z<boolean, boolean>;
@@ -106,6 +152,10 @@ export declare const AutoContinueSchema: z<Schemastery.ObjectS<{
     notify: z<boolean, boolean>;
     /** Globally pause auto-continue: no live or scan send. */
     paused: z<boolean, boolean>;
+    /** Persist choices by session, including an explicit return to the profile default. */
+    sessionModes: z<import("@deepseek-ai/cosmokit").Dict<"default" | "off" | "recover" | "loop", string>, import("@deepseek-ai/cosmokit").Dict<"default" | "off" | "recover" | "loop", string>>;
+    /** Show the session mode selector in the conversation composer. */
+    showComposerToggle: z<boolean, boolean>;
     /** Loop guard: detect a running turn spinning in place and restart it. */
     loopGuard: z<boolean, boolean>;
     /** A model message shorter than this many chars counts as a short sentence (loop signal). */
@@ -120,10 +170,196 @@ export declare const AutoContinueSchema: z<Schemastery.ObjectS<{
     loopToolRepeat: z<number, number>;
     /** Text sent after the loop guard cancels and restarts a turn (supports {tool}). */
     loopText: z<string, string>;
+    /** Recover child (subagent / Agent Teams) sessions a restart interrupted by waking their root session once. */
+    resumeInterruptedChildren: z<boolean, boolean>;
+    /** Re-arm a goal a restart left `active` but `disarmed`, when its own session is resumed. */
+    resumeGoals: z<boolean, boolean>;
+    /** Also resume goals the user explicitly paused. Off by default: pausing is a human decision. */
+    resumePausedGoals: z<boolean, boolean>;
+    /** Hold network-error recoveries while the host is offline; waiting does not consume the retry budget. */
+    pauseWhenOffline: z<boolean, boolean>;
+    /** How often (ms) a held recovery re-checks connectivity. */
+    offlineCheckMs: z<number, number>;
+    /** Autonomous-loop round cap per session; 0 means unlimited. */
+    loopMaxIterations: z<number, number>;
 }>>;
+/** Loader config is a live reference on DSH 0.1.7, and a plain object on older hosts. */
+export type AutoContinueEntryConfig = EntrySettings | LiveEntrySettings;
+export declare const Config: z<Schemastery.ObjectS<{
+    /** Active browser/UI locale mirrored by the client. */
+    locale: z<string, string>;
+    /** Send continue messages with the plugin source instead of the legacy user source. */
+    usePluginSource: z<boolean, boolean>;
+    /** Text automatically sent after an interruption. */
+    continueText: z<string, string>;
+    /** Text sent when the output token ceiling is reached (same placeholders as `continueText`). */
+    continueTextMaxTokens: z<string, string>;
+    /** Resume observed model activity that completes without visible output. */
+    resumeSilentTurns: z<boolean, boolean>;
+    /** Resume interrupted subagent sessions when their main conversation has auto-continue enabled. Subagents never enter the autonomous loop. */
+    resumeSubagentSessions: z<boolean, boolean>;
+    /** Autonomous mode: hand the thread back to the agent after every completed turn, looping until the user stops it. The consecutive-failure cap only throttles failures, never successful completions. */
+    resumeCompletedTurns: z<boolean, boolean>;
+    /** Text sent to resume a silent turn (same placeholders as `continueText`). */
+    continueTextSilent: z<string, string>;
+    /** Text sent for each autonomous-loop continuation (same placeholders as `continueText`). */
+    continueTextLoop: z<string, string>;
+    /** Text sent when a turn is recovered after a harness restart closed it as interrupted. */
+    continueTextInterrupted: z<string, string>;
+    /** Idempotency guard: inspect the last tool call before resuming and steer the model. */
+    guardTools: z<boolean, boolean>;
+    /** Guard text appended when the last tool call has no confirmed result (it may have partially executed). */
+    guardPendingText: z<string, string>;
+    /** Guard text appended when the last tool call completed successfully (don't rerun it). */
+    guardDoneText: z<string, string>;
+    /** Grace period after an interruption before auto-sending (ms). */
+    graceMs: z<number, number>;
+    /** Minimum interval between two auto-continues per session (ms). */
+    cooldownMs: z<number, number>;
+    /** Max consecutive auto-continues per session before stopping. */
+    maxConsecutive: z<number, number>;
+    /** Recover delayed interrupted sessions during the host startup window. */
+    scanOnBoot: z<boolean, boolean>;
+    /** Max eligible recoveries per scan pass (most recently active first). */
+    scanLimit: z<number, number>;
+    /** Interruption freshness and duration of startup polling (ms). */
+    freshMs: z<number, number>;
+    /** Log `[auto-continue]` lines to the browser console. */
+    verbose: z<boolean, boolean>;
+    /** Classify failures: auto-continue transient errors only; permanent ones are skipped and notified. */
+    classify: z<boolean, boolean>;
+    /** Provider-specific message/code/status fragments that explicitly count as retryable, one literal per line. */
+    retryableErrorPatterns: z<string, string>;
+    /** Cooldown multiplier per consecutive failure (adaptive backoff). */
+    backoffFactor: z<number, number>;
+    /** Cap on the effective backoff interval (ms). */
+    backoffMaxMs: z<number, number>;
+    /** Show browser notifications for auto-continue events. */
+    notify: z<boolean, boolean>;
+    /** Globally pause auto-continue: no live or scan send. */
+    paused: z<boolean, boolean>;
+    /** Persist choices by session, including an explicit return to the profile default. */
+    sessionModes: z<import("@deepseek-ai/cosmokit").Dict<"default" | "off" | "recover" | "loop", string>, import("@deepseek-ai/cosmokit").Dict<"default" | "off" | "recover" | "loop", string>>;
+    /** Show the session mode selector in the conversation composer. */
+    showComposerToggle: z<boolean, boolean>;
+    /** Loop guard: detect a running turn spinning in place and restart it. */
+    loopGuard: z<boolean, boolean>;
+    /** A model message shorter than this many chars counts as a short sentence (loop signal). */
+    loopShortChars: z<number, number>;
+    /** Consecutive short sentences within this window (ms) with no tool call in between trip the loop guard. */
+    loopWindowMs: z<number, number>;
+    /** Consecutive short sentences trip the loop guard. */
+    loopShortCount: z<number, number>;
+    /** Consecutive identical assistant messages trip the loop guard (strongest signal; also used for streamed intra-message repetition). */
+    loopRepeatText: z<number, number>;
+    /** Consecutive identical tool calls with identical arguments AND results trip the loop guard. */
+    loopToolRepeat: z<number, number>;
+    /** Text sent after the loop guard cancels and restarts a turn (supports {tool}). */
+    loopText: z<string, string>;
+    /** Recover child (subagent / Agent Teams) sessions a restart interrupted by waking their root session once. */
+    resumeInterruptedChildren: z<boolean, boolean>;
+    /** Re-arm a goal a restart left `active` but `disarmed`, when its own session is resumed. */
+    resumeGoals: z<boolean, boolean>;
+    /** Also resume goals the user explicitly paused. Off by default: pausing is a human decision. */
+    resumePausedGoals: z<boolean, boolean>;
+    /** Hold network-error recoveries while the host is offline; waiting does not consume the retry budget. */
+    pauseWhenOffline: z<boolean, boolean>;
+    /** How often (ms) a held recovery re-checks connectivity. */
+    offlineCheckMs: z<number, number>;
+    /** Autonomous-loop round cap per session; 0 means unlimited. */
+    loopMaxIterations: z<number, number>;
+}>, Schemastery.ObjectT<{
+    /** Active browser/UI locale mirrored by the client. */
+    locale: z<string, string>;
+    /** Send continue messages with the plugin source instead of the legacy user source. */
+    usePluginSource: z<boolean, boolean>;
+    /** Text automatically sent after an interruption. */
+    continueText: z<string, string>;
+    /** Text sent when the output token ceiling is reached (same placeholders as `continueText`). */
+    continueTextMaxTokens: z<string, string>;
+    /** Resume observed model activity that completes without visible output. */
+    resumeSilentTurns: z<boolean, boolean>;
+    /** Resume interrupted subagent sessions when their main conversation has auto-continue enabled. Subagents never enter the autonomous loop. */
+    resumeSubagentSessions: z<boolean, boolean>;
+    /** Autonomous mode: hand the thread back to the agent after every completed turn, looping until the user stops it. The consecutive-failure cap only throttles failures, never successful completions. */
+    resumeCompletedTurns: z<boolean, boolean>;
+    /** Text sent to resume a silent turn (same placeholders as `continueText`). */
+    continueTextSilent: z<string, string>;
+    /** Text sent for each autonomous-loop continuation (same placeholders as `continueText`). */
+    continueTextLoop: z<string, string>;
+    /** Text sent when a turn is recovered after a harness restart closed it as interrupted. */
+    continueTextInterrupted: z<string, string>;
+    /** Idempotency guard: inspect the last tool call before resuming and steer the model. */
+    guardTools: z<boolean, boolean>;
+    /** Guard text appended when the last tool call has no confirmed result (it may have partially executed). */
+    guardPendingText: z<string, string>;
+    /** Guard text appended when the last tool call completed successfully (don't rerun it). */
+    guardDoneText: z<string, string>;
+    /** Grace period after an interruption before auto-sending (ms). */
+    graceMs: z<number, number>;
+    /** Minimum interval between two auto-continues per session (ms). */
+    cooldownMs: z<number, number>;
+    /** Max consecutive auto-continues per session before stopping. */
+    maxConsecutive: z<number, number>;
+    /** Recover delayed interrupted sessions during the host startup window. */
+    scanOnBoot: z<boolean, boolean>;
+    /** Max eligible recoveries per scan pass (most recently active first). */
+    scanLimit: z<number, number>;
+    /** Interruption freshness and duration of startup polling (ms). */
+    freshMs: z<number, number>;
+    /** Log `[auto-continue]` lines to the browser console. */
+    verbose: z<boolean, boolean>;
+    /** Classify failures: auto-continue transient errors only; permanent ones are skipped and notified. */
+    classify: z<boolean, boolean>;
+    /** Provider-specific message/code/status fragments that explicitly count as retryable, one literal per line. */
+    retryableErrorPatterns: z<string, string>;
+    /** Cooldown multiplier per consecutive failure (adaptive backoff). */
+    backoffFactor: z<number, number>;
+    /** Cap on the effective backoff interval (ms). */
+    backoffMaxMs: z<number, number>;
+    /** Show browser notifications for auto-continue events. */
+    notify: z<boolean, boolean>;
+    /** Globally pause auto-continue: no live or scan send. */
+    paused: z<boolean, boolean>;
+    /** Persist choices by session, including an explicit return to the profile default. */
+    sessionModes: z<import("@deepseek-ai/cosmokit").Dict<"default" | "off" | "recover" | "loop", string>, import("@deepseek-ai/cosmokit").Dict<"default" | "off" | "recover" | "loop", string>>;
+    /** Show the session mode selector in the conversation composer. */
+    showComposerToggle: z<boolean, boolean>;
+    /** Loop guard: detect a running turn spinning in place and restart it. */
+    loopGuard: z<boolean, boolean>;
+    /** A model message shorter than this many chars counts as a short sentence (loop signal). */
+    loopShortChars: z<number, number>;
+    /** Consecutive short sentences within this window (ms) with no tool call in between trip the loop guard. */
+    loopWindowMs: z<number, number>;
+    /** Consecutive short sentences trip the loop guard. */
+    loopShortCount: z<number, number>;
+    /** Consecutive identical assistant messages trip the loop guard (strongest signal; also used for streamed intra-message repetition). */
+    loopRepeatText: z<number, number>;
+    /** Consecutive identical tool calls with identical arguments AND results trip the loop guard. */
+    loopToolRepeat: z<number, number>;
+    /** Text sent after the loop guard cancels and restarts a turn (supports {tool}). */
+    loopText: z<string, string>;
+    /** Recover child (subagent / Agent Teams) sessions a restart interrupted by waking their root session once. */
+    resumeInterruptedChildren: z<boolean, boolean>;
+    /** Re-arm a goal a restart left `active` but `disarmed`, when its own session is resumed. */
+    resumeGoals: z<boolean, boolean>;
+    /** Also resume goals the user explicitly paused. Off by default: pausing is a human decision. */
+    resumePausedGoals: z<boolean, boolean>;
+    /** Hold network-error recoveries while the host is offline; waiting does not consume the retry budget. */
+    pauseWhenOffline: z<boolean, boolean>;
+    /** How often (ms) a held recovery re-checks connectivity. */
+    offlineCheckMs: z<number, number>;
+    /** Autonomous-loop round cap per session; 0 means unlimited. */
+    loopMaxIterations: z<number, number>;
+}>> | z<AutoContinueSettings, AutoContinueEntryConfig>;
 /**
- * Plugin body: register the settings namespace, start the single-instance
- * engine, and serve the status bridge.
+ * Plugin body: start the single-instance engine and serve the status bridge.
+ *
+ * Configuration comes from this entry's own Loader config (merged with the
+ * schema defaults by `resolveConfig`); the current harness exposes entry
+ * config through the settings service instead of the legacy `register`/`get`
+ * namespace API this plugin was originally written against.
  * @param ctx - host plugin context.
+ * @param config - this entry's config (may be partial / absent → defaults).
  */
-export declare function apply(ctx: Context): void;
+export declare function apply(ctx: Context, config?: AutoContinueEntryConfig): void;

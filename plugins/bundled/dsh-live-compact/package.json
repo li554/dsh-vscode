@@ -1,16 +1,35 @@
 {
   "name": "dsh-live-compact",
-  "version": "1.0.1",
+  "version": "1.1.6",
   "description": "In-place newest-turn compaction for DeepSeek Harness. Compress while the task runs and keep the prefix.",
   "license": "MIT",
+  "author": "MerkyorLynn <268568828+MerkyorLynn@users.noreply.github.com>",
   "type": "module",
-  "main": "index.js",
+  "main": "shell.js",
   "bin": {
-    "dsh-live-compact": "./bin/dsh-live-compact.js"
+    "dsh-live-compact": "bin/dsh-live-compact.js"
+  },
+  "exports": {
+    ".": "./shell.js",
+    "./client": "./client.js",
+    "./engine": "./index.js",
+    "./gate": "./gate.js",
+    "./shadow-search": "./shadow-search.js"
   },
   "files": [
+    "CHANGELOG.md",
+    "shell.js",
+    "adapter.js",
+    "settings.js",
+    "client.js",
     "index.js",
+    "gate.js",
     "plan.js",
+    "raw.js",
+    "shadow.js",
+    "shadow-save-worker.mjs",
+    "shadow-search.js",
+    "cooldown.js",
     "thunder.js",
     "bin",
     "cordis.patch.yml",
@@ -23,6 +42,11 @@
     "dsh",
     "compaction"
   ],
+  "scripts": {
+    "test:gate": "node test/p0-gate.mjs && node test/p0-blockers.mjs && node test/excerpt.mjs && node test/shadow-worker.mjs && node test/shadow-worker-pool.mjs && node test/shadow-worker-fuse.mjs && node --test test/failed-diagnostics.test.mjs test/public-exports.test.mjs test/cooldown.test.mjs test/gate-config.test.mjs test/stand-down.test.mjs test/drain-stopline.mjs test/scan-once.mjs test/issue-19.mjs test/issue-20.mjs test/issue-34.mjs test/windows-acl.test.mjs test/issue-27.mjs test/issue-29.mjs test/issue-29-notice.mjs test/client-settings.test.mjs test/settings-integration.test.mjs test/runtime-lifecycle.mjs test/shadow-lifecycle.mjs test/finalize-over-32000.mjs test/p1-fable-review.mjs",
+    "test:compat41": "node test/compat-cordis41.mjs",
+    "test:live-gate": "python3 -B -m unittest discover -s test/live-fill -p test_*.py"
+  },
   "engines": {
     "node": "^22.19 || >=24",
     "dsh": ">=0.2.0-rc.2 <0.3.0"
@@ -30,7 +54,9 @@
   "peerDependencies": {
     "@deepseek-ai/dsh-compaction": ">=0.2.0-rc.2 <0.3.0",
     "@deepseek-ai/dsh-compaction-basic": ">=0.2.0-rc.2 <0.3.0",
-    "@deepseek-ai/dsh-llm": ">=0.2.0-rc.2 <0.3.0"
+    "@deepseek-ai/dsh-llm": ">=0.2.0-rc.2 <0.3.0",
+    "@deepseek-ai/schemastery": ">=3.18.0 <4",
+    "react": ">=18"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-compaction": "0.2.0-rc.2",
@@ -40,14 +66,23 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-plugin-manager",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ],
+      "platform": "web"
     }
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/MerkyorLynn/dsh-live-compact.git"
+    "url": "git+https://github.com/Tranquillitatis-Lab/dsh-live-compact.git"
   },
-  "homepage": "https://github.com/MerkyorLynn/dsh-live-compact#readme",
+  "homepage": "https://github.com/Tranquillitatis-Lab/dsh-live-compact#readme",
   "bugs": {
-    "url": "https://github.com/MerkyorLynn/dsh-live-compact/issues"
+    "url": "https://github.com/Tranquillitatis-Lab/dsh-live-compact/issues"
   }
 }

@@ -1,76 +1,118 @@
 /**
- * dsh-rewind client settings card: the "Snapshot cleanup" module under
- * Settings > Plugins > Plugin configuration, drawn as one `settings.plugin.item`
- * card (keyed by the host-registered settings namespace).
+ * This bundle's configuration form for the file-checkpointing and snapshot
+ * cleanup switches, rendered on its Plugins-page card (`plugins.bundle.config`,
+ * keyed by the package name).
  *
- * The card edits exactly two knobs — `enabled` (auto-cleanup switch) and
- * `maxAgeDays` (idle cutoff, a positive integer) — and stages them exactly like
- * the host-side /snapshot-auto-cleanup command does, so the GUI and the command
- * can never disagree. The switch collapses/expands the max-age editor; a
- * non-positive/non-integer draft blocks save (the same single validator the
- * host schema enforces). "Discard changes" restores the last-read baseline.
- *
- * It neither imports the client settings typed contract nor depends on the
- * 0.1.2-rc.1-only `mutate` write API: it reads `getSnapshot().value` and writes
- * via the `set(field, value)` method, and the card receives a tiny structural
- * `CleanupCardApi` supplied by `src/client/index.ts` so the component stays
- * harness-agnostic and unit-testable in isolation.
+ * The staging model, the field controls, and the form frame are the harness's
+ * own (`SettingsFormModel` + `SettingsValueField` + `SettingsForm`); the one
+ * control the official set does not provide is a boolean-with-reset, so the
+ * switch follows the official subagent page (`Switch` inside the form body)
+ * and stages through the same model.
  *
  * @module dsh-rewind/client/settings-card
  */
+import { SettingsFormModel } from '@deepseek-ai/dsh-client-ui-primitives';
+import type { SettingsFieldState, SettingsFormActions, SettingsFormLabels, SettingsFormShell } from '@deepseek-ai/dsh-client-ui-primitives';
+import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots';
+import type { RewindKey } from './locales.ts';
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+    interface LocaleNamespaceMap {
+        /** The card reads the plugin's own `rewind` dictionary (see `./locales.ts`). */
+        rewind: RewindKey;
+    }
+}
 /**
- * The dsh-settings namespace the card binds to. Duplicated here (not imported
- * from the host module) because the client build must stay free of host/node
- * imports; a cross-config test pins it equal to the host's constant. The
- * settings grammar forbids dots, so this is hyphenated.
+ * The dictionary namespace the card's copy comes from: the `rewind` namespace
+ * the rest of the client plugin registers, which the slot registration declares
+ * as its `locale`.
  */
-export declare const CLEANUP_SETTINGS_NAMESPACE = "dsh-rewind-snapshot-cleanup";
-/** The defaults the host uses; shown as the field placeholder until a draft. */
+export declare const CARD_LOCALE_NS = "rewind";
+/**
+ * The plugin entry whose form this is: the bundle's package name, which is the
+ * profile entry id the host addresses the configuration by.
+ */
+export declare const SETTINGS_ENTRY_ID = "dsh-rewind-plugin";
+/** The default max age; an empty numeric draft means "use this". */
 export declare const DEFAULT_MAX_AGE_DAYS = 30;
-/** The two editable knobs, exactly as the host policy exposes them. */
-export interface CleanupPolicy {
-    readonly enabled: boolean;
-    readonly maxAgeDays: number;
+/** The editable knobs, exactly as the entry's configuration document names them. */
+export interface SettingsPolicy {
+    readonly fileCheckpointingEnabled: boolean;
+    readonly autoCleanupEnabled: boolean;
+    readonly autoCleanupMaxAgeDays: number;
 }
-/** A staged draft: the switch state and the raw (unparsed) max-age text. */
-export interface CleanupDraft {
-    readonly enabled: boolean;
-    readonly maxAgeDays: string;
-}
-/** The structural api the card reads/saves through (supplied by the client). */
-export interface CleanupCardApi {
-    /** Read the resolved policy; `undefined` while the describe mirror loads. */
-    read(): CleanupPolicy | undefined;
-    /** Whether the settings source accepts writes (false = read-only card). */
-    writable(): boolean;
-    /** Persist a validated policy; rejects on failure. */
-    save(next: CleanupPolicy): Promise<void>;
-    /** Optional change subscription (returns the disposer). */
-    subscribe(cb: () => void): () => void;
-}
-/** Translate one client dictionary key (the card's `t`). */
-export type CardTranslate = (key: string, params?: Record<string, string | number>) => string;
-/** Load a draft from a policy (defaults when the view has not loaded). */
-export declare function draftFrom(policy: CleanupPolicy | undefined): CleanupDraft;
-/** Parse the max-age text: a strict positive integer, else `null`. */
-export declare function maxAgeOf(text: string): number | null;
 /**
- * The policy a draft resolves to, or `null` when the max-age draft is invalid
- * (which blocks save). `enabled` is always a boolean from the switch, and
- * `maxAgeDays` comes from the validated draft.
+ * One form snapshot as this card reads it: the shared form frame's own state
+ * (`SettingsFormShell`) plus the three field drafts.
  */
-export declare function configOf(draft: CleanupDraft): CleanupPolicy | null;
-/** True when the draft differs from the baseline (an unsaved edit). */
-export declare function dirtyOf(base: CleanupDraft, draft: CleanupDraft): boolean;
+export interface SettingsCardSnapshot extends SettingsFormShell {
+    readonly checkpointingEnabled: SettingsFieldState;
+    readonly enabled: SettingsFieldState;
+    readonly maxAgeDays: SettingsFieldState;
+}
 /**
- * The card body. Draws the switch (+ collapse), the max-age editor, and the
- * discard/save actions. Pure of host wiring: everything goes through the
- * supplied {@link CleanupCardApi}.
- * @param api - the read/write transport.
- * @param t - the client dictionary translator.
- * @returns the card element.
+ * The bound snapshot store the slot renderer rebinds as the card's
+ * `useSettingsCard` selector hook.
  */
-export declare function SettingsCleanupCard({ api, t }: {
-    api: CleanupCardApi;
-    t: CardTranslate;
-}): import("react").JSX.Element;
+export interface SettingsCardStore {
+    getSnapshot(): SettingsCardSnapshot;
+    subscribe(listener: () => void): () => void;
+}
+/**
+ * The shared per-entry form this card stages over: the harness's
+ * `SettingsFormScope` read/write face, declared structurally so the card never
+ * couples to an internal declaration file's path.
+ */
+export interface SettingsFormScope<T> {
+    getSnapshot(): {
+        readonly status: 'loading' | 'ready' | 'unavailable';
+        readonly value: T | undefined;
+        readonly base: unknown;
+        readonly user: unknown;
+        readonly writable: boolean;
+        readonly revision: number | undefined;
+    };
+    subscribe(listener: () => void): () => void;
+    mutate(ops: readonly ({
+        readonly op: 'set';
+        readonly path: readonly string[];
+        readonly value: unknown;
+    } | {
+        readonly op: 'unset';
+        readonly path: readonly string[];
+    })[], expectedRevision?: number): Promise<boolean>;
+}
+/**
+ * Props the Plugins page binds for this bundle's configuration form: the slot's
+ * runtime owner share (`view`), the locale `t` seat, and the injected face with
+ * its `hooks` compartment rebound as a `use<Name>` selector hook.
+ */
+export type SettingsCardProps = PropsRuntime<'plugins.bundle.config'> & PropsLocale<typeof CARD_LOCALE_NS> & InjectFace<SettingsCardFace>;
+/**
+ * Every dictionary key this card reads: the switch row, the day field, and the
+ * five labels the shared form frame renders.
+ */
+export type SettingsLabelKey = 'backup.title' | 'backup.on' | 'backup.off' | 'cleanup.auto' | 'cleanup.auto.on' | 'cleanup.auto.off' | 'cleanup.maxAge' | 'cleanup.maxAge.hint' | 'cleanup.overridden' | 'cleanup.reset' | 'cleanup.invalid' | 'cleanup.unavailable' | 'cleanup.readonly' | 'cleanup.saveFailed' | 'cleanup.save' | 'cleanup.saving';
+/** The form frame's copy, read from this plugin's dictionary. */
+export declare function formLabels(t: (key: SettingsLabelKey) => string): SettingsFormLabels;
+/**
+ * Build the staged form over one entry's configuration.
+ * @param scope - the shared per-entry configuration form.
+ * @returns the model plus the card's bound read hook.
+ */
+export declare function settingsForm(scope: SettingsFormScope<SettingsPolicy>): {
+    form: SettingsFormModel<SettingsPolicy>;
+    store: import("@deepseek-ai/dsh-client-store").SnapshotStore<SettingsCardSnapshot>;
+};
+/**
+ * The bundle's configuration form; `summary` renders nothing (the page only
+ * asks a bundle configuration for its `page` form).
+ * @param props - the view, the card's read hook, locale seat, and form actions.
+ * @returns the form element, or null for the summary view.
+ */
+export declare function SettingsCard(props: SettingsCardProps): import("react").JSX.Element | null;
+/** The face the slot registration injects into the card. */
+export interface SettingsCardFace extends SettingsFormActions {
+    readonly hooks: {
+        readonly settingsCard: SettingsCardStore;
+    };
+}

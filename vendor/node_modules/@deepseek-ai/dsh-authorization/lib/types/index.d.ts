@@ -26,7 +26,7 @@
  * @module @deepseek-ai/dsh-authorization
  */
 import { Context, Service } from '@deepseek-ai/cordis';
-import type { CredentialKey } from '@deepseek-ai/dsh-credentials';
+import type { CredentialKey, CredentialRecord } from '@deepseek-ai/dsh-credentials';
 import { HarnessError } from '@deepseek-ai/dsh-llm';
 import type { AuthorizationEntry, AuthorizationMethod, AuthorizationNotice, AuthorizationOutcome, AuthorizationPrompt, AuthorizationSettlement } from './types.ts';
 export type { AuthorizationEntry, AuthorizationMethod, AuthorizationNotice, AuthorizationOutcome, AuthorizationPrompt, AuthorizationPromptOption, AuthorizationSettlement, AuthorizationStatus, } from './types.ts';
@@ -72,6 +72,12 @@ export interface AuthorizationSession {
     readonly method: string;
     /** Aborted when the caller withdraws or `cancel()` is called for this key. */
     readonly signal: AbortSignal;
+    /**
+     * Commit a record while rejecting cancelled attempts. Once admitted, cancellation waits for completion.
+     * @param record - credential owned by this flow.
+     * @returns after the credential store commits the record.
+     */
+    commit(record: CredentialRecord): Promise<void>;
     /**
      * Report progress, or tell the human what to do next. Fire-and-forget: a
      * surface that cannot render a notice must not stall the flow.
@@ -207,8 +213,7 @@ export declare class AuthorizationService extends Service {
     /**
      * Fan `authorization/settled` out with contained listener failures: every
      * listener runs, and a sync throw or async rejection is logged without
-     * changing the finished attempt's own outcome — except `INVARIANT`-coded
-     * failures, which rethrow after every listener ran. The attempt is already
+     * changing the finished attempt's own outcome. The attempt is already
      * over and its key released when this fires, so a broken watcher (that
      * second browser tab) can never turn the caller's settled result into a
      * failure of its own.

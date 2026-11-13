@@ -3,6 +3,38 @@ import { MEMORY_SPACE_PROVIDER_API_VERSION, NORMALIZED_RELEVANCE_SCORE, defineMe
 import { randomUUID } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+//#region src/top-scored.ts
+/** Stable descending score selection. Keep sort semantics for non-finite legacy scores. */
+function topScored(values, limit) {
+	const count = Math.min(values.length, Math.max(0, Math.trunc(limit) || 0));
+	if (count === 0) return [];
+	if (values.length <= Math.max(64, count * 2) || values.some((value) => !Number.isFinite(value.score))) return values.sort((left, right) => right.score - left.score).slice(0, count);
+	const compare = (left, right) => values[right].score - values[left].score || left - right;
+	const heap = [];
+	for (let index = 0; index < values.length; index++) if (heap.length < count) {
+		let child = heap.length;
+		heap.push(index);
+		while (child > 0) {
+			const parent = child - 1 >>> 1;
+			if (compare(heap[parent], index) >= 0) break;
+			heap[child] = heap[parent];
+			child = parent;
+		}
+		heap[child] = index;
+	} else if (compare(index, heap[0]) < 0) {
+		let parent = 0;
+		while (parent * 2 + 1 < count) {
+			let child = parent * 2 + 1;
+			if (child + 1 < count && compare(heap[child + 1], heap[child]) > 0) child += 1;
+			if (compare(index, heap[child]) >= 0) break;
+			heap[parent] = heap[child];
+			parent = child;
+		}
+		heap[parent] = index;
+	}
+	return heap.sort(compare).map((index) => values[index]);
+}
+//#endregion
 //#region src/driver.ts
 const WORD = /[\p{L}\p{N}_-]+/gu;
 const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]+/gu;
@@ -23,8 +55,9 @@ function terms(value) {
 function overlap(left, right) {
 	if (left.size === 0 || right.size === 0) return 0;
 	let shared = 0;
-	for (const value of left) if (right.has(value)) shared += 1;
-	return shared / (/* @__PURE__ */ new Set([...left, ...right])).size;
+	const [smaller, larger] = left.size <= right.size ? [left, right] : [right, left];
+	for (const value of smaller) if (larger.has(value)) shared += 1;
+	return shared / (left.size + right.size - shared);
 }
 function extractEntities(content, supplied = []) {
 	const values = [...supplied];
@@ -37,7 +70,7 @@ function insight(fact, score) {
 		id: fact.id,
 		content: fact.content,
 		category: fact.category,
-		importance: fact.trustScore,
+		...fact.importance === void 0 ? {} : { importance: fact.importance },
 		tags: fact.tags,
 		entities: fact.entities,
 		source: "external",
@@ -87,7 +120,7 @@ var HolographicProvider = class {
 		const queryTerms = terms(request.query);
 		const query = request.query.toLocaleLowerCase();
 		const limit = Math.min(Math.max(request.limit ?? 10, 1), 50);
-		return { results: store.facts.flatMap((fact) => {
+		return { results: topScored(store.facts.flatMap((fact) => {
 			if (fact.trustScore < minTrust || request.category !== void 0 && fact.category !== request.category) return [];
 			const lexical = overlap(queryTerms, terms(`${fact.content} ${fact.tags.join(" ")} ${fact.entities.join(" ")}`));
 			const phrase = fact.content.toLocaleLowerCase().includes(query) ? 1 : 0;
@@ -97,7 +130,7 @@ var HolographicProvider = class {
 				fact,
 				score: relevance * fact.trustScore
 			}];
-		}).sort((left, right) => right.score - left.score).slice(0, limit).map((result) => insight(result.fact, result.score)) };
+		}), limit).map((result) => insight(result.fact, result.score)) };
 	}
 	async list(body, request) {
 		if (request.query !== void 0 && request.query.trim() !== "") return (await this.search(body, {
@@ -139,17 +172,19 @@ var HolographicProvider = class {
 		if (source === void 0) return [];
 		const sourceEntities = new Set(source.entities.map((value) => value.toLocaleLowerCase()));
 		const sourceTerms = terms(source.content);
-		return store.facts.flatMap((fact) => {
-			if (fact.id === id) return [];
+		const minTrust = clampTrust(Number(this.connection(body).minTrust ?? .3));
+		return topScored(store.facts.flatMap((fact) => {
+			if (fact.id === id || fact.trustScore < minTrust) return [];
 			const sharedEntities = fact.entities.filter((value) => sourceEntities.has(value.toLocaleLowerCase())).length;
 			const score = Math.max(sharedEntities === 0 ? 0 : Math.min(1, .5 + sharedEntities * .2), overlap(sourceTerms, terms(fact.content))) * fact.trustScore;
 			return score <= 0 ? [] : [{
 				fact,
 				score
 			}];
-		}).sort((left, right) => right.score - left.score).slice(0, 20).map((result) => insight(result.fact, result.score));
+		}), 20).map((result) => insight(result.fact, result.score));
 	}
 	async remember(body, request) {
+		if (request.importance !== void 0 && (!Number.isInteger(request.importance) || request.importance < 1 || request.importance > 5)) throw new Error("importance must be an integer from 1 through 5");
 		const store = this.load(body);
 		const existing = store.facts.find((fact) => fact.content === request.content.trim());
 		if (existing !== void 0) return {
@@ -166,7 +201,8 @@ var HolographicProvider = class {
 			category: request.category ?? "general",
 			tags: [...new Set(request.tags ?? [])],
 			entities: extractEntities(request.content, request.entities),
-			trustScore: clampTrust(Number(request.importance ?? connection.defaultTrust ?? .5)),
+			trustScore: request.importance === void 0 ? clampTrust(Number(connection.defaultTrust ?? .5)) : request.importance / 5,
+			importance: request.importance ?? 3,
 			createdAt: now,
 			updatedAt: now
 		};
@@ -256,7 +292,7 @@ const definition = defineMemorySpaceProviderDefinition({
 		kind: "provider",
 		typeId: descriptor.id,
 		packageName: "dsh-mnemon-provider-holographic",
-		version: "0.5.4",
+		version: "0.5.7",
 		label: descriptor.label,
 		icon: descriptor.icon,
 		summary: descriptor.summary,

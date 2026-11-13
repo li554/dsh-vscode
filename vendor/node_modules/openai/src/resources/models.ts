@@ -1,4 +1,4 @@
-// File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
+// File generated from our OpenAPI spec by Castiron. See CONTRIBUTING.md for details.
 
 import { APIResource } from '../core/resource';
 import { APIPromise } from '../core/api-promise';
@@ -61,6 +61,11 @@ export interface Model {
    * The organization that owns the model.
    */
   owned_by: string;
+
+  /**
+   * The date when the model will shut down, or null if not announced.
+   */
+  shutdown_date?: string | null;
 }
 
 export interface ModelDeleted {

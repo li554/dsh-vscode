@@ -1,6 +1,17 @@
-import { MemoryJsonValue as JsonValue } from "dsh-mnemon/contracts";
+import { MemoryJsonValue as JsonValue, MemoryReadGrant } from "dsh-mnemon/contracts";
 //#region src/contracts.d.ts
 type MemoryProviderId = string;
+/**
+ * The Mnemon Native Provider's id. Its package names its descriptor and driver
+ * with it, the Starter installs it under it, and a stored space that names no
+ * Provider belongs to it.
+ */
+declare const NATIVE_PROVIDER_ID = "mnemon-native";
+/** Whether a Provider is Mnemon Native: by its implementation type, else by its id. */
+declare function isNativeProvider(provider: {
+  readonly id: MemoryProviderId;
+  readonly typeId?: string | undefined;
+}): boolean;
 type MemoryProviderConnectionValue = string | number | boolean;
 type MemoryProviderConnection = Record<string, MemoryProviderConnectionValue>;
 interface MemoryProviderIcon {
@@ -19,7 +30,7 @@ interface MemoryProviderConfigField {
   label: string;
   /** Optional Host-provided translation key; clients fall back to label. */
   i18nKey?: string;
-  /** Service fields are configured once in Settings; memory fields belong to each Memory Space. */
+  /** Service fields are configured once on the dsh-mnemon page under Plugins; memory fields belong to each Memory Space. */
   scope: 'service' | 'memory';
   /** A reusable local data location presented with the same default/custom scope UI as Mnemon Native. */
   role?: 'global-location';
@@ -38,7 +49,9 @@ interface MemoryProviderConfigField {
   discoveryDefaultFrom?: string;
   options?: MemoryProviderConfigOption[];
 }
-type MemoryPlacementCapability = 'graph' | 'entities' | 'related' | 'exact-write' | 'link' | 'forget';
+/** What a persistence strategy's rules can require of a Provider; the Starter's settings schema takes the same list. */
+declare const MEMORY_PLACEMENT_CAPABILITIES: readonly ["graph", "entities", "related", "exact-write", "link", "forget"];
+type MemoryPlacementCapability = (typeof MEMORY_PLACEMENT_CAPABILITIES)[number];
 type MemoryPlacementPreference = 'balanced' | 'local-first' | 'shared-first';
 interface MemoryPlacementRules {
   allowedProviderIds?: MemoryProviderId[];
@@ -60,6 +73,8 @@ interface MemoryPersistenceStrategy {
 interface ResolvedMemoryPersistenceStrategy {
   mode: 'manual' | 'automatic';
   providerId: MemoryProviderId;
+  /** Set when no provider was chosen; manual mode then uses whichever provider is ready. */
+  providerDefaulted?: true;
   prompt: string;
   rules: {
     allowedProviderIds: MemoryProviderId[];
@@ -226,7 +241,12 @@ type EdgeType = 'temporal' | 'semantic' | 'causal' | 'entity';
 declare const EDGE_TYPES: readonly ["temporal", "semantic", "causal", "entity"];
 type Intent = 'WHY' | 'WHEN' | 'ENTITY' | 'GENERAL';
 declare const INTENTS: readonly ["WHY", "WHEN", "ENTITY", "GENERAL"];
-type RecallRelevanceTier = 'high' | 'medium' | 'low' | 'unknown';
+type RecallRelevanceTier = 'high' | 'medium' | 'ranked' | 'low' | 'unknown';
+/**
+ * One spelling-insensitive key per entity. The Host's entity index and the Client's graph
+ * both count an entity's memories by it, so their numbers agree.
+ */
+declare function normalizeEntityKey(entity: string): string;
 interface Insight {
   id: string;
   content: string;
@@ -265,10 +285,18 @@ interface SearchRequest {
   source?: Source;
   intent?: Intent;
   memoryBodyIds?: string[];
+  /**
+   * A look at the memory rather than a use of it, such as the Memory System's
+   * own searches. Providers that record reads, as access counts or a query
+   * log, leave it out, and may answer from a snapshot that lags a write still
+   * in flight; a check that must see a write leaves the flag unset.
+   */
+  inspect?: boolean;
 }
 interface RememberRequest {
   content: string;
   category?: Category;
+  /** Integer 1..5 when supplied. Omission uses the Provider's default. */
   importance?: number;
   tags?: string[];
   entities?: string[];
@@ -298,6 +326,17 @@ interface MemorySpaceView extends MemorySpace {
   error?: string;
   stats?: MemorySpaceStats;
 }
+/** Optional Host-only body-directory input; the Host binds the grant to its initiating View and exact Source. */
+interface MemorySpaceWriteScopeRequest {
+  viewId: string;
+  grant: MemoryReadGrant;
+}
+/** Source-owned write authority, distinct from the active namespaces pinned for recall. */
+interface MemorySpaceWriteScope {
+  viewId: string;
+  sourceInstanceKey: string;
+  memoryBodyIds: string[];
+}
 interface MemorySpaceCatalog {
   items: MemorySpaceView[];
   providers: MemoryProviderDescriptor[];
@@ -307,6 +346,37 @@ interface MemorySpaceCatalog {
   activeCount: number;
   directory: string;
   generatedAt: string;
+  /** Present only when body-directory receives a supported writeScope request. Older Sources omit it. */
+  writeScope?: MemorySpaceWriteScope;
+  /** Provider namespaces asked for again in this process: whether a pass is running, and the last one. Older Sources omit it. */
+  rediscovery?: {
+    running: boolean;
+    last?: MemorySpaceRediscovery;
+  };
+}
+/** What one Provider answered when its namespaces were asked for again. */
+interface MemorySpaceRediscoveryResult {
+  providerId: MemoryProviderId;
+  label: string;
+  /** Namespaces the Provider reported. */
+  found: number;
+  /** Spaces mounted for namespaces this directory had never held. They start inactive. */
+  added: Array<{
+    id: string;
+    name: string;
+  }>;
+  /** Reported namespaces a person disconnected here; they stay disconnected. */
+  disconnected: number;
+  /** Why the Provider could not be asked, as it said. Its spaces stay as they were. */
+  error?: string;
+  /** The Provider said nothing within the time it was given. */
+  timedOut?: boolean;
+}
+/** One pass over every enabled Provider service, when the Host starts or from the Memory Spaces page. */
+interface MemorySpaceRediscovery {
+  at: string;
+  trigger: 'startup' | 'manual';
+  results: MemorySpaceRediscoveryResult[];
 }
 interface MemoryGraphNode extends Insight {
   color: string;
@@ -332,7 +402,8 @@ interface MemoryGraphSnapshot {
   sources?: MemoryReadSource[];
 }
 type MemoryReadMode = 'search' | 'graph' | 'projection' | 'enumerable' | 'query-only' | 'entities' | 'unsupported';
-type MemoryReadStatus = 'ready' | 'empty' | 'query-required' | 'unsupported' | 'unavailable';
+/** 'loading' is client-only: a page shows its spaces from the directory while the read runs. */
+type MemoryReadStatus = 'ready' | 'empty' | 'query-required' | 'unsupported' | 'unavailable' | 'loading';
 /**
  * One provider-backed Memory Space participating in a read surface.
  *
@@ -350,6 +421,10 @@ interface MemoryReadSource {
   status: MemoryReadStatus;
   itemCount: number;
   edgeCount?: number;
+  /** Entity reads: the memories the entity index covers in this space. */
+  memoryCount?: number;
+  /** Entity reads: false when the Provider could not index every memory of this space. */
+  complete?: boolean;
   hint?: string;
   quality?: RecallQualityStats;
 }
@@ -364,6 +439,10 @@ interface RecallQualityStats {
   droppedInvalidScore: number;
   unscored: number;
   unscaled: number;
+  /** Finite native or out-of-range scores retained by Provider rank, not confidence. */
+  ranked?: number;
+  /** A normalized-relevance Provider returned a score above its declared maximum of 1. */
+  outOfRange?: number;
 }
 interface MemoryListRequest {
   query?: string;
@@ -424,7 +503,9 @@ interface RecallQualityConfig {
   candidateMultiplier?: number;
   /** Maximum medium-relevance rows admitted by the strict policy. */
   maxMediumResults?: number;
-  /** Maximum unknown-scale or unscored rows admitted by the strict policy. */
+  /** Maximum Provider-ranked rows without calibrated relevance admitted by the strict policy. */
+  maxRankedResults?: number;
+  /** Maximum undeclared-scale or unscored rows admitted by the strict policy. */
   maxUnknownResults?: number;
 }
 interface ResolvedRecallQualityConfig {
@@ -433,6 +514,7 @@ interface ResolvedRecallQualityConfig {
   highScoreThreshold: number;
   candidateMultiplier: number;
   maxMediumResults: number;
+  maxRankedResults: number;
   maxUnknownResults: number;
 }
 type MnemonEmbeddingProtocol = (typeof MNEMON_EMBEDDING_PROTOCOLS)[number];
@@ -441,8 +523,12 @@ interface MnemonEmbeddingConfig {
   enabled?: boolean;
   endpoint?: string;
   model?: string;
-  /** Optional Bearer token forwarded as MNEMON_EMBED_API_KEY for OpenAI-compatible endpoints. */
+  /** Legacy inline key. New settings writes move it to the Host credentials store. */
   apiKey?: string;
+  /** Host environment variable resolved just before launching the CLI. */
+  apiKeyEnv?: string;
+  /** Opaque reference to an endpoint-bound record in DSH's credentials store. */
+  apiKeyRef?: string;
   /** Explicit wire-protocol override; 'auto' keeps Mnemon's /v1 auto-detection. */
   protocol?: MnemonEmbeddingProtocol;
 }
@@ -451,16 +537,62 @@ interface ResolvedMnemonEmbeddingConfig {
   endpoint: string;
   model: string;
   apiKey: string;
+  apiKeyEnv?: string;
+  apiKeyRef?: string;
   protocol: MnemonEmbeddingProtocol;
 }
+/** Settings readback metadata only; never persisted as embedding configuration. */
+interface MnemonEmbeddingSettingsView extends MnemonEmbeddingConfig {
+  apiKeyStorage?: 'none' | 'legacy' | 'environment' | 'credentials';
+  apiKeyConfigured?: boolean;
+}
+declare const EMBEDDING_CREDENTIAL_PREFIX = "dsh-mnemon/embedding-";
+declare const EMBEDDING_CREDENTIAL_REFERENCE: RegExp;
+declare const EMBEDDING_ENVIRONMENT_NAME: RegExp;
+/** DSH owns persistence; this grant is private to Mnemon Native embedding. */
+interface MnemonEmbeddingCredential {
+  version: 1;
+  endpoint: string;
+  apiKey: string;
+}
 interface MnemonEmbeddingStatus {
+  /** Whether Mnemon 0.2.13+ produced a nonempty probe vector with the selected model. */
   available: boolean;
   model: string;
   /** Protocol Mnemon resolved for the embedding endpoint; omitted when the CLI does not report one. */
   protocol?: string;
+  /** Across the spaces in `spaces` that could be counted; 0 when no space has a database. */
   totalInsights: number;
   embedded: number;
   coverage: string;
+  /** Each Mnemon Native space with a database, as `mnemon --store <id> embed --status` counts it (#392). */
+  spaces?: MnemonEmbeddingSpaceStatus[];
+}
+/** One Mnemon Native space's vector coverage. */
+interface MnemonEmbeddingSpaceStatus {
+  memoryBodyId: string;
+  name: string;
+  active: boolean;
+  totalInsights: number;
+  embedded: number;
+  coverage: string;
+  /** Why the space could not be counted; its counts are then 0 and stay out of the total. */
+  error?: string;
+}
+/** What one fill of a Mnemon Native space's missing vectors did (#392). */
+interface MnemonEmbeddingFill {
+  memoryBodyId: string;
+  /** Vectors the fill wrote. */
+  filled: number;
+  /** Memories of the space still without a vector when it stopped. */
+  remaining: number;
+  /** The embedding model Mnemon used. */
+  model: string;
+  /**
+   * Why it stopped while memories remain: its minute ran out (`time`), or a step wrote no vector,
+   * so the embedding service returned none for the memories left (`refused`).
+   */
+  stopped?: 'time' | 'refused';
 }
 /** Domain status only; workbench/lifecycle status belongs to the default adapter. */
 interface MemorySpacesStatus {
@@ -477,6 +609,11 @@ interface MemorySpacesStatus {
   timeoutMs: number;
   defaultRecallLimit: number;
   recallQuality: ResolvedRecallQualityConfig;
+  /**
+   * Whether DSH manages Mnemon Native's embedding settings (`embedding.enabled`). While it does
+   * not, Mnemon keeps the Host environment and its own defaults. Memory Spaces 0.5.21 and earlier omit it.
+   */
+  embeddingManaged?: boolean;
   memoryBodyDirectory: string;
   memoryBodies: MemorySpaceView[];
   providerServices?: MemoryProviderRuntimeStatus[];
@@ -484,16 +621,99 @@ interface MemorySpacesStatus {
     dbPath?: string;
   };
 }
+/**
+ * The entities of the active spaces. Each count is the number of memories that
+ * carry the entity, the same set entity-memories lists.
+ */
 interface EntityView {
   items: Array<{
     entity: string;
     count: number;
   }>;
+  /** With a selected entity: the first page of entity-memories, kept for existing callers. */
   insights: Insight[];
   selected?: string;
   /** Omitted only when talking to a pre-provider-aware Host. */
   sources?: MemoryReadSource[];
+  /** Distinct entities across the active spaces; items may be capped below it. Omitted by older Hosts. */
+  total?: number;
+  /** False when a space's Provider could not index every memory. Omitted by older Hosts. */
+  complete?: boolean;
 }
+/** One page of the memories that carry an entity, by importance and then recency. */
+interface EntityMemoriesView {
+  /** The entity's most common spelling, or the requested name when no memory carries it. */
+  entity: string;
+  total: number;
+  offset: number;
+  items: Insight[];
+  complete: boolean;
+  sources: MemoryReadSource[];
+}
+/** Memories recall relates to an entity that do not carry it themselves. */
+interface EntityRelatedView {
+  entity: string;
+  items: Insight[];
+  sources: MemoryReadSource[];
+}
+/** The directory under a storage root that holds Mnemon's stores, one per Native space, and their registry. */
+declare const MEMORY_SPACES_DIRECTORY = "data";
+/** The registry of Native spaces. The published v1 name and its `bodies` key stay for existing stores and Packs. */
+declare const MEMORY_SPACE_REGISTRY_FILE = ".dsh-memory-bodies.json";
+/** A Native space's Mnemon store, in the directory its space id names. */
+declare const MEMORY_SPACE_DATABASE_FILE = "mnemon.db";
+/** A space id, which also names its store's directory. */
+declare const MEMORY_SPACE_ID_PATTERN: RegExp;
+/** The most characters a space's name holds. */
+declare const MEMORY_SPACE_NAME_MAX_LENGTH = 100;
+/** The most characters a space's routing description holds. */
+declare const MEMORY_SPACE_DESCRIPTION_MAX_LENGTH = 1000;
+/** Mnemon's own record of its default store, one space id, at the storage root. */
+declare const MNEMON_ACTIVE_STORE_FILE = "active";
+/** Third-party Provider services and the spaces they serve, in the storage root's `state` directory. No Pack carries it. */
+declare const MEMORY_PROVIDER_REGISTRY_FILE = "memory-providers.json";
+/** One Native space as a copy of the registry, such as a Mnemon Pack, carries it. */
+interface MemorySpaceRegistryEntry {
+  id: string;
+  name: string;
+  description: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+interface MemorySpaceRegistryFile {
+  version: 1;
+  bodies: MemorySpaceRegistryEntry[];
+}
+/**
+ * Read a registry as a copy of it carries it: each id unique and usable as a directory name,
+ * every name, description and time present, or the whole registry is refused. Only the fields of
+ * the entry above are kept, so a copy holds nothing else, and a registry written back from one
+ * no longer holds what else an entry recorded, such as a Native space's `placement` decision or
+ * `metadataSource`.
+ */
+declare function parseMemorySpaceRegistry(value: unknown): MemorySpaceRegistryFile;
+/** What a stored registry holds, counted without judging each space. */
+interface MemorySpaceRegistrySummary {
+  /** Whether it is the version 1 registry this Source writes; a legacy version 2 file, migrated when the Source next loads it, is not. */
+  valid: boolean;
+  /** Every listed space that is an object, whichever version lists it. */
+  spaces: number;
+  active: number;
+}
+/** Count the spaces of a parsed registry for a read-only inventory. It never throws. */
+declare function summarizeMemorySpaceRegistry(value: unknown): MemorySpaceRegistrySummary;
+/** What a stored Provider registry holds, counted without judging each entry. */
+interface MemoryProviderRegistrySummary {
+  /** Whether the file is an object at all. Without one, every count is 0. */
+  valid: boolean;
+  /** Provider services with saved settings, enabled or not. */
+  services: number;
+  /** Spaces a third-party Provider serves: every entry of the list, well-formed or not. */
+  connections: number;
+}
+/** Count a parsed Provider registry for a read-only inventory. It never throws. */
+declare function summarizeMemoryProviderRegistry(value: unknown): MemoryProviderRegistrySummary;
 /** @deprecated Use CreateMemorySpaceRequest. The wire shape is unchanged. */
 type CreateMemoryBodyRequest = CreateMemorySpaceRequest;
 /** @deprecated Use UpdateMemorySpaceRequest. The wire shape is unchanged. */
@@ -517,4 +737,4 @@ type MemoryBodyView = MemorySpaceView;
 /** @deprecated Use OpenVikingSpaceConnection. The wire shape is unchanged. */
 type OpenVikingBodyConnection = OpenVikingSpaceConnection;
 //#endregion
-export { AutomaticMemoryPlacementRequest, CATEGORIES, Category, CreateMemoryBodyRequest, CreateMemorySpaceRequest, DEFAULT_EMBEDDING_ENDPOINT, DEFAULT_EMBEDDING_MODEL, DEFAULT_EMBEDDING_PROTOCOL, EDGE_TYPES, EMBEDDING_PROTOCOL_AUTO, EMBEDDING_PROTOCOL_OLLAMA, EMBEDDING_PROTOCOL_OPENAI, EdgeType, EntityView, INTENTS, Insight, Intent, type JsonValue, LlmMemoryPlacementSelection, MNEMON_EMBEDDING_PROTOCOLS, MemoryBody, MemoryBodyCatalog, MemoryBodyMetadataMaintenanceResult, MemoryBodyMetadataSample, MemoryBodyMetadataUpdate, MemoryBodyProvider, MemoryBodyStats, MemoryBodyView, MemoryGraphEdge, MemoryGraphNode, MemoryGraphSnapshot, MemoryListRequest, MemoryListView, MemoryPersistenceStrategy, MemoryPlacementCandidate, MemoryPlacementCapability, MemoryPlacementDecision, MemoryPlacementPreference, MemoryPlacementRules, MemoryProviderCapabilities, MemoryProviderConfigField, MemoryProviderConfigOption, MemoryProviderConnection, MemoryProviderConnectionValue, MemoryProviderDescriptor, MemoryProviderIcon, MemoryProviderId, MemoryProviderRuntimeStatus, MemoryProviderServiceCatalog, MemoryProviderServiceView, MemoryReadMode, MemoryReadSource, MemoryReadStatus, MemorySpace, MemorySpaceCatalog, MemorySpaceMetadataMaintenanceResult, MemorySpaceMetadataSample, MemorySpaceMetadataUpdate, MemorySpaceProvider, MemorySpaceStats, MemorySpaceView, MemorySpacesStatus, MnemonEmbeddingConfig, MnemonEmbeddingProtocol, MnemonEmbeddingStatus, OpenVikingBodyConnection, OpenVikingSpaceConnection, PreparedMemoryPlacement, RecallQualityConfig, RecallQualityStats, RecallRelevanceTier, RememberRequest, ResolvedMemoryPersistenceStrategy, ResolvedMnemonEmbeddingConfig, ResolvedRecallQualityConfig, SOURCES, SearchRequest, Source, UpdateMemoryBodyRequest, UpdateMemoryProviderServiceRequest, UpdateMemorySpaceRequest };
+export { AutomaticMemoryPlacementRequest, CATEGORIES, Category, CreateMemoryBodyRequest, CreateMemorySpaceRequest, DEFAULT_EMBEDDING_ENDPOINT, DEFAULT_EMBEDDING_MODEL, DEFAULT_EMBEDDING_PROTOCOL, EDGE_TYPES, EMBEDDING_CREDENTIAL_PREFIX, EMBEDDING_CREDENTIAL_REFERENCE, EMBEDDING_ENVIRONMENT_NAME, EMBEDDING_PROTOCOL_AUTO, EMBEDDING_PROTOCOL_OLLAMA, EMBEDDING_PROTOCOL_OPENAI, EdgeType, EntityMemoriesView, EntityRelatedView, EntityView, INTENTS, Insight, Intent, type JsonValue, LlmMemoryPlacementSelection, MEMORY_PLACEMENT_CAPABILITIES, MEMORY_PROVIDER_REGISTRY_FILE, MEMORY_SPACES_DIRECTORY, MEMORY_SPACE_DATABASE_FILE, MEMORY_SPACE_DESCRIPTION_MAX_LENGTH, MEMORY_SPACE_ID_PATTERN, MEMORY_SPACE_NAME_MAX_LENGTH, MEMORY_SPACE_REGISTRY_FILE, MNEMON_ACTIVE_STORE_FILE, MNEMON_EMBEDDING_PROTOCOLS, MemoryBody, MemoryBodyCatalog, MemoryBodyMetadataMaintenanceResult, MemoryBodyMetadataSample, MemoryBodyMetadataUpdate, MemoryBodyProvider, MemoryBodyStats, MemoryBodyView, MemoryGraphEdge, MemoryGraphNode, MemoryGraphSnapshot, MemoryListRequest, MemoryListView, MemoryPersistenceStrategy, MemoryPlacementCandidate, MemoryPlacementCapability, MemoryPlacementDecision, MemoryPlacementPreference, MemoryPlacementRules, MemoryProviderCapabilities, MemoryProviderConfigField, MemoryProviderConfigOption, MemoryProviderConnection, MemoryProviderConnectionValue, MemoryProviderDescriptor, MemoryProviderIcon, MemoryProviderId, MemoryProviderRegistrySummary, MemoryProviderRuntimeStatus, MemoryProviderServiceCatalog, MemoryProviderServiceView, MemoryReadMode, MemoryReadSource, MemoryReadStatus, MemorySpace, MemorySpaceCatalog, MemorySpaceMetadataMaintenanceResult, MemorySpaceMetadataSample, MemorySpaceMetadataUpdate, MemorySpaceProvider, MemorySpaceRediscovery, MemorySpaceRediscoveryResult, MemorySpaceRegistryEntry, MemorySpaceRegistryFile, MemorySpaceRegistrySummary, MemorySpaceStats, MemorySpaceView, MemorySpaceWriteScope, MemorySpaceWriteScopeRequest, MemorySpacesStatus, MnemonEmbeddingConfig, MnemonEmbeddingCredential, MnemonEmbeddingFill, MnemonEmbeddingProtocol, MnemonEmbeddingSettingsView, MnemonEmbeddingSpaceStatus, MnemonEmbeddingStatus, NATIVE_PROVIDER_ID, OpenVikingBodyConnection, OpenVikingSpaceConnection, PreparedMemoryPlacement, RecallQualityConfig, RecallQualityStats, RecallRelevanceTier, RememberRequest, ResolvedMemoryPersistenceStrategy, ResolvedMnemonEmbeddingConfig, ResolvedRecallQualityConfig, SOURCES, SearchRequest, Source, UpdateMemoryBodyRequest, UpdateMemoryProviderServiceRequest, UpdateMemorySpaceRequest, isNativeProvider, normalizeEntityKey, parseMemorySpaceRegistry, summarizeMemoryProviderRegistry, summarizeMemorySpaceRegistry };

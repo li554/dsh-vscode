@@ -1,7 +1,19 @@
 import { t as descriptor } from "./descriptor-BxGaZkfv.js";
-import { HttpMemoryProvider, MEMORY_SPACE_PROVIDER_API_VERSION, NORMALIZED_RELEVANCE_SCORE, defineMemorySpaceProvider, defineMemorySpaceProviderDefinition, firstArray, jsonArray, jsonNumber, jsonObject, jsonString } from "dsh-mnemon-source-memory-spaces/provider-sdk";
+import { HttpMemoryProvider, MEMORY_SPACE_PROVIDER_API_VERSION, defineMemorySpaceProvider, defineMemorySpaceProviderDefinition, firstArray, jsonArray, jsonNumber, jsonObject, jsonString } from "dsh-mnemon-source-memory-spaces/provider-sdk";
 import { randomUUID } from "node:crypto";
 //#region src/driver.ts
+/**
+* An entity name without the note Hindsight may append in parentheses, `Alice (person)`. The same
+* result as removing /\s*\([^)]*\)\s*$/u, in one pass: that pattern took quadratic time on a
+* name of many "(" without a ")", and the name comes from the server.
+*/
+function withoutTrailingNote(entry) {
+	const trimmed = entry.trimEnd();
+	if (!trimmed.endsWith(")")) return entry.trim();
+	const close = trimmed.length - 1;
+	const open = trimmed.indexOf("(", trimmed.lastIndexOf(")", close - 1) + 1);
+	return open < 0 || open >= close ? entry.trim() : trimmed.slice(0, open).trim();
+}
 function insight(value) {
 	const item = jsonObject(value);
 	const id = jsonString(item?.id);
@@ -11,7 +23,7 @@ function insight(value) {
 	const score = jsonNumber(scores?.final) ?? jsonNumber(item?.score);
 	const createdAt = jsonString(item?.mentioned_at) ?? jsonString(item?.date) ?? jsonString(item?.occurred_start);
 	const rawEntities = item?.entities;
-	const entities = Array.isArray(rawEntities) ? rawEntities.filter((entry) => typeof entry === "string") : typeof rawEntities === "string" ? rawEntities.split(",").map((entry) => entry.replace(/\s*\([^)]*\)\s*$/u, "").trim()).filter(Boolean) : [];
+	const entities = Array.isArray(rawEntities) ? rawEntities.filter((entry) => typeof entry === "string") : typeof rawEntities === "string" ? rawEntities.split(",").map(withoutTrailingNote).filter(Boolean) : [];
 	const tags = jsonArray(item?.tags).filter((entry) => typeof entry === "string");
 	return {
 		id,
@@ -29,7 +41,7 @@ function edgeType(value) {
 }
 var HindsightProvider = class extends HttpMemoryProvider {
 	id = "hindsight";
-	scoreSemantics = NORMALIZED_RELEVANCE_SCORE;
+	scoreSemantics = Object.freeze({ kind: "provider-native" });
 	constructor(memorySpaces, options = {}) {
 		super(memorySpaces, {
 			label: descriptor.label,
@@ -252,7 +264,7 @@ const definition = defineMemorySpaceProviderDefinition({
 		kind: "provider",
 		typeId: descriptor.id,
 		packageName: "dsh-mnemon-provider-hindsight",
-		version: "0.5.4",
+		version: "0.5.7",
 		label: descriptor.label,
 		icon: descriptor.icon,
 		summary: descriptor.summary,
@@ -263,7 +275,7 @@ const definition = defineMemorySpaceProviderDefinition({
 		capabilities: descriptor.capabilities,
 		fields: descriptor.fields,
 		secrets: descriptor.fields.filter((field) => field.input === "secret").map((field) => field.key),
-		scoreSemantics: "normalized-relevance"
+		scoreSemantics: "provider-native"
 	},
 	create: (context) => new HindsightProvider(context.memorySpaces ?? context.memoryBodies, { requestTimeoutMs: context.config.timeoutMs })
 });

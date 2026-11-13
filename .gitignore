@@ -32,3 +32,7 @@ vendor/node_modules/.bin/
 /file-review-test*.md
 /.review-debug/
 /fix-dsh-ripgrep.ps1
+
+# Python bytecode from the smoke/pack scripts (regenerated on every run)
+__pycache__/
+*.pyc

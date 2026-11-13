@@ -1,5 +1,5 @@
 import { CATEGORIES, EDGE_TYPES, INTENTS, SOURCES } from "./contracts.js";
-import { n as NORMALIZED_RELEVANCE_SCORE, t as runProcess } from "./process-BvrgxPNP.js";
+import { i as runProcess, n as DEFAULT_MAX_OUTPUT_BYTES, r as ProcessError, t as NORMALIZED_RELEVANCE_SCORE } from "./adapter-D-BnWkko.js";
 import { i as defineMemorySpaceProviderDefinition, r as defineMemorySpaceProvider, t as MEMORY_SPACE_PROVIDER_API_VERSION } from "./definitions-DfmOqJjR.js";
 //#region src/providers/http.ts
 function jsonObject(value) {
@@ -105,4 +105,4 @@ var HttpMemoryProvider = class {
 	}
 };
 //#endregion
-export { CATEGORIES, EDGE_TYPES, HttpMemoryProvider, INTENTS, MEMORY_SPACE_PROVIDER_API_VERSION, NORMALIZED_RELEVANCE_SCORE, SOURCES, defineMemorySpaceProvider, defineMemorySpaceProviderDefinition, firstArray, jsonArray, jsonNumber, jsonObject, jsonString, runProcess };
+export { CATEGORIES, DEFAULT_MAX_OUTPUT_BYTES, EDGE_TYPES, HttpMemoryProvider, INTENTS, MEMORY_SPACE_PROVIDER_API_VERSION, NORMALIZED_RELEVANCE_SCORE, ProcessError, SOURCES, defineMemorySpaceProvider, defineMemorySpaceProviderDefinition, firstArray, jsonArray, jsonNumber, jsonObject, jsonString, runProcess };

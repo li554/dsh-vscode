@@ -1,15 +1,46 @@
 import type { Context } from './context-types.ts';
 import { Config, type ResolvedSidebarConfig, type SidebarConfig } from './config.ts';
+import { type SidebarFsEntry } from './fs-tree.ts';
+import { FS_TREES_MAX_PATHS } from './fs-batch.ts';
 export { Config };
 export type { SidebarConfig, ResolvedSidebarConfig };
 export type { Context } from './context-types.ts';
-export type { BetterSidebarService, TabDescriptor, TabComponentProps, FileViewerDescriptor, FileViewerProps, FileFetchStrategy, } from './client/service.ts';
+export type { BetterSidebarService, SidechatSurface, SidechatSurfaceAdapter, TabDescriptor, TabComponentProps, FileViewerDescriptor, FileViewerProps, FileFetchStrategy, } from './client/service.ts';
+export { contentDispositionOf } from './archive-route.ts';
 /** Plugin identity for cordis.yml rows. */
 export declare const name = "dsh-better-sidebar";
-/** Services required before mounting: the webserver routes, the session store, the web runtime's trusted hosts, and the tool registry. */
+/** Row bound of one `fs.trees` batch request (a mount/refresh sends what it
+ *  shows, split into cap-sized batches by the client — see `fs-batch.ts`). */
+export { FS_TREES_MAX_PATHS };
+/** One level of an `fs.trees` batch: either a listing or that level's failure. */
+export interface SidebarFsLevel {
+    path: string;
+    entries: SidebarFsEntry[];
+    truncated: boolean;
+    /** Present only when THIS level failed (the batch itself still succeeded). */
+    error?: string;
+}
+/** Services required before mounting: routes, sessions, native request admission, and tools. */
 export declare const inject: string[];
-/** Content type served by /sidebar/file (binary-safe fallback for unknowns). */
+/** Content type served by /sidebar/file and /sidebar/html; unknowns use a binary-safe fallback. */
 export declare function mediaTypeForPath(path: string): string;
+/** One file read, in the shape the client's viewer dispatch consumes. */
+export type SidebarReadResult = {
+    kind: 'text';
+    content: string;
+    size: number;
+    mtimeMs: number;
+} | {
+    kind: 'binary';
+    size: number;
+    mtimeMs: number;
+    head: string;
+} | {
+    kind: 'too-large';
+    size: number;
+    mtimeMs: number;
+    head: string;
+};
 /**
  * The live face of the side card settings namespace, bound to the settings
  * service when it is mounted. The DSH settings RPC domain only serves
@@ -38,19 +69,10 @@ export interface SidebarSettingsFace {
     }>;
 }
 /**
- * Plugin body: mount the fenced routes and the pty lifecycle.
- * @param ctx - host plugin context (webServer, sessions, webRuntime).
+ * Plugin body: mount the fenced routes and the sidebar_open push socket.
+ * @param ctx - host plugin context (webServer, sessions, connection).
  * @param config - deployment-provided limits; the Loader validates against
  * {@link Config} and fills defaults, direct callers get them from
  * {@link resolveSidebarConfig}.
  */
 export declare function apply(ctx: Context, config?: SidebarConfig): void;
-/**
- * The WS close reason for a failed terminal attach. A missing configured
- * shell gets a SHORT machine-readable marker (`shell-not-found:<name>`,
- * capped by BYTES — a WS close reason allows at most 123 bytes, which `ws`
- * validates with `Buffer.byteLength`) that the client maps to a localized,
- * actionable banner; every other failure keeps the raw message (the
- * model-side tool errors read it verbatim).
- */
-export declare function wsCloseReasonOf(error: unknown): string;

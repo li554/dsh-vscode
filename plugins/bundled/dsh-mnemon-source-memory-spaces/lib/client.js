@@ -4,8 +4,32 @@ window.__ModuleLoader__.load({
 		var module = { exports: {} };
 		var exports = module.exports;
 		Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
+		//#region \0rolldown/runtime.js
+		var __create = Object.create;
+		var __defProp = Object.defineProperty;
+		var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+		var __getOwnPropNames = Object.getOwnPropertyNames;
+		var __getProtoOf = Object.getPrototypeOf;
+		var __hasOwnProp = Object.prototype.hasOwnProperty;
+		var __copyProps = (to, from, except, desc) => {
+			if (from && typeof from === "object" || typeof from === "function") for (var keys = __getOwnPropNames(from), i = 0, n = keys.length, key; i < n; i++) {
+				key = keys[i];
+				if (!__hasOwnProp.call(to, key) && key !== except) __defProp(to, key, {
+					get: ((k) => from[k]).bind(null, key),
+					enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable
+				});
+			}
+			return to;
+		};
+		var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(isNodeMode || !mod || !mod.__esModule || !__hasOwnProp.call(mod, "default") ? __defProp(target, "default", {
+			value: mod,
+			enumerable: true
+		}) : target, mod));
+		//#endregion
 		let react = require("react");
 		let dsh_mnemon_client = require("dsh-mnemon/client");
+		dsh_mnemon_client = __toESM(dsh_mnemon_client, 1);
+		let _deepseek_ai_dsh_client_ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives");
 		let react_jsx_runtime = require("react/jsx-runtime");
 		//#region presentation/locales.json
 		var zh = {
@@ -22,10 +46,10 @@ window.__ModuleLoader__.load({
 			"nav.bodies": "记忆空间",
 			"nav.search": "检索",
 			"nav.entities": "实体",
-			"nav.rememberAction": "沉淀记忆",
+			"nav.rememberAction": "存入记忆",
 			"nav.content": "内容",
 			"overview.title": "记忆空间",
-			"overview.description": "统一管理由 Mnemon Native 或第三方 Provider 承载的记忆空间；已激活的空间共同参与读取、路由与实时快照。",
+			"overview.description": "由 Mnemon Native 或第三方 Provider 承载的长期记忆；已激活的空间参与召回。",
 			"overview.pageDescription": "创建和启停记忆空间，查看每个 Provider 的存储状态与实时关联快照。",
 			"overview.interval": "进入时全量同步 · 点击卡片按需同步",
 			"overview.fullSyncPending": "等待首次全量同步",
@@ -34,11 +58,8 @@ window.__ModuleLoader__.load({
 			"overview.fullSyncMinutes": "上次全量同步：{count} 分钟前",
 			"overview.fullSyncHours": "上次全量同步：{count} 小时前",
 			"overview.fullSyncDays": "上次全量同步：{count} 天前",
-			"overview.syncing": "同步中…",
-			"overview.syncNow": "立即同步",
 			"overview.directory": "记忆空间目录",
-			"overview.directory.description": "每张卡片对应一个记忆空间。第三方 Provider 首次接入时建立映射，之后点击卡片只检测该空间；本地维护的标题与说明不会被重连覆盖。",
-			"overview.directory.waiting": "等待目录",
+			"overview.directory.description": "每张卡片是一个记忆空间；点击卡片检查连接，开关决定它是否参与召回。",
 			"overview.directory.unsynced": "目录尚未同步",
 			"overview.directory.unsyncedBadge": "目录待同步",
 			"overview.directoryLoading": "正在加载记忆空间目录",
@@ -50,7 +71,7 @@ window.__ModuleLoader__.load({
 			"overview.reconnectHint": "点击卡片重新检测并同步这个记忆空间",
 			"overview.reconnectAria": "重新连接{name}",
 			"overview.snapshotLoading": "正在加载多记忆空间实时快照",
-			"overview.metadataAction": "AI 维护元信息",
+			"overview.metadataAction": "整理名称与说明",
 			"overview.metadataTitle": "AI 维护记忆空间元信息",
 			"overview.metadataDescription": "选择一个或多个已激活记忆空间。系统会分别通过各 Provider 最快的原生查询路径读取少量样本，再由独立任务 Agent 生成标题与说明。",
 			"overview.metadataUnavailable": "暂时无法运行：未找到与当前记忆范围匹配的活跃 Agent",
@@ -77,17 +98,17 @@ window.__ModuleLoader__.load({
 			"overview.unsyncedLong": "当前 Host 仍在使用旧插件契约；重启 DSH 后会重新发现既有 Store，期间不会删除任何 .db。",
 			"overview.emptyTitle": "还没有记忆空间",
 			"overview.emptyShort": "创建第一个记忆空间并写入稳定上下文后，它会出现在这里。",
-			"overview.emptyLong": "创建一个 Mnemon 记忆空间，或在“设置 → 记忆系统”启用第三方 Provider 以同步其已有记忆空间。",
+			"overview.emptyLong": "创建一个 Mnemon 记忆空间，或在“插件 → 可组合记忆”页面启用第三方 Provider 以同步其已有记忆空间。",
 			"overview.noActiveTitle": "没有激活的记忆空间",
 			"overview.noActiveText": "开启至少一个记忆空间的读取开关，即可在这里聚合它的实时图谱。",
 			"overview.noContentTitle": "已激活记忆空间尚无内容",
-			"overview.noContentText": "向任意记忆空间沉淀稳定上下文后，这里会聚合呈现节点与关系。",
+			"overview.noContentText": "存入记忆后，这里会显示节点与关系。",
 			"overview.createTitle": "创建记忆空间",
-			"overview.createDialogHint": "这里定义记忆空间用途并选择底层 Provider；服务、凭据和全局数据位置沿用“设置 → 记忆系统”的配置。",
+			"overview.createDialogHint": "这里定义记忆空间用途并选择底层 Provider；服务、凭据和全局数据位置沿用“插件 → 可组合记忆”页面中的配置。",
 			"overview.createIdentityTitle": "记忆空间信息",
 			"overview.createIdentityHint": "名称用于识别；描述会帮助 Agent 判断什么内容应写入和召回。",
 			"overview.createPlacementTitle": "记忆空间 Provider",
-			"overview.createPlacementHint": "这是一次明确的手动创建；选择一个已启用 Provider。自动选择由“沉淀策略”统一管理。",
+			"overview.createPlacementHint": "这是一次明确的手动创建；选择一个已启用 Provider。任务 Agent 新建空间时的选择在“新空间的 Provider”中设置。",
 			"overview.createName": "新记忆空间名称",
 			"overview.createNamePlaceholder": "名称",
 			"overview.createDescription": "新记忆空间描述",
@@ -116,7 +137,8 @@ window.__ModuleLoader__.load({
 			"overview.capability.exact-write": "精确写入",
 			"overview.capability.forget": "安全遗忘",
 			"overview.candidateNativeReady": "官方原生 · 跟随当前记忆范围",
-			"overview.providerServiceRequired": "尚未启用；请先前往“设置 → 记忆系统”完成服务配置",
+			"overview.providerServiceRequired": "未启用",
+			"overview.nativeCliRequired": "需要在本机安装 Mnemon CLI；其他 Provider 不受影响",
 			"overview.workspaceBinding.automatic": "跟随当前记忆范围",
 			"overview.workspaceBinding.optional-override": "跟随当前范围；全局可自定义位置",
 			"overview.workspaceBinding.provider-global": "始终使用全局范围",
@@ -132,25 +154,23 @@ window.__ModuleLoader__.load({
 			"overview.providerLabel": "记忆引擎",
 			"overview.nativeOfficial": "官方原生",
 			"overview.providerNativeHint": "官方原生、本地优先，保留完整图谱与软删除能力",
-			"strategy.action": "沉淀策略",
-			"strategy.title": "沉淀策略",
-			"strategy.description": "定义 Agent 在沉淀过程中需要新建记忆空间时，如何选择底层 Provider。已有记忆空间仍会优先按名称、描述与能力路由。",
+			"strategy.action": "新空间的 Provider",
+			"strategy.title": "新空间的 Provider",
+			"strategy.description": "任务 Agent 需要新建记忆空间时，如何选择 Provider；已有空间仍按名称与说明路由。",
 			"strategy.loading": "正在读取 Provider 目录…",
 			"strategy.modeTitle": "Provider 选择方式",
-			"strategy.modeHint": "该策略只影响 Agent 沉淀时的新记忆空间创建；手动点击“创建记忆空间”始终由你指定。",
+			"strategy.modeHint": "只影响任务 Agent 新建的记忆空间；手动创建时始终由你指定。",
 			"strategy.manualHint": "固定使用一个 Provider，Agent 无法改选",
 			"strategy.automaticHint": "先执行硬规则，再由任务 Agent 选择合格 Provider",
 			"strategy.manualTitle": "固定 Provider",
 			"strategy.manualDescription": "当现有记忆空间都不适合时，新记忆空间固定创建在这个 Provider 中。",
 			"strategy.automaticTitle": "智能选择规则",
 			"strategy.automaticDescription": "数据边界与能力要求由主机强制执行，Prompt 只影响合格候选之间的判断。",
-			"strategy.taskAgentReady": "任务 Agent 就绪",
-			"strategy.taskAgentUnavailable": "等待任务 Agent",
-			"strategy.save": "保存策略",
+			"strategy.save": "保存",
 			"strategy.saving": "保存中…",
 			"overview.providerOpenVikingHint": "连接已有 OpenViking 服务，由记忆空间工作流统一调度",
 			"overview.providerSummary.mnemon-native": "官方原生、本地优先，保留完整图谱与软删除能力",
-			"overview.providerSummary.openviking": "文件系统形态的共享记忆，支持分层读取与自动语义提炼",
+			"overview.providerSummary.openviking": "文件系统形态的共享记忆，支持经验证的精确写入与语义召回",
 			"overview.providerSummary.honcho": "跨会话用户建模、Peer 档案、辩证推理与持久结论",
 			"overview.providerSummary.mem0": "自动事实提取、语义召回、重排与去重",
 			"overview.providerSummary.hindsight": "知识图谱记忆，具备实体解析、多策略召回与反思",
@@ -167,6 +187,7 @@ window.__ModuleLoader__.load({
 			"overview.providerApiKeyOptional": "未启用鉴权时可留空",
 			"overview.providerApiKeyKeep": "已保存；留空表示保持不变",
 			"overview.providerAccount": "Account",
+			"overview.providerDiscoveryUser": "User Key 所属用户（跳过 Admin）",
 			"overview.providerUser": "User",
 			"overview.providerActorPeer": "Actor Peer",
 			"overview.providerField.workspace": "工作区",
@@ -263,7 +284,7 @@ window.__ModuleLoader__.load({
 			"graph.kindSpace": "记忆空间",
 			"graph.kindEntity": "实体",
 			"search.title": "检索记忆",
-			"search.description": "跨已激活记忆空间检索原始证据；每个 Provider 使用自己的原生召回方式并保留来源。",
+			"search.description": "在已激活的记忆空间中检索：直接检索返回原文，Agent 查询给出带引用的回答。",
 			"search.maxResults": "最多 {count} 条",
 			"search.placeholder": "为什么选用 SQLite？这个项目有哪些发布约定？",
 			"search.queryAria": "记忆查询",
@@ -290,7 +311,7 @@ window.__ModuleLoader__.load({
 			"search.noRelated": "没有找到两跳内的关联节点。",
 			"search.sourcesTitle": "本次检索范围",
 			"entities.title": "实体查阅",
-			"entities.description": "只在真正提供实体索引的记忆空间中，查阅实体跨越事实、决策与上下文的关系。",
+			"entities.description": "查看实体在事实、决策与上下文之间的关联。",
 			"entities.sourcesTitle": "实体能力范围",
 			"entities.unsupportedTitle": "没有支持实体索引的记忆空间",
 			"entities.unsupportedText": "当前激活 Provider 仍可通过“检索”召回，但不会在这里伪装成实体图谱。",
@@ -303,57 +324,58 @@ window.__ModuleLoader__.load({
 			"entities.filterHint": "输入时即时过滤左侧列表（按 Esc 清空）",
 			"entities.emptyRail": "写入带实体的记忆后，这里会形成入口。",
 			"entities.filterEmpty": "本地无匹配。点“查阅”向宿主发起查询。",
-			"entities.loading": "正在沿实体关系召回…",
+			"entities.loading": "正在读取实体的记忆…",
 			"entities.selectTitle": "选择或输入一个实体",
-			"entities.selectText": "实体视图会聚合与它相关的记忆，而不是只做字面匹配。",
+			"entities.selectText": "选中后列出带有它的全部记忆；需要时，可再查找召回认为相关的其他记忆。",
 			"entities.emptyTitle": "没有关联记忆",
 			"entities.emptyText": "尝试更完整的名称或另一个实体别名。",
-			"remember.title": "沉淀记忆",
-			"remember.description": "候选内容会进入无会话历史的独立任务 Agent，由它选择记忆空间、查重、提炼并执行写入，不占用主对话上下文。",
+			"entities.railLoading": "正在读取实体…",
+			"entities.memoriesHint": "带有此实体的记忆",
+			"entities.relatedTitle": "相关记忆",
+			"entities.relatedHint": "召回认为相关、但不带此实体的记忆",
+			"entities.findRelated": "查找相关记忆",
+			"entities.hideRelated": "收起",
+			"entities.noCarrying": "没有记忆带有此实体。",
+			"entities.noRelated": "没有其他相关记忆。",
+			"entities.retry": "重试",
+			"entities.sourceReady": "{count} 个实体",
+			"entities.sourcePartial": "{count} 个实体 · 部分",
+			"readSources.status.loading": "正在读取",
+			"remember.title": "存入记忆",
+			"remember.description": "任务 Agent 会判断是否值得保存，去重、提炼后写入合适的记忆空间，不占用当前对话。",
 			"remember.readOnlyTitle": "当前为只读模式",
 			"remember.readOnlyText": "当前部署禁止记忆写入；如需调整，请修改 DSH 的 Mnemon 配置并保存。",
-			"remember.delegateTitle": "交给独立任务 Agent",
-			"remember.noSession": "无可用会话",
-			"remember.ready": "独立任务 Agent 就绪",
-			"remember.noTaskAgent": "任务 Agent 不可用",
-			"remember.taskAgentReady": "任务 Agent 就绪",
 			"remember.candidate": "候选内容",
-			"remember.candidateAria": "待沉淀内容",
-			"remember.placeholder": "输入希望跨任务保留的背景、偏好、决策或洞察。模型会先判断它是否真的值得沉淀。",
+			"remember.placeholder": "输入希望长期保留的背景、偏好、决策或结论。",
 			"remember.sessionHint": "当前视图没有可用的模型路由，无法创建独立任务 Agent。",
 			"remember.taskAgentHint": "当前 Host 暂时无法创建独立任务 Agent，请刷新状态后重试。",
-			"remember.processing": "独立任务 Agent 处理中…",
-			"remember.action": "调度独立任务 Agent 判断并沉淀",
-			"remember.advanced": "人工高级选项",
-			"remember.advancedHint": "为独立任务 Agent 指定目标记忆空间与元数据约束",
+			"remember.processing": "任务 Agent 处理中…",
+			"remember.action": "交给任务 Agent",
+			"remember.advanced": "高级选项",
+			"remember.advancedHint": "指定目标记忆空间、分类与重要性",
 			"remember.expand": "展开",
 			"remember.target": "目标记忆空间",
 			"remember.asyncProviderHint": "该记忆空间会等待远程提炼任务完成后再返回真实写入回执。",
 			"remember.entities": "实体（逗号分隔）",
 			"remember.tags": "标签（逗号分隔）",
-			"remember.advancedText": "高级选项是约束而不是绕过监督；独立任务 Agent 仍会查重并返回结构化回执。",
-			"remember.saving": "独立任务 Agent 写入中…",
-			"remember.advancedAction": "按高级约束沉淀",
-			"remember.skipped": "独立任务 Agent 判断无需写入",
-			"remember.completed": "独立任务 Agent 已完成处理",
-			"remember.processed": "独立任务 Agent 已处理：{action}",
-			"remember.dispatchFailed": "调度失败：{error}",
-			"remember.saveFailed": "保存失败：{error}",
+			"remember.advancedText": "这些约束同样经过任务 Agent 的去重与回执。",
+			"remember.saving": "任务 Agent 处理中…",
+			"remember.advancedAction": "按约束交给任务 Agent",
 			"content.title": "记忆内容",
-			"content.description": "按 Provider 的真实浏览契约检查可观察内容；列表型、查询型与不可浏览引擎会明确区分。",
+			"content.description": "浏览各记忆空间保存的内容。",
 			"content.sourcesTitle": "Provider 内容模型",
 			"content.count": "{count} 条记忆",
 			"content.filterAria": "筛选记忆内容",
 			"content.filterPlaceholder": "按内容或精确 ID 筛选…",
 			"content.categoryAria": "记忆分类",
 			"content.apply": "应用筛选",
-			"content.notice": "内容页直接调用 Provider 的只读浏览契约；查询型引擎仅在输入查询后执行检索。",
+			"content.notice": "查询型 Provider 需要输入关键词后才显示内容。",
 			"content.queryRequiredTitle": "查询型记忆空间等待问题",
 			"content.queryRequiredText": "输入一个明确查询即可读取 ByteRover 等不提供全量列表的 Provider。",
 			"content.showing": "当前显示 {visible} / {total}",
 			"content.showMore": "再显示 {count} 条",
 			"content.emptyTitle": "没有符合条件的记忆",
-			"content.emptyText": "清空筛选，或前往“沉淀”写入第一条稳定上下文。",
+			"content.emptyText": "清空筛选，或先存入第一条记忆。",
 			"nav.spaces": "记忆空间",
 			"overview.editSpace": "编辑",
 			"overview.editSpaceAria": "编辑{name}",
@@ -363,7 +385,150 @@ window.__ModuleLoader__.load({
 			"overview.deleteSpaceAria": "删除{name}",
 			"overview.disconnectSpace": "断开",
 			"overview.disconnectSpaceAria": "断开{name}",
-			"overview.deletingSpace": "删除中…"
+			"overview.deletingSpace": "删除中…",
+			"common.score": "相关度 {value}",
+			"overview.providerEnableHint": "未启用的 Provider 可在“插件 → 可组合记忆”的“记忆空间”页面中启用。",
+			"search.citations": "引用",
+			"overview.rediscoverAction": "重新发现",
+			"overview.rediscovering": "正在发现…",
+			"overview.rediscoverHint": "再次询问已启用的 Provider；新出现的空间会挂载，但不加入召回",
+			"overview.rediscoveryAdded": "发现 {count} 个新空间，尚未加入召回，打开开关即可启用。",
+			"overview.rediscoveryNone": "没有新的空间。",
+			"overview.rediscoveryDisconnected": "{count} 个断开过的空间保持断开；重新保存对应 Provider 的设置可以恢复。",
+			"overview.rediscoveryFailed": "{provider} 无法完成发现：{error}",
+			"overview.rediscoveryTimedOut": "{provider} 没有按时响应，稍后可以再次发现。",
+			"overview.rediscoveryDismiss": "知道了",
+			"overview.newSpace": "新发现",
+			"common.copyId": "复制 ID",
+			"common.readOnly": "只读模式",
+			"common.activationOnly": "仅可切换激活状态",
+			"common.active": "已激活",
+			"common.category": "分类",
+			"common.importanceLabel": "重要性",
+			"common.importance": "重要性 {value}",
+			"common.hops": "{count} 跳",
+			"common.allCategories": "全部分类",
+			"common.memories": "{count} 条记忆",
+			"common.edges": "{count} 条连接",
+			"card.confirmText": "软删除这条记忆？",
+			"card.processing": "处理中…",
+			"card.confirmForget": "确认忘记",
+			"card.related": "查看关联",
+			"card.clone": "基于此新建",
+			"card.forget": "忘记",
+			"readSources.all": "全部 Provider",
+			"readSources.mode.search": "原生检索",
+			"readSources.mode.graph": "真实关系图",
+			"readSources.mode.projection": "内容投影",
+			"readSources.mode.enumerable": "可枚举内容",
+			"readSources.mode.query-only": "仅查询",
+			"readSources.mode.entities": "实体索引",
+			"readSources.mode.unsupported": "不支持",
+			"readSources.status.ready": "{count} 条可观察",
+			"readSources.status.empty": "已连接 · 暂无内容",
+			"readSources.status.query-required": "输入查询后读取",
+			"readSources.status.unsupported": "当前表面不可用",
+			"readSources.status.unavailable": "连接不可用",
+			"readSources.edges": "{count} 条真实关系",
+			"readSources.model.mnemon-native": "事实、实体与类型关系",
+			"readSources.model.openviking": "目录与分层内容",
+			"readSources.model.honcho": "Peer 结论与画像",
+			"readSources.model.mem0": "提炼后的语义记忆",
+			"readSources.model.hindsight": "记忆单元与知识图",
+			"readSources.model.holographic": "可信事实与实体",
+			"readSources.model.retaindb": "画像与类型化事实",
+			"readSources.model.byterover": "知识树查询",
+			"readSources.model.supermemory": "记忆与摄取文档",
+			"common.inactive": "未激活",
+			"config.providerSecretShow": "显示凭证",
+			"config.providerSecretHide": "隐藏凭证",
+			"config.providerSecretStoredValue": "已保存凭证",
+			"config.providersSpacesOffTitle": "“记忆空间”已关闭",
+			"config.providersSpacesOffDetail": "已保存的连接会保留",
+			"config.providersSpacesOn": "开启“记忆空间”",
+			"config.providersReadOnlyTitle": "dsh-mnemon 当前为只读",
+			"config.providersReadOnlyDetail": "writeEnabled 为 false 时，不能启用或停用 Provider。",
+			"spaces.offNote": "开启后可配置 Provider 与嵌入",
+			"config.providersTitle": "记忆 Provider",
+			"config.providersDescription": "Provider 为记忆空间提供存储。启用或保存会同步其中已有的记忆空间；关闭只移除本地映射，不会删除第三方数据。",
+			"config.nativeSummary": "官方原生长期记忆与完整关系图",
+			"config.officialNative": "官方原生",
+			"config.nativeCliMissing": "未安装 CLI（可选）",
+			"config.embeddingTitle": "本地向量嵌入",
+			"config.embeddingDescription": "让 DSH Host 为每次 Mnemon CLI 调用注入嵌入 Endpoint 与模型；Endpoint 以 /v1 结尾时 Mnemon 自动使用 OpenAI 兼容协议（/v1/embeddings + Bearer 认证），否则使用 Ollama 协议；不以 /v1 结尾的兼容端点可在“协议”下拉中显式指定。",
+			"config.embeddingManaged": "由 DSH 管理嵌入配置",
+			"config.embeddingManagedHint": "开启后以这里保存的值覆盖 Mnemon 子进程环境；关闭后继续沿用 Host 环境与 Mnemon 默认值。",
+			"config.embeddingEndpoint": "嵌入 Endpoint",
+			"config.embeddingModel": "嵌入模型",
+			"config.embeddingApiKey": "API Key（可选，OpenAI 兼容服务）",
+			"config.embeddingApiKeyInvalid": "API Key 不能包含控制字符，且长度不超过 2048。",
+			"config.embeddingProtocol": "协议",
+			"config.embeddingProtocolAuto": "自动（按 /v1 探测）",
+			"config.embeddingProtocolOllama": "Ollama",
+			"config.embeddingProtocolOpenai": "OpenAI 兼容",
+			"config.embeddingProtocolInvalid": "协议必须是 自动 / Ollama / OpenAI 兼容 之一。",
+			"config.embeddingEndpointInvalid": "嵌入 Endpoint 必须是不含凭据、查询参数或片段的 HTTP(S) 绝对 URL。",
+			"config.embeddingModelInvalid": "嵌入模型必须包含 1–200 个字符，且不能包含控制字符。",
+			"config.embeddingSecurity": "Mnemon 会把记忆与查询正文发送到此 Endpoint。新密钥由 DSH 凭据库保管，设置中仅存引用；也可使用 Host 环境变量。留空保留已有密钥，移除引用不会删除凭据库中的记录。远程服务请使用 HTTPS。",
+			"config.embeddingTest": "测试状态",
+			"config.embeddingNotTested": "尚未检查嵌入服务的连接与各 Mnemon Native 空间的覆盖率。",
+			"config.embeddingTesting": "正在通过 Mnemon 检查嵌入服务与覆盖率…",
+			"config.embeddingSaveBeforeTest": "请先保存嵌入配置，再测试实际运行值。",
+			"config.embeddingTestUnavailable": "当前 DSH Host 不提供嵌入状态检查。",
+			"config.embeddingCliMissing": "测试需要 Mnemon CLI；向量设置只作用于 Mnemon Native。",
+			"config.embeddingStatusAvailable": "嵌入模型可用 · {model} · 已嵌入 {embedded}/{total}（{coverage}）",
+			"config.embeddingStatusAvailableWithProtocol": "嵌入模型可用 · {model} · 协议 {protocol} · 已嵌入 {embedded}/{total}（{coverage}）",
+			"config.embeddingStatusUnavailable": "嵌入模型不可用 · {model} · 已嵌入 {embedded}/{total}（{coverage}）",
+			"config.embeddingStatusUnavailableWithProtocol": "嵌入模型不可用 · {model} · 协议 {protocol} · 已嵌入 {embedded}/{total}（{coverage}）",
+			"config.embeddingStatusFailed": "嵌入状态检查失败：{error}",
+			"config.embeddingSpaces": "各 Mnemon Native 空间",
+			"config.embeddingSpaceCounts": "已嵌入 {embedded}/{total}（{coverage}）",
+			"config.embeddingSpaceFailed": "无法读取：{error}",
+			"config.embeddingMissing": "没有向量的记忆不参与语义匹配。",
+			"config.embeddingMissingFill": "没有向量的记忆不参与语义匹配；点空间旁的「补齐」即可生成缺少的向量。",
+			"config.embeddingMissingOffline": "没有向量的记忆不参与语义匹配；嵌入服务可用后，可以在这里补齐。",
+			"config.embeddingSpacesUnread": "无法读取的空间没有计入合计。",
+			"config.embeddingFill": "补齐",
+			"config.embeddingFilling": "补齐中…",
+			"config.embeddingFillLabel": "补齐「{name}」的向量",
+			"config.embeddingFillingLabel": "正在补齐「{name}」的向量",
+			"config.embeddingFillDone": "已为「{name}」补齐 {filled} 条向量。",
+			"config.embeddingFillMore": "已为「{name}」补齐 {filled} 条向量，还缺 {remaining} 条，再点「补齐」继续。",
+			"config.embeddingFillPartly": "已为「{name}」补齐 {filled} 条向量；其余 {remaining} 条嵌入服务没有返回向量，可以稍后再点「补齐」。",
+			"config.embeddingFillRefused": "嵌入服务没有为「{name}」返回向量，请确认它在运行并提供模型 {model}。",
+			"config.embeddingFillFailed": "「{name}」的向量没有补齐：{error}",
+			"config.providerGlobalLocation": "全局数据位置",
+			"config.providerGlobalLocationHint": "{provider} 默认使用全局范围目录，也可以指定一个自定义位置。",
+			"config.providerGlobalLocationWorkspaceHint": "当前使用工作区默认位置；切换到全局范围后可指定自定义位置。",
+			"config.providerDefaultLocation": "默认（跟随范围）",
+			"config.providerSaveFailed": "配置保存失败：{error}",
+			"config.providerServiceTitle": "服务配置",
+			"config.providerServiceHint": "供该 Provider 的所有记忆空间复用；启用或保存时会刷新记忆空间目录中的映射与元信息。",
+			"config.providerEnableHint": "填写服务配置并保存后，Provider 会启用并同步所有可见记忆空间。",
+			"config.providerEnabled": "已启用",
+			"config.providerDisabled": "未启用",
+			"config.providerDisabledConfigured": "已关闭 · 配置已保留",
+			"config.providerNeedsConfiguration": "需要完成配置",
+			"config.providerToggleAria": "启用 {provider}",
+			"config.providerToggleFailed": "切换失败：{error}",
+			"config.enableProvider": "保存并启用",
+			"config.providerServiceSaved": "服务配置已保存，记忆空间目录已同步",
+			"config.saveProviderService": "保存服务配置",
+			"config.providerUnavailable": "当前 DSH 主机不支持 Provider 服务配置。",
+			"config.saveScopeBeforeProviders": "存储范围有未保存修改。请先保存范围，再配置对应目录中的 Provider。",
+			"config.providerTargetWorkspace": "当前工作区：{workspace}；标记“工作区”的 Provider 配置与记忆空间使用此范围。",
+			"config.loadingProviders": "正在读取 Provider 配置…",
+			"config.providerLoadFailed": "读取 Provider 配置失败：{error}",
+			"config.retryProviders": "重试",
+			"config.saving": "保存中…",
+			"config.embeddingApiKeyEnv": "API Key 环境变量（可选）",
+			"config.embeddingEnvInvalid": "请输入有效的 Host 环境变量名，例如 MY_EMBEDDING_API_KEY。",
+			"config.embeddingAuthChoice": "请填写 API Key 或环境变量名，二选一。",
+			"config.embeddingKeyPlaceholder": "留空保留已有密钥",
+			"config.embeddingCredentialSaved": "已保存 DSH 凭据引用；密钥不会回传到此页面。",
+			"config.embeddingClearKey": "移除本连接的密钥和环境变量引用",
+			"config.embeddingMigrateKey": "将已有明文密钥迁入 DSH 凭据库",
+			"config.embeddingUpgradeHost": "升级 dsh-mnemon Starter 后即可管理凭据。现有连接仍可使用；此处暂不接受新的密钥。"
 		};
 		var en = {
 			"term.space": "Memory Space",
@@ -379,10 +544,10 @@ window.__ModuleLoader__.load({
 			"nav.bodies": "Memory Spaces",
 			"nav.search": "Recall",
 			"nav.entities": "Entities",
-			"nav.rememberAction": "Remember",
+			"nav.rememberAction": "Save to memory",
 			"nav.content": "Content",
 			"overview.title": "Memory Spaces",
-			"overview.description": "Manage memory spaces backed by Mnemon Native or third-party Providers. Active spaces participate in reads, routing, and live snapshots.",
+			"overview.description": "Long-term memory held by Mnemon Native or third-party Providers; active spaces take part in recall.",
 			"overview.pageDescription": "Create and activate Memory Spaces, then inspect storage health and live relation snapshots across providers.",
 			"overview.interval": "Full sync on entry · Click a card to sync on demand",
 			"overview.fullSyncPending": "Waiting for the first full sync",
@@ -391,11 +556,8 @@ window.__ModuleLoader__.load({
 			"overview.fullSyncMinutes": "Last full sync: {count}m ago",
 			"overview.fullSyncHours": "Last full sync: {count}h ago",
 			"overview.fullSyncDays": "Last full sync: {count}d ago",
-			"overview.syncing": "Syncing…",
-			"overview.syncNow": "Sync now",
 			"overview.directory": "Memory Space Directory",
-			"overview.directory.description": "Each card represents a memory space. A third-party Provider creates its mapping on first connection; later card clicks check only that space, without overwriting locally maintained titles or descriptions.",
-			"overview.directory.waiting": "Waiting for directory",
+			"overview.directory.description": "Each card is one Memory Space; click it to check the connection, and use its switch to include it in recall.",
 			"overview.directory.unsynced": "Directory not synchronized",
 			"overview.directory.unsyncedBadge": "Directory pending",
 			"overview.directoryLoading": "Loading the Memory Space directory",
@@ -407,7 +569,7 @@ window.__ModuleLoader__.load({
 			"overview.reconnectHint": "Click the card to reconnect and synchronize this Memory Space",
 			"overview.reconnectAria": "Reconnect {name}",
 			"overview.snapshotLoading": "Loading the multi-space live snapshot",
-			"overview.metadataAction": "AI metadata",
+			"overview.metadataAction": "Tidy names and descriptions",
 			"overview.metadataTitle": "Maintain Memory Space metadata with AI",
 			"overview.metadataDescription": "Select one or more active Memory Spaces. The system reads a small sample through each Provider’s fastest native path, then gives each space to an independent task Agent for its title and description.",
 			"overview.metadataUnavailable": "Temporarily unavailable: no active Agent matches the current memory scope",
@@ -434,17 +596,17 @@ window.__ModuleLoader__.load({
 			"overview.unsyncedLong": "The Host is still using the previous plugin contract. Restart DSH to rediscover existing Stores; no .db file will be deleted.",
 			"overview.emptyTitle": "No Memory Spaces yet",
 			"overview.emptyShort": "Create the first space and distill durable context into it.",
-			"overview.emptyLong": "Create a Mnemon Memory Space, or enable a third-party provider in Settings → Memory System to synchronize its existing namespaces.",
+			"overview.emptyLong": "Create a Mnemon Memory Space, or enable a third-party provider on the dsh-mnemon page under Plugins to synchronize its existing namespaces.",
 			"overview.noActiveTitle": "No active Memory Spaces",
 			"overview.noActiveText": "Enable read access for at least one space to aggregate its live graph here.",
 			"overview.noContentTitle": "Active spaces have no content yet",
-			"overview.noContentText": "Distill durable context into a space to populate nodes and relations.",
+			"overview.noContentText": "Save memories to see their nodes and relations here.",
 			"overview.createTitle": "Create Memory Space",
-			"overview.createDialogHint": "Define this Memory Space and choose its provider here. It reuses services, credentials, and global data locations from Settings → Memory System.",
+			"overview.createDialogHint": "Define this Memory Space and choose its provider here. It reuses services, credentials, and global data locations configured on the dsh-mnemon page under Plugins.",
 			"overview.createIdentityTitle": "Memory Space details",
 			"overview.createIdentityHint": "The name identifies the space; the description guides when the agent writes and recalls it.",
 			"overview.createPlacementTitle": "Memory Space provider",
-			"overview.createPlacementHint": "This is an explicit manual creation. Choose one enabled Provider; automatic selection is managed by Distillation Strategy.",
+			"overview.createPlacementHint": "This is an explicit manual creation; choose one enabled Provider. What a task Agent chooses for new spaces is set in Provider for new spaces.",
 			"overview.createName": "New Memory Space name",
 			"overview.createNamePlaceholder": "Name",
 			"overview.createDescription": "New Memory Space description",
@@ -473,7 +635,8 @@ window.__ModuleLoader__.load({
 			"overview.capability.exact-write": "Exact writes",
 			"overview.capability.forget": "Safe forget",
 			"overview.candidateNativeReady": "Official native · follows the active memory scope",
-			"overview.providerServiceRequired": "Not enabled; configure the service in Settings → Memory System first",
+			"overview.providerServiceRequired": "Off",
+			"overview.nativeCliRequired": "Needs the Mnemon CLI on this machine; other providers work without it",
 			"overview.workspaceBinding.automatic": "Follows the active memory scope",
 			"overview.workspaceBinding.optional-override": "Follows the active scope; global location can be customized",
 			"overview.workspaceBinding.provider-global": "Always uses the global scope",
@@ -489,25 +652,23 @@ window.__ModuleLoader__.load({
 			"overview.providerLabel": "Memory engine",
 			"overview.nativeOfficial": "Official native",
 			"overview.providerNativeHint": "Official native, local-first storage with the full graph and soft-delete semantics",
-			"strategy.action": "Distillation strategy",
-			"strategy.title": "Distillation strategy",
-			"strategy.description": "Choose how the Agent selects a Provider when it must create a new Memory Space during distillation. Existing spaces are still routed by name, description, and capabilities first.",
+			"strategy.action": "Provider for new spaces",
+			"strategy.title": "Provider for new spaces",
+			"strategy.description": "How a task Agent picks a Provider when it creates a Memory Space; existing spaces are still chosen by name and description.",
 			"strategy.loading": "Loading Provider directory…",
 			"strategy.modeTitle": "Provider selection",
-			"strategy.modeHint": "This policy applies only to Agent-created spaces during distillation. Manual Create Memory Space always asks you to choose.",
+			"strategy.modeHint": "Applies only to spaces a task Agent creates; you always choose when you create one yourself.",
 			"strategy.manualHint": "Fix one Provider; the Agent cannot override it",
 			"strategy.automaticHint": "Apply hard rules first, then let the task Agent choose an eligible Provider",
 			"strategy.manualTitle": "Fixed Provider",
 			"strategy.manualDescription": "When no existing space fits, create the new space on this Provider.",
 			"strategy.automaticTitle": "Smart selection rules",
 			"strategy.automaticDescription": "The host enforces data and capability rules. The prompt only guides judgment among eligible candidates.",
-			"strategy.taskAgentReady": "Task Agent ready",
-			"strategy.taskAgentUnavailable": "Waiting for task Agent",
-			"strategy.save": "Save strategy",
+			"strategy.save": "Save",
 			"strategy.saving": "Saving…",
 			"overview.providerOpenVikingHint": "Connect an existing OpenViking service under the same Memory Space workflow",
 			"overview.providerSummary.mnemon-native": "Official native, local-first storage with the full graph and soft-delete semantics",
-			"overview.providerSummary.openviking": "Filesystem-shaped shared memory with tiered reads and automatic semantic extraction",
+			"overview.providerSummary.openviking": "Filesystem-shaped shared memory with verified exact writes and semantic retrieval",
 			"overview.providerSummary.honcho": "Cross-session user modelling, peer profiles, dialectic reasoning, and persistent conclusions",
 			"overview.providerSummary.mem0": "Automatic fact extraction, semantic retrieval, reranking, and deduplication",
 			"overview.providerSummary.hindsight": "Knowledge-graph memory with entity resolution, multi-strategy recall, and reflection",
@@ -524,6 +685,7 @@ window.__ModuleLoader__.load({
 			"overview.providerApiKeyOptional": "Leave blank when authentication is disabled",
 			"overview.providerApiKeyKeep": "Saved; leave blank to keep unchanged",
 			"overview.providerAccount": "Account",
+			"overview.providerDiscoveryUser": "User key owner (skip admin)",
 			"overview.providerUser": "User",
 			"overview.providerActorPeer": "Actor Peer",
 			"overview.providerField.workspace": "Workspace",
@@ -620,7 +782,7 @@ window.__ModuleLoader__.load({
 			"graph.kindSpace": "Memory Space",
 			"graph.kindEntity": "Entity",
 			"search.title": "Recall Memory",
-			"search.description": "Retrieve raw evidence across active Memory Spaces; every provider uses its native recall method and keeps provenance.",
+			"search.description": "Search the active Memory Spaces: direct search returns the stored text, an Agent query answers with citations.",
 			"search.maxResults": "Up to {count} results",
 			"search.placeholder": "Why did we choose SQLite? What release conventions apply?",
 			"search.queryAria": "Memory query",
@@ -647,7 +809,7 @@ window.__ModuleLoader__.load({
 			"search.noRelated": "No related nodes found within two hops.",
 			"search.sourcesTitle": "Search coverage",
 			"entities.title": "Entity Explorer",
-			"entities.description": "Inspect entity connections only in Memory Spaces that expose a real entity index.",
+			"entities.description": "See how entities connect facts, decisions and context.",
 			"entities.sourcesTitle": "Entity capability coverage",
 			"entities.unsupportedTitle": "No active space exposes an entity index",
 			"entities.unsupportedText": "The active providers remain searchable through Recall, but are not presented here as a fabricated entity graph.",
@@ -660,57 +822,58 @@ window.__ModuleLoader__.load({
 			"entities.filterHint": "Type to filter the rail locally (Esc to clear).",
 			"entities.emptyRail": "Entities appear here after memories with entity metadata are stored.",
 			"entities.filterEmpty": "No local match. Press Explore to query the host.",
-			"entities.loading": "Recalling entity relations…",
+			"entities.loading": "Reading the entity's memories…",
 			"entities.selectTitle": "Select or enter an entity",
-			"entities.selectText": "The entity view aggregates related memories instead of relying on literal matching.",
+			"entities.selectText": "Selecting one lists every memory that carries it; Find related memories then adds others recall relates to it.",
 			"entities.emptyTitle": "No related memories",
 			"entities.emptyText": "Try the full name or another entity alias.",
-			"remember.title": "Distill Memory",
-			"remember.description": "An independent task Agent with no conversation history selects a Memory Space, checks duplicates, distills the candidate, and completes the write without filling the main conversation context.",
+			"entities.railLoading": "Reading entities…",
+			"entities.memoriesHint": "Memories that carry this entity",
+			"entities.relatedTitle": "Related memories",
+			"entities.relatedHint": "Recalled as related, without this entity",
+			"entities.findRelated": "Find related memories",
+			"entities.hideRelated": "Hide",
+			"entities.noCarrying": "No memory carries this entity.",
+			"entities.noRelated": "No other related memories.",
+			"entities.retry": "Retry",
+			"entities.sourceReady": "{count} entities",
+			"entities.sourcePartial": "{count} entities · partial",
+			"readSources.status.loading": "Reading",
+			"remember.title": "Save to memory",
+			"remember.description": "A task Agent decides whether this is worth keeping, removes duplicates, distills it and writes it to the right Memory Space, outside this conversation.",
 			"remember.readOnlyTitle": "Read-only mode",
 			"remember.readOnlyText": "This deployment disables memory writes. Change and save the DSH Mnemon configuration to enable them.",
-			"remember.delegateTitle": "Send to independent task Agent",
-			"remember.noSession": "No live session",
-			"remember.ready": "Independent task Agent ready",
-			"remember.noTaskAgent": "Task Agent unavailable",
-			"remember.taskAgentReady": "Task Agent ready",
 			"remember.candidate": "Candidate",
-			"remember.candidateAria": "Memory candidate",
-			"remember.placeholder": "Enter background, preferences, decisions, or insights worth retaining across tasks. The model decides whether they qualify.",
+			"remember.placeholder": "Background, preferences, decisions or conclusions worth keeping.",
 			"remember.sessionHint": "No usable model route is available for an independent task Agent.",
 			"remember.taskAgentHint": "The Host cannot currently create an isolated task Agent. Refresh status and try again.",
-			"remember.processing": "Independent task Agent is working…",
-			"remember.action": "Evaluate and distill",
-			"remember.advanced": "Advanced human constraints",
-			"remember.advancedHint": "Constrain the target Memory Space and metadata",
+			"remember.processing": "Task Agent working…",
+			"remember.action": "Send to task Agent",
+			"remember.advanced": "Advanced options",
+			"remember.advancedHint": "Choose the target space, category and importance",
 			"remember.expand": "Expand",
 			"remember.target": "Target Memory Space",
 			"remember.asyncProviderHint": "This Memory Space waits for remote extraction to settle before returning a truthful write receipt.",
 			"remember.entities": "Entities (comma-separated)",
 			"remember.tags": "Tags (comma-separated)",
-			"remember.advancedText": "Advanced options constrain the independent task Agent; they do not bypass supervision or duplicate checks.",
-			"remember.saving": "Independent task Agent is writing…",
-			"remember.advancedAction": "Distill with constraints",
-			"remember.skipped": "The independent task Agent decided not to write",
-			"remember.completed": "The independent task Agent completed processing",
-			"remember.processed": "Independent task Agent processed: {action}",
-			"remember.dispatchFailed": "Dispatch failed: {error}",
-			"remember.saveFailed": "Save failed: {error}",
+			"remember.advancedText": "Constraints still go through the task Agent’s duplicate check and receipt.",
+			"remember.saving": "Task Agent working…",
+			"remember.advancedAction": "Send with constraints",
 			"content.title": "Memory Content",
-			"content.description": "Inspect observable content through each provider’s real browse contract, with enumerable, query-only, and unavailable engines kept distinct.",
+			"content.description": "Browse what each Memory Space holds.",
 			"content.sourcesTitle": "Provider content models",
 			"content.count": "{count} memories",
 			"content.filterAria": "Filter memory content",
 			"content.filterPlaceholder": "Filter by content or exact ID…",
 			"content.categoryAria": "Memory category",
 			"content.apply": "Apply filters",
-			"content.notice": "Content calls each provider’s read-only browse contract directly; query-only engines run only after you enter a query.",
+			"content.notice": "Query-only Providers show content once you enter a query.",
 			"content.queryRequiredTitle": "Query-only spaces are waiting",
 			"content.queryRequiredText": "Enter a focused query to inspect providers such as ByteRover that do not expose a complete list.",
 			"content.showing": "Showing {visible} / {total}",
 			"content.showMore": "Show {count} more",
 			"content.emptyTitle": "No matching memories",
-			"content.emptyText": "Clear the filters or distill the first durable memory.",
+			"content.emptyText": "Clear the filters or save a first memory.",
 			"nav.spaces": "Memory Spaces",
 			"overview.editSpace": "Edit",
 			"overview.editSpaceAria": "Edit {name}",
@@ -720,11 +883,154 @@ window.__ModuleLoader__.load({
 			"overview.deleteSpaceAria": "Delete {name}",
 			"overview.disconnectSpace": "Disconnect",
 			"overview.disconnectSpaceAria": "Disconnect {name}",
-			"overview.deletingSpace": "Deleting…"
+			"overview.deletingSpace": "Deleting…",
+			"common.score": "Score {value}",
+			"overview.providerEnableHint": "Turn on more Providers on Memory Spaces’ page under Plugins → dsh-mnemon.",
+			"search.citations": "Cites",
+			"overview.rediscoverAction": "Rediscover",
+			"overview.rediscovering": "Rediscovering…",
+			"overview.rediscoverHint": "Ask the enabled Providers again; new spaces are added without joining recall",
+			"overview.rediscoveryAdded": "New spaces found: {count}. They join recall once you switch them on.",
+			"overview.rediscoveryNone": "No new spaces.",
+			"overview.rediscoveryDisconnected": "Spaces you disconnected stay disconnected: {count}. Save the Provider’s settings again to bring them back.",
+			"overview.rediscoveryFailed": "{provider} could not finish discovery: {error}",
+			"overview.rediscoveryTimedOut": "{provider} did not answer in time; try Rediscover later.",
+			"overview.rediscoveryDismiss": "Dismiss",
+			"overview.newSpace": "New",
+			"common.copyId": "Copy ID",
+			"common.readOnly": "Read only",
+			"common.activationOnly": "Activation control only",
+			"common.active": "Active",
+			"common.category": "Category",
+			"common.importanceLabel": "Importance",
+			"common.importance": "Importance {value}",
+			"common.hops": "{count} hops",
+			"common.allCategories": "All categories",
+			"common.memories": "{count} memories",
+			"common.edges": "{count} edges",
+			"card.confirmText": "Soft-delete this memory?",
+			"card.processing": "Processing…",
+			"card.confirmForget": "Confirm forget",
+			"card.related": "View related",
+			"card.clone": "Create from this",
+			"card.forget": "Forget",
+			"readSources.all": "All providers",
+			"readSources.mode.search": "Native search",
+			"readSources.mode.graph": "True relation graph",
+			"readSources.mode.projection": "Content projection",
+			"readSources.mode.enumerable": "Enumerable content",
+			"readSources.mode.query-only": "Query only",
+			"readSources.mode.entities": "Entity index",
+			"readSources.mode.unsupported": "Unsupported",
+			"readSources.status.ready": "{count} observable",
+			"readSources.status.empty": "Connected · no content",
+			"readSources.status.query-required": "Read after a query",
+			"readSources.status.unsupported": "Unavailable on this surface",
+			"readSources.status.unavailable": "Connection unavailable",
+			"readSources.edges": "{count} true relations",
+			"readSources.model.mnemon-native": "Facts, entities, and typed relations",
+			"readSources.model.openviking": "Hierarchy and tiered content",
+			"readSources.model.honcho": "Peer conclusions and profiles",
+			"readSources.model.mem0": "Extracted semantic memories",
+			"readSources.model.hindsight": "Memory units and knowledge graph",
+			"readSources.model.holographic": "Trusted facts and entities",
+			"readSources.model.retaindb": "Profiles and typed facts",
+			"readSources.model.byterover": "Knowledge-tree queries",
+			"readSources.model.supermemory": "Memories and ingested documents",
+			"common.inactive": "Inactive",
+			"config.providerSecretShow": "Show credential",
+			"config.providerSecretHide": "Hide credential",
+			"config.providerSecretStoredValue": "Saved credential",
+			"config.providersSpacesOffTitle": "Memory Spaces is off",
+			"config.providersSpacesOffDetail": "Saved connections are kept",
+			"config.providersSpacesOn": "Turn on “Memory Spaces”",
+			"config.providersReadOnlyTitle": "dsh-mnemon is read-only",
+			"config.providersReadOnlyDetail": "With writeEnabled false, Providers cannot be switched on or off.",
+			"spaces.offNote": "Turn it on to configure Providers and embedding",
+			"config.providersTitle": "Memory providers",
+			"config.providersDescription": "Providers store memory spaces. Enabling or saving one synchronizes its existing spaces; turning it off removes only the local mapping, never third-party data.",
+			"config.nativeSummary": "Official native long-term memory with a complete relation graph",
+			"config.officialNative": "Official native",
+			"config.nativeCliMissing": "CLI not installed (optional)",
+			"config.embeddingTitle": "Local vector embeddings",
+			"config.embeddingDescription": "Have the DSH Host inject the embedding endpoint and model into every Mnemon CLI call; an endpoint ending in /v1 automatically uses the OpenAI-compatible protocol (/v1/embeddings with Bearer auth), otherwise the Ollama protocol. Compatible endpoints that do not end in /v1 can set the protocol explicitly.",
+			"config.embeddingManaged": "Manage embedding settings in DSH",
+			"config.embeddingManagedHint": "When enabled, saved values override the Mnemon child-process environment. When off, Mnemon keeps the Host environment and its built-in defaults.",
+			"config.embeddingEndpoint": "Embedding endpoint",
+			"config.embeddingModel": "Embedding model",
+			"config.embeddingApiKey": "API key (optional, OpenAI-compatible servers)",
+			"config.embeddingApiKeyInvalid": "The API key must contain no control characters and at most 2048 characters.",
+			"config.embeddingProtocol": "Protocol",
+			"config.embeddingProtocolAuto": "Auto (detect via /v1)",
+			"config.embeddingProtocolOllama": "Ollama",
+			"config.embeddingProtocolOpenai": "OpenAI-compatible",
+			"config.embeddingProtocolInvalid": "The protocol must be one of Auto / Ollama / OpenAI-compatible.",
+			"config.embeddingEndpointInvalid": "The embedding endpoint must be an absolute HTTP(S) URL without credentials, a query, or a fragment.",
+			"config.embeddingModelInvalid": "The embedding model must contain 1–200 characters and no control characters.",
+			"config.embeddingSecurity": "Mnemon sends memory and query text to this endpoint. New keys are held by DSH credentials; settings contain only references. Host environment variables are also supported. Blank keeps the existing key; removing a reference does not delete stored records. Use HTTPS for remote services.",
+			"config.embeddingTest": "Test status",
+			"config.embeddingNotTested": "The embedding connection and the coverage of each Mnemon Native space have not been checked.",
+			"config.embeddingTesting": "Checking the embedding server and coverage through Mnemon…",
+			"config.embeddingSaveBeforeTest": "Save the embedding settings before testing their effective runtime values.",
+			"config.embeddingTestUnavailable": "This DSH Host does not provide embedding status checks.",
+			"config.embeddingCliMissing": "Testing needs the Mnemon CLI; these embedding settings only apply to Mnemon Native.",
+			"config.embeddingStatusAvailable": "Embedding model available · {model} · {embedded}/{total} embedded ({coverage})",
+			"config.embeddingStatusAvailableWithProtocol": "Embedding model available · {model} · protocol {protocol} · {embedded}/{total} embedded ({coverage})",
+			"config.embeddingStatusUnavailable": "Embedding model unavailable · {model} · {embedded}/{total} embedded ({coverage})",
+			"config.embeddingStatusUnavailableWithProtocol": "Embedding model unavailable · {model} · protocol {protocol} · {embedded}/{total} embedded ({coverage})",
+			"config.embeddingStatusFailed": "Embedding status check failed: {error}",
+			"config.embeddingSpaces": "Each Mnemon Native space",
+			"config.embeddingSpaceCounts": "{embedded}/{total} embedded ({coverage})",
+			"config.embeddingSpaceFailed": "Could not read: {error}",
+			"config.embeddingMissing": "Memories without a vector are left out of semantic matching.",
+			"config.embeddingMissingFill": "Memories without a vector are left out of semantic matching; Fill in beside a space creates its missing vectors.",
+			"config.embeddingMissingOffline": "Memories without a vector are left out of semantic matching; once the embedding service answers, their vectors can be filled in here.",
+			"config.embeddingSpacesUnread": "Spaces that could not be read are left out of the total.",
+			"config.embeddingFill": "Fill in",
+			"config.embeddingFilling": "Filling in…",
+			"config.embeddingFillLabel": "Fill in the vectors of {name}",
+			"config.embeddingFillingLabel": "Filling in the vectors of {name}",
+			"config.embeddingFillDone": "Filled in {filled} vectors for {name}.",
+			"config.embeddingFillMore": "Filled in {filled} vectors for {name}; {remaining} are still missing. Press Fill in to go on.",
+			"config.embeddingFillPartly": "Filled in {filled} vectors for {name}; the embedding service returned none for the other {remaining}. Press Fill in later to try again.",
+			"config.embeddingFillRefused": "The embedding service returned no vectors for {name}. Check that it is running and serves the model {model}.",
+			"config.embeddingFillFailed": "The vectors of {name} were not filled in: {error}",
+			"config.providerGlobalLocation": "Global data location",
+			"config.providerGlobalLocationHint": "{provider} uses the global scope directory by default, or you can choose a custom location.",
+			"config.providerGlobalLocationWorkspaceHint": "The workspace default is active. Switch to Global to choose a custom location.",
+			"config.providerDefaultLocation": "Default (follows scope)",
+			"config.providerSaveFailed": "Could not save configuration: {error}",
+			"config.providerServiceTitle": "Service configuration",
+			"config.providerServiceHint": "Shared by this provider’s Memory Spaces; enabling or saving refreshes their directory mappings and metadata.",
+			"config.providerEnableHint": "Complete and save the service configuration to enable the provider and synchronize every visible namespace.",
+			"config.providerEnabled": "Enabled",
+			"config.providerDisabled": "Not enabled",
+			"config.providerDisabledConfigured": "Off · configuration kept",
+			"config.providerNeedsConfiguration": "Configuration required",
+			"config.providerToggleAria": "Enable {provider}",
+			"config.providerToggleFailed": "Could not change provider state: {error}",
+			"config.enableProvider": "Save and enable",
+			"config.providerServiceSaved": "Service configuration saved and Memory Spaces synchronized",
+			"config.saveProviderService": "Save service configuration",
+			"config.providerUnavailable": "This DSH host does not support provider service configuration.",
+			"config.saveScopeBeforeProviders": "The storage scope has unsaved changes. Save the scope before configuring providers in that directory.",
+			"config.providerTargetWorkspace": "Current workspace: {workspace}. Providers tagged Workspace use this scope for configuration and Memory Spaces.",
+			"config.loadingProviders": "Loading provider configurations…",
+			"config.providerLoadFailed": "Could not load provider configurations: {error}",
+			"config.retryProviders": "Retry",
+			"config.saving": "Saving…",
+			"config.embeddingApiKeyEnv": "API key environment variable (optional)",
+			"config.embeddingEnvInvalid": "Enter a valid Host environment variable name, such as MY_EMBEDDING_API_KEY.",
+			"config.embeddingAuthChoice": "Provide an API key or an environment variable name, not both.",
+			"config.embeddingKeyPlaceholder": "Leave blank to keep the existing key",
+			"config.embeddingCredentialSaved": "A DSH credential reference is saved; the key is never returned to this page.",
+			"config.embeddingClearKey": "Remove this connection's key and environment variable references",
+			"config.embeddingMigrateKey": "Move the existing plaintext key to DSH credentials",
+			"config.embeddingUpgradeHost": "Upgrade dsh-mnemon Starter to manage credentials. The existing connection still works; new keys cannot be entered here yet."
 		};
 		//#endregion
 		//#region \0source-css:/home/runner/work/dsh-mnemon/dsh-mnemon/plugins/dsh-mnemon-source-memory-spaces/presentation/page.module.css.mjs
-		const css$2 = ".IIa07q_entityHeading>span,.IIa07q_inspectorHeading>span{color:var(--mn-faint);font:650 9px/1.2 var(--mn-code);letter-spacing:.12em;text-transform:uppercase}.IIa07q_memoryHeaderActions{align-items:center;gap:7px;display:flex}.IIa07q_memoryHeaderActions>button{white-space:nowrap}.IIa07q_asyncRegion{min-width:0;position:relative}.IIa07q_asyncResults{min-width:0;min-height:120px;position:relative}.IIa07q_asyncPlaceholder{border:1px solid var(--mn-line);min-height:220px;color:var(--mn-muted);background:var(--mn-layer-1);border-radius:13px;place-items:center;display:grid;position:relative}.IIa07q_muted{color:var(--mn-faint);padding:16px 0;font-size:12px}.IIa07q_readSources{border:1px solid var(--mn-line);background:color-mix(in srgb, var(--mn-layer-1) 72%, transparent);border-radius:11px;gap:8px;margin:0 0 14px;padding:11px 12px;display:grid}.IIa07q_readSources>header{justify-content:space-between;align-items:flex-start;gap:14px;display:flex}.IIa07q_readSources>header>div{gap:2px;display:grid}.IIa07q_readSources>header strong{font-size:11px}.IIa07q_readSources>header p{max-width:92ch;color:var(--mn-muted);margin:0;font-size:9.5px;line-height:1.45}.IIa07q_readSources>header>button{border:1px solid var(--mn-line);min-height:26px;color:var(--mn-muted);background:var(--mn-layer-2);cursor:pointer;border-radius:7px;flex:none;padding:0 8px;font-size:9px}.IIa07q_readSources>header>button[data-selected]{border-color:color-mix(in srgb, var(--mn-accent) 42%, var(--mn-line));color:var(--mn-accent);background:color-mix(in srgb, var(--mn-accent) 7%, var(--mn-layer-2))}.IIa07q_readSources>div{grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:6px;display:grid}.IIa07q_readSourceCard,.IIa07q_bodyCard,.IIa07q_metadataList>label{border:1px solid var(--mn-line);color:var(--mn-text);background:linear-gradient(90deg, color-mix(in srgb, var(--mn-provider-color) 5%, var(--mn-layer-1)), var(--mn-layer-1) 34%);box-shadow:inset 3px 0 0 color-mix(in srgb, var(--mn-provider-color) 68%, transparent);border-radius:8px}.IIa07q_readSourceCard{text-align:left;grid-template-columns:7px minmax(0,1fr) auto;align-items:center;gap:8px;min-width:0;min-height:58px;padding:7px 8px 7px 11px;display:grid}button.IIa07q_readSourceCard{cursor:pointer}button.IIa07q_readSourceCard:hover{border-color:color-mix(in srgb, var(--mn-provider-color) 32%, var(--mn-line-strong));background:linear-gradient(90deg, color-mix(in srgb, var(--mn-provider-color) 8%, var(--mn-hover)), var(--mn-hover) 40%)}.IIa07q_readSourceCard[data-selected]{border-color:color-mix(in srgb, var(--mn-accent) 48%, var(--mn-line));box-shadow:inset 3px 0 0 var(--mn-provider-color), inset 0 0 0 1px color-mix(in srgb, var(--mn-accent) 10%, transparent)}.IIa07q_readSourceSignal{background:var(--mn-success);width:7px;height:7px;box-shadow:0 0 0 3px color-mix(in srgb, var(--mn-success) 12%, transparent);border-radius:50%}.IIa07q_readSourceCard[data-mode=projection] .IIa07q_readSourceSignal,.IIa07q_readSourceCard[data-mode=enumerable] .IIa07q_readSourceSignal{background:#6574d9;box-shadow:0 0 0 3px #6574d924}.IIa07q_readSourceCard[data-mode=query-only] .IIa07q_readSourceSignal{background:#c38a32;box-shadow:0 0 0 3px #c38a3224}.IIa07q_readSourceCard[data-status=unavailable] .IIa07q_readSourceSignal,.IIa07q_readSourceCard[data-status=unsupported] .IIa07q_readSourceSignal{background:var(--mn-danger);box-shadow:0 0 0 3px color-mix(in srgb, var(--mn-danger) 12%, transparent)}.IIa07q_readSourceCard[data-status=empty] .IIa07q_readSourceSignal{background:var(--mn-faint);box-shadow:0 0 0 3px color-mix(in srgb, var(--mn-faint) 12%, transparent)}.IIa07q_readSourceIdentity,.IIa07q_readSourceState{gap:1px;min-width:0;display:grid}.IIa07q_readSourceIdentity strong{text-overflow:ellipsis;white-space:nowrap;font-size:10.5px;overflow:hidden}.IIa07q_readSourceMeta{align-items:center;gap:5px;min-width:0;margin-top:3px;display:flex}.IIa07q_readSourceMeta>small{color:var(--mn-faint);text-overflow:ellipsis;white-space:nowrap;font-size:8px;overflow:hidden}.IIa07q_readSourceState{text-align:right;justify-items:end}.IIa07q_readSourceState em{width:fit-content;color:var(--mn-accent);background:color-mix(in srgb, var(--mn-accent) 9%, transparent);font:650 8px var(--mn-code);white-space:nowrap;border-radius:999px;padding:2px 5px;font-style:normal}.IIa07q_readSourceState small{color:var(--mn-faint);white-space:nowrap;font-size:8px}.IIa07q_bodyDirectory{border:1px solid var(--mn-line);background:color-mix(in srgb, var(--mn-layer-1) 72%, var(--mn-bg));border-radius:11px;margin-bottom:12px;padding:12px 14px;position:relative}.IIa07q_bodyDirectoryHeader{flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:18px;margin-bottom:10px;display:flex}.IIa07q_bodyDirectoryHeader>div:first-child{flex:260px;min-width:0}.IIa07q_bodyDirectoryHeader h3{margin:1px 0;font-size:13px}.IIa07q_bodyDirectoryHeader p{color:var(--mn-muted);margin:0;font-size:10px}.IIa07q_bodyDirectoryPath{max-width:100%;color:var(--mn-faint);text-overflow:ellipsis;white-space:nowrap;margin-top:4px;font-size:9px;display:block;overflow:hidden}.IIa07q_bodyDirectoryControls{flex:none;justify-content:flex-end;align-items:center;gap:6px;padding-right:28px;display:flex}.IIa07q_bodyDirectoryControls>strong{color:var(--mn-accent);background:color-mix(in srgb, var(--mn-accent) 9%, transparent);font:650 9px var(--mn-code);border-radius:999px;flex:none;padding:5px 8px}.IIa07q_bodyGrid{grid-template-columns:repeat(auto-fit,minmax(245px,1fr));gap:7px;display:grid}.IIa07q_bodyDirectoryEmpty{border:1px dashed color-mix(in srgb, var(--mn-line) 84%, transparent);min-height:92px;color:var(--mn-muted);border-radius:12px;grid-column:1/-1;justify-content:center;align-items:center;gap:14px;display:flex}.IIa07q_bodyDirectoryEmpty>span{opacity:.6;font-size:28px}.IIa07q_bodyDirectoryEmpty strong{color:var(--mn-text);display:block}.IIa07q_bodyDirectoryEmpty p{margin:3px 0 0;font-size:10px}.IIa07q_bodyCard{--mn-body-accent:var(--mn-success);opacity:.72;min-width:0;padding:9px 10px 9px 13px;transition:opacity .18s,border-color .18s,background-color .18s}.IIa07q_bodyCard[data-active]{opacity:1;box-shadow:inset 3px 0 0 color-mix(in srgb, var(--mn-provider-color) 78%, transparent)}.IIa07q_bodyCard[data-reconnectable]{cursor:pointer}.IIa07q_bodyCard[data-reconnectable]:hover{border-color:color-mix(in srgb, var(--mn-provider-color) 46%, var(--mn-line))}.IIa07q_bodyCard[data-reconnectable]:focus-visible{outline:2px solid color-mix(in srgb, var(--mn-accent) 58%, transparent);outline-offset:2px}.IIa07q_bodySignal{background:var(--mn-faint);border-radius:50%;width:7px;height:7px}.IIa07q_bodyCard[data-active] .IIa07q_bodySignal{background:var(--mn-body-accent);box-shadow:0 0 0 4px color-mix(in srgb, var(--mn-body-accent) 14%, transparent)}.IIa07q_bodyCard:not([data-healthy]) .IIa07q_bodySignal{background:var(--mn-danger);box-shadow:0 0 0 4px color-mix(in srgb, var(--mn-danger) 12%, transparent)}.IIa07q_bodyCard[data-status-loading] .IIa07q_bodySignal{background:var(--mn-faint);box-shadow:0 0 0 4px color-mix(in srgb, var(--mn-faint) 12%, transparent)}.IIa07q_bodyCard[data-reconnecting] .IIa07q_bodySignal{box-sizing:border-box;border:1.5px solid color-mix(in srgb, var(--mn-provider-color) 24%, transparent);border-top-color:var(--mn-provider-color);width:7px;height:7px;box-shadow:none;background:0 0;animation:.72s linear infinite IIa07q_mnemon-spin}.IIa07q_bodyHealth{color:var(--mn-success);font:650 8px var(--mn-code);letter-spacing:.07em;text-transform:uppercase}.IIa07q_bodyCard:not([data-healthy]) .IIa07q_bodyHealth{color:var(--mn-danger)}.IIa07q_bodyCard[data-status-loading] .IIa07q_bodyHealth{color:var(--mn-faint)}.IIa07q_mnemonDefaultBadge{border:1px solid color-mix(in srgb, var(--mn-accent) 24%, var(--mn-line));width:fit-content;color:var(--mn-accent);background:color-mix(in srgb, var(--mn-accent) 7%, transparent);font:650 8px var(--mn-code);white-space:nowrap;border-radius:999px;padding:2px 5px}.IIa07q_providerBadge{border:1px solid color-mix(in srgb, var(--mn-provider-color) 34%, var(--mn-line));width:fit-content;max-width:100%;min-height:17px;color:color-mix(in srgb, var(--mn-provider-color) 78%, var(--mn-text));background:color-mix(in srgb, var(--mn-provider-color) 10%, var(--mn-layer-1));font:650 8px/11px var(--mn-code);text-align:center;text-overflow:ellipsis;vertical-align:middle;white-space:nowrap;border-radius:999px;flex:none;justify-content:center;align-items:center;padding:2px 6px;display:inline-flex;overflow:hidden}.IIa07q_providerBadge,.IIa07q_readSourceCard,.IIa07q_bodyCard,.IIa07q_metadataList>label,.IIa07q_graphNode,.IIa07q_providerBadge[data-provider=mnemon-native],.IIa07q_readSourceCard[data-provider=mnemon-native],.IIa07q_bodyCard[data-provider=mnemon-native],.IIa07q_metadataList>label[data-provider=mnemon-native],.IIa07q_graphNode[data-provider=mnemon-native]{--mn-provider-color:#64748b}.IIa07q_providerBadge[data-provider=openviking],.IIa07q_readSourceCard[data-provider=openviking],.IIa07q_bodyCard[data-provider=openviking],.IIa07q_metadataList>label[data-provider=openviking],.IIa07q_graphNode[data-provider=openviking]{--mn-provider-color:#3b82d0}.IIa07q_providerBadge[data-provider=honcho],.IIa07q_readSourceCard[data-provider=honcho],.IIa07q_bodyCard[data-provider=honcho],.IIa07q_metadataList>label[data-provider=honcho],.IIa07q_graphNode[data-provider=honcho]{--mn-provider-color:#c44fcf}.IIa07q_providerBadge[data-provider=mem0],.IIa07q_readSourceCard[data-provider=mem0],.IIa07q_bodyCard[data-provider=mem0],.IIa07q_metadataList>label[data-provider=mem0],.IIa07q_graphNode[data-provider=mem0]{--mn-provider-color:#8b5cf6}.IIa07q_providerBadge[data-provider=hindsight],.IIa07q_readSourceCard[data-provider=hindsight],.IIa07q_bodyCard[data-provider=hindsight],.IIa07q_metadataList>label[data-provider=hindsight],.IIa07q_graphNode[data-provider=hindsight]{--mn-provider-color:#0891b2}.IIa07q_providerBadge[data-provider=holographic],.IIa07q_readSourceCard[data-provider=holographic],.IIa07q_bodyCard[data-provider=holographic],.IIa07q_metadataList>label[data-provider=holographic],.IIa07q_graphNode[data-provider=holographic]{--mn-provider-color:#6366d9}.IIa07q_providerBadge[data-provider=retaindb],.IIa07q_readSourceCard[data-provider=retaindb],.IIa07q_bodyCard[data-provider=retaindb],.IIa07q_metadataList>label[data-provider=retaindb],.IIa07q_graphNode[data-provider=retaindb]{--mn-provider-color:#d08a28}.IIa07q_providerBadge[data-provider=byterover],.IIa07q_readSourceCard[data-provider=byterover],.IIa07q_bodyCard[data-provider=byterover],.IIa07q_metadataList>label[data-provider=byterover],.IIa07q_graphNode[data-provider=byterover]{--mn-provider-color:#0f9a83}.IIa07q_providerBadge[data-provider=supermemory],.IIa07q_readSourceCard[data-provider=supermemory],.IIa07q_bodyCard[data-provider=supermemory],.IIa07q_metadataList>label[data-provider=supermemory],.IIa07q_graphNode[data-provider=supermemory]{--mn-provider-color:#df4d72}.IIa07q_bodySwitch{min-height:32px;color:var(--mn-faint);cursor:pointer;background:0 0;border:0;align-items:center;gap:6px;padding:0 1px;font-size:9.5px;display:flex}.IIa07q_bodySwitchTrack{border:1px solid var(--mn-line-strong);background:var(--mn-layer-2);border-radius:999px;flex:none;width:29px;height:17px;transition:border-color .18s,background-color .18s;position:relative}.IIa07q_bodySwitchTrack i{background:var(--mn-faint);border-radius:50%;width:11px;height:11px;transition:transform .2s cubic-bezier(.2,.8,.2,1),background-color .18s;position:absolute;top:2px;left:2px}.IIa07q_bodySwitch:hover{color:var(--mn-text)}.IIa07q_bodySwitch:hover .IIa07q_bodySwitchTrack{border-color:var(--mn-body-accent)}.IIa07q_bodySwitch[aria-checked=true]{color:var(--mn-text)}.IIa07q_bodySwitch[aria-checked=true] .IIa07q_bodySwitchTrack{border-color:color-mix(in srgb, var(--mn-body-accent) 65%, var(--mn-line));background:color-mix(in srgb, var(--mn-body-accent) 25%, var(--mn-layer-2))}.IIa07q_bodySwitch[aria-checked=true] .IIa07q_bodySwitchTrack i{background:var(--mn-body-accent);transform:translate(12px)}.IIa07q_bodyCardActions{align-items:center;gap:6px;display:flex}.IIa07q_bodyCreateForm{gap:14px;padding-top:0}.IIa07q_createSection{border:1px solid var(--mn-line);background:color-mix(in srgb, var(--mn-layer-2) 42%, var(--mn-layer-1));border-radius:11px;gap:11px;padding:13px;display:grid}.IIa07q_createSectionHeading{align-items:flex-start;gap:9px;display:flex}.IIa07q_createSectionHeading>span{width:25px;height:19px;color:var(--mn-accent);background:color-mix(in srgb, var(--mn-accent) 9%, transparent);font:650 8px var(--mn-code);border-radius:6px;flex:none;place-items:center;display:grid}.IIa07q_createSectionHeading>div{gap:2px;min-width:0;display:grid}.IIa07q_createSectionHeading strong{color:var(--mn-text);font-size:11.5px;line-height:17px}.IIa07q_createSectionHeading small{color:var(--mn-muted);font-size:9px;line-height:1.45}.IIa07q_createIdentityGrid{grid-template-columns:minmax(0,1fr);align-items:stretch;gap:10px;display:grid}.IIa07q_createIdentityGrid>label{align-content:start}.IIa07q_createIdentityGrid textarea{min-height:70px}.IIa07q_strategyForm{gap:14px;padding-top:0}.IIa07q_strategyLoading{border:1px dashed var(--mn-line);min-height:88px;color:var(--mn-muted);border-radius:10px;justify-content:center;align-items:center;font-size:10px;display:flex;position:relative}.IIa07q_strategyLoading .IIa07q_sectionSpinner{top:9px;right:9px}.IIa07q_placementMode{border:0;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:0;padding:0;display:grid}.IIa07q_placementMode legend{color:var(--mn-muted);margin-bottom:5px;font-size:10px}.IIa07q_placementMode label{border:1px solid var(--mn-line);cursor:pointer;background:color-mix(in srgb, var(--mn-layer-2) 62%, transparent);border-radius:9px;grid-template-columns:16px minmax(0,1fr);align-items:center;gap:8px;min-width:0;padding:10px;display:grid;position:relative}.IIa07q_placementMode label[data-selected]{border-color:color-mix(in srgb, var(--mn-accent) 52%, var(--mn-line));background:color-mix(in srgb, var(--mn-accent) 5%, var(--mn-layer-2));box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--mn-accent) 12%, transparent)}.IIa07q_placementMode label[data-disabled]{cursor:not-allowed;opacity:.58}.IIa07q_placementMode input{opacity:0;pointer-events:none;width:1px;height:1px;position:absolute}.IIa07q_placementMode span{gap:3px;display:grid}.IIa07q_placementMode strong{color:var(--mn-text);font-size:11px}.IIa07q_placementMode strong em{color:var(--mn-accent);background:color-mix(in srgb, var(--mn-accent) 10%, transparent);font:650 8px var(--mn-code);border-radius:999px;margin-left:4px;padding:2px 5px;font-style:normal}.IIa07q_placementMode small{color:var(--mn-muted);font-size:9px;line-height:1.45}.IIa07q_placementPolicy{border:1px solid color-mix(in srgb, var(--mn-accent) 26%, var(--mn-line));background:color-mix(in srgb, var(--mn-accent) 4%, var(--mn-layer-1));border-radius:10px;gap:9px;margin:0;padding:11px;display:grid}.IIa07q_placementPolicyHeading{justify-content:space-between;align-items:flex-start;gap:12px;display:flex}.IIa07q_placementPolicyHeading>div{gap:2px;display:grid}.IIa07q_placementPolicyHeading strong{font-size:11px}.IIa07q_placementPolicyHeading small{color:var(--mn-muted);font-size:9px;line-height:1.45}.IIa07q_placementPolicyHeading>span{border:1px solid color-mix(in srgb, var(--mn-accent) 22%, var(--mn-line));color:var(--mn-accent);font:650 8px var(--mn-code);border-radius:999px;flex:none;padding:3px 6px}.IIa07q_placementRuleGrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;display:grid}.IIa07q_capabilityRules{border:0;flex-wrap:wrap;gap:6px;margin:0;padding:0;display:flex}.IIa07q_capabilityRules legend{width:100%;color:var(--mn-faint);margin-bottom:1px;font-size:9px}.IIa07q_capabilityRules label{border:1px solid var(--mn-line);width:fit-content;color:var(--mn-muted);background:var(--mn-input);cursor:pointer;border-radius:8px;align-items:center;gap:6px;padding:6px 8px;display:flex;position:relative}.IIa07q_capabilityRules label[data-selected]{border-color:color-mix(in srgb, var(--mn-accent) 42%, var(--mn-line));color:var(--mn-text);background:color-mix(in srgb, var(--mn-accent) 7%, var(--mn-input))}.IIa07q_capabilityRules input{opacity:0;pointer-events:none;width:1px;height:1px;position:absolute}.IIa07q_placementCandidates{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;display:grid}.IIa07q_placementCandidates>span,.IIa07q_placementCandidates>label{border:1px solid var(--mn-line);background:color-mix(in srgb, var(--mn-layer-2) 70%, transparent);border-radius:8px;grid-template-columns:28px minmax(0,1fr) 16px;align-items:center;gap:8px;min-width:0;padding:8px 9px;display:grid;position:relative}.IIa07q_placementCandidates>label{cursor:pointer}.IIa07q_placementCandidates>[data-selected]{border-color:color-mix(in srgb, var(--mn-accent) 38%, var(--mn-line));background:color-mix(in srgb, var(--mn-accent) 7%, transparent)}.IIa07q_placementCandidates>label[data-disabled]{cursor:not-allowed;opacity:.48}.IIa07q_placementCandidates input{opacity:0;pointer-events:none;width:1px;height:1px;position:absolute}.IIa07q_placementCandidates>span>span:not(.IIa07q_candidateIcon),.IIa07q_placementCandidates>label>span:not(.IIa07q_candidateIcon){gap:2px;min-width:0;display:grid}.IIa07q_placementCandidates strong{color:var(--mn-text);font-size:10px}.IIa07q_placementCandidates small{color:var(--mn-muted);font-size:8.5px;line-height:1.4}.IIa07q_providerChoice{border:0;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0;padding:0;display:grid}.IIa07q_providerChoice legend{color:var(--mn-muted);margin-bottom:5px;font-size:10px}.IIa07q_providerChoice label{border:1px solid var(--mn-line);cursor:pointer;background:color-mix(in srgb, var(--mn-layer-2) 72%, transparent);border-radius:9px;grid-template-columns:32px minmax(0,1fr) 16px;align-items:center;gap:9px;min-width:0;padding:10px;display:grid;position:relative}.IIa07q_providerChoice label[data-native]{border-color:color-mix(in srgb, var(--mn-accent) 20%, var(--mn-line));grid-column:1/-1}.IIa07q_providerChoice label[data-selected]{border-color:color-mix(in srgb, var(--mn-accent) 48%, var(--mn-line));background:color-mix(in srgb, var(--mn-accent) 5%, var(--mn-layer-2));box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--mn-accent) 12%, transparent)}.IIa07q_providerChoice label[data-disabled]{cursor:not-allowed;opacity:.5}.IIa07q_providerChoice input{opacity:0;pointer-events:none;width:1px;height:1px;position:absolute}.IIa07q_providerChoice span{gap:3px;display:grid}.IIa07q_providerChoice strong{color:var(--mn-text);font-size:11px}.IIa07q_providerChoice strong em{color:var(--mn-accent);background:color-mix(in srgb, var(--mn-accent) 10%, transparent);font:650 8px var(--mn-code);border-radius:999px;margin-left:5px;padding:2px 5px;font-style:normal}.IIa07q_providerChoice small{color:var(--mn-muted);-webkit-line-clamp:2;-webkit-box-orient:vertical;font-size:9px;line-height:1.45;display:-webkit-box;overflow:hidden}.IIa07q_providerChoiceIcon,.IIa07q_candidateIcon,.IIa07q_providerFieldIcon{box-sizing:border-box;border:1px solid var(--mn-line);background:var(--mn-layer-1);place-items:center;display:grid;overflow:hidden}.IIa07q_providerChoiceIcon{border-radius:8px;width:32px;height:32px;padding:3px}.IIa07q_candidateIcon{border-radius:7px;width:28px;height:28px;padding:3px}.IIa07q_providerFieldIcon{border-radius:8px;flex:none;width:30px;height:30px;padding:3px}.IIa07q_providerChoiceIcon>img,.IIa07q_providerChoiceIcon>svg,.IIa07q_candidateIcon>img,.IIa07q_candidateIcon>svg,.IIa07q_providerFieldIcon>img,.IIa07q_providerFieldIcon>svg{object-fit:contain;border-radius:5px;width:100%;height:100%;display:block}.IIa07q_choiceControl{box-sizing:border-box;border:1px solid color-mix(in srgb, var(--mn-muted) 52%, var(--mn-line));background:var(--mn-layer-1);border-radius:5px;flex:none;place-items:center;width:16px;height:16px;display:grid;position:relative}.IIa07q_choiceControl[data-kind=radio]{border-radius:50%}[data-selected]>.IIa07q_choiceControl{border-color:var(--mn-accent);background:var(--mn-accent)}[data-selected]>.IIa07q_choiceControl[data-kind=check]:after{content:\"\";border-bottom:1.5px solid #fff;border-left:1.5px solid #fff;width:7px;height:4px;transform:translateY(-1px)rotate(-45deg)}[data-selected]>.IIa07q_choiceControl[data-kind=radio]:after{content:\"\";background:#fff;border-radius:50%;width:6px;height:6px}.IIa07q_placementMode label:focus-within,.IIa07q_providerChoice label:focus-within,.IIa07q_capabilityRules label:focus-within,.IIa07q_placementCandidates label:focus-within{outline:2px solid color-mix(in srgb, var(--mn-accent) 28%, transparent);outline-offset:1px}.IIa07q_providerFields{border:1px solid color-mix(in srgb, #6574d9 25%, var(--mn-line));background:#6574d90d;border-radius:9px;gap:8px;padding:10px;display:grid}.IIa07q_providerFieldHeading{justify-content:space-between;align-items:flex-start;gap:12px;display:flex}.IIa07q_providerFieldIdentity{align-items:center;gap:8px;min-width:0;display:flex}.IIa07q_providerFieldIdentity>div{gap:2px;min-width:0;display:grid}.IIa07q_providerFieldHeading strong{color:var(--mn-text);font-size:11px}.IIa07q_providerFieldHeading small{color:var(--mn-muted);font-size:9px;line-height:1.45}.IIa07q_providerFieldHeading>span{border:1px solid color-mix(in srgb, #6574d9 24%, var(--mn-line));color:color-mix(in srgb, #8793ef 80%, var(--mn-text));font:650 8px var(--mn-code);border-radius:999px;flex:none;padding:3px 6px}.IIa07q_providerFields details{min-width:0}.IIa07q_providerFields summary{width:fit-content;color:var(--mn-accent);cursor:pointer;font-size:9px}.IIa07q_providerAdvancedGrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:8px;display:grid}.IIa07q_providerFieldControl .IIa07q_providerSecretClear{color:var(--mn-muted);cursor:pointer;align-items:center;gap:5px;font-size:8.5px;display:flex}.IIa07q_providerWriteHint{color:color-mix(in srgb, #8793ef 72%, var(--mn-muted));margin-top:4px;font-size:9px;line-height:1.45;display:block}.IIa07q_placementReceipt{border:1px solid color-mix(in srgb, var(--mn-accent) 20%, var(--mn-line));min-width:0;color:var(--mn-accent);background:color-mix(in srgb, var(--mn-accent) 4%, transparent);border-radius:8px;align-items:flex-start;gap:7px;margin:7px 0;padding:7px 8px;display:flex}.IIa07q_placementReceipt>span{flex:none;font-size:10px}.IIa07q_placementReceipt>div{grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;min-width:0;display:grid}.IIa07q_placementReceipt strong,.IIa07q_placementReceipt small{text-overflow:ellipsis;white-space:nowrap;overflow:hidden}.IIa07q_placementReceipt strong{font-size:9px}.IIa07q_placementReceipt small{color:var(--mn-muted);font-size:8px}.IIa07q_placementReceipt p{color:var(--mn-muted);text-overflow:ellipsis;white-space:nowrap;grid-column:1/-1;margin:0;font-size:8.5px;line-height:1.4;overflow:hidden}.IIa07q_bodyCard>p{min-height:15px;color:var(--mn-muted);margin:7px 0;font-size:10px;line-height:1.45}.IIa07q_bodyCard footer{border-top:1px solid var(--mn-line);min-width:0;color:var(--mn-faint);flex-wrap:nowrap;gap:5px 11px;padding-top:6px;font-size:9px;display:flex;overflow:hidden}.IIa07q_bodyFooterBlock{text-overflow:ellipsis;white-space:nowrap;flex:0 auto;min-width:0;display:block;overflow:hidden}.IIa07q_bodyFooterGrow{flex:auto}.IIa07q_graphLayout{grid-template-columns:minmax(0,1fr) minmax(240px,270px);gap:10px;display:grid}.IIa07q_graphPanel,.IIa07q_graphInspector{border:1px solid var(--mn-line);background:var(--mn-layer-1);border-radius:11px}.IIa07q_graphPanel{min-width:0;position:relative;overflow:hidden}.IIa07q_graphToolbar,.IIa07q_graphFooter{min-height:43px;color:var(--mn-muted);justify-content:space-between;align-items:center;gap:14px;padding:0 13px;font-size:10px;display:flex}.IIa07q_graphToolbar{border-bottom:1px solid var(--mn-line)}.IIa07q_graphToolbar>div:first-child{align-items:center;gap:7px;display:flex}.IIa07q_graphToolbar small{color:var(--mn-faint)}.IIa07q_liveDot{background:var(--mn-success);width:6px;height:6px;box-shadow:0 0 0 3px color-mix(in srgb, var(--mn-success) 15%, transparent);border-radius:50%}.IIa07q_graphLegend{flex-wrap:wrap;justify-content:flex-end;gap:5px 10px;display:flex}.IIa07q_graphLegend span{align-items:center;gap:4px;display:flex}.IIa07q_graphLegend span:before{content:\"\";background:var(--edge-color);border-radius:2px;width:13px;height:2px}.IIa07q_graphLegend [data-edge=temporal]{--edge-color:#87909f}.IIa07q_graphLegend [data-edge=scope]{--edge-color:#708199}.IIa07q_graphLegend [data-edge=scope]:before{background:repeating-linear-gradient(90deg, var(--edge-color) 0 4px, transparent 4px 7px)}.IIa07q_graphLegend [data-edge=semantic]{--edge-color:#4d7cfe}.IIa07q_graphLegend [data-edge=causal]{--edge-color:#ef6b5b}.IIa07q_graphLegend [data-edge=entity]{--edge-color:#22a879}.IIa07q_graphViewport{background:radial-gradient(circle at 50% 48%, color-mix(in srgb, var(--mn-accent) 6%, transparent), transparent 47%);min-height:clamp(390px,42vw,560px);position:relative;overflow:hidden}.IIa07q_graphCanvasControls{z-index:2;border:1px solid var(--mn-line);background:color-mix(in srgb, var(--mn-layer-1) 88%, transparent);box-shadow:0 6px 18px color-mix(in srgb, var(--mn-text) 7%, transparent);backdrop-filter:blur(10px);border-radius:9px;align-items:center;gap:5px;padding:4px;display:flex;position:absolute;top:10px;right:10px}.IIa07q_graphCanvasControls span{color:var(--mn-faint);font:9px var(--mn-code);align-items:center;gap:5px;padding:0 6px;display:flex}.IIa07q_graphCanvasControls span i{background:var(--mn-accent);width:5px;height:5px;box-shadow:0 0 0 3px color-mix(in srgb, var(--mn-accent) 12%, transparent);border-radius:50%}.IIa07q_graphCanvasControls button{min-height:30px;color:var(--mn-muted);cursor:pointer;background:0 0;border:1px solid #0000;border-radius:6px;padding:0 9px;font-size:9.5px}.IIa07q_graphCanvasControls button:hover,.IIa07q_graphCanvasControls button[data-active]{border-color:var(--mn-line);color:var(--mn-text);background:var(--mn-hover)}.IIa07q_graphCanvasControls button[data-active]{color:var(--mn-accent)}.IIa07q_graphSvg{touch-action:pan-y pinch-zoom;user-select:none;width:100%;height:clamp(390px,42vw,560px);display:block}.IIa07q_graphBackdrop{fill:var(--mn-layer-1)}.IIa07q_graphGridLine{stroke:var(--mn-line);stroke-width:.6px;opacity:.5}.IIa07q_graphEdge{fill:none;stroke:#87909f;stroke-width:1px;opacity:.32;vector-effect:non-scaling-stroke}.IIa07q_graphEdge[data-edge=scope]{stroke:#708199;stroke-dasharray:4 5;opacity:.28}.IIa07q_graphEdge[data-edge=semantic]{stroke:#4d7cfe;opacity:.48}.IIa07q_graphEdge[data-edge=causal]{stroke:#ef6b5b;opacity:.52}.IIa07q_graphEdge[data-edge=entity]{stroke:#22a879;stroke-width:1.45px;opacity:.78}.IIa07q_graphNode{--node:#8290a8;cursor:grab;touch-action:none;outline:none}.IIa07q_graphNode[data-dragging]{cursor:grabbing}.IIa07q_graphNode[data-category=decision]{--node:#ef8354}.IIa07q_graphNode[data-category=preference]{--node:#a879e1}.IIa07q_graphNode[data-category=fact]{--node:#4d7cfe}.IIa07q_graphNode[data-category=insight]{--node:#19a77d}.IIa07q_graphNode[data-category=context]{--node:#d8a624}.IIa07q_graphNode[data-kind=space]{--node:var(--mn-provider-color)}.IIa07q_graphNode[data-kind=entity]{--node:#2b9db9}.IIa07q_nodeHalo{fill:color-mix(in srgb, var(--node) 18%, var(--mn-layer-1));stroke:color-mix(in srgb, var(--node) 60%, var(--mn-layer-1));stroke-width:1.5px;transition:r .16s}.IIa07q_nodeCore{fill:var(--node)}.IIa07q_nodeLabel{fill:var(--mn-muted);font:10px var(--mn-code);pointer-events:auto}.IIa07q_nodeBodyLabel{fill:var(--mn-faint);font:650 8px var(--mn-code);letter-spacing:.04em;pointer-events:auto}.IIa07q_graphSvg[data-density=sparse] .IIa07q_nodeLabel{font-size:12px}.IIa07q_graphNode:hover .IIa07q_nodeHalo,.IIa07q_graphNode:focus .IIa07q_nodeHalo,.IIa07q_graphNode[data-selected] .IIa07q_nodeHalo{fill:color-mix(in srgb, var(--node) 28%, var(--mn-layer-1));stroke:var(--node)}.IIa07q_graphNode[data-selected] .IIa07q_nodeLabel{fill:var(--mn-text);font-weight:650}.IIa07q_graphFooter{border-top:1px solid var(--mn-line);min-height:38px;color:var(--mn-faint)}.IIa07q_graphInspector{min-width:0;min-height:calc(clamp(390px,42vw,560px) + 83px);padding:15px;overflow:hidden}.IIa07q_inspectorEmpty{text-align:center;flex-direction:column;justify-content:center;align-items:center;height:100%;display:flex}.IIa07q_inspectorLogo{opacity:.72;border-radius:11px;width:54px;height:54px;margin-bottom:15px}.IIa07q_inspectorEmpty h3{margin:7px 0 3px;font-size:14px}.IIa07q_inspectorEmpty p{color:var(--mn-faint);margin:0;font-size:11px}.IIa07q_inspectorHeading{justify-content:space-between;align-items:center;display:flex}.IIa07q_inspectorHeading button{width:32px;height:32px;color:var(--mn-muted);cursor:pointer;background:0 0;border:0;border-radius:7px;place-items:center;display:grid}.IIa07q_inspectorHeading button:hover{background:var(--mn-hover)}.IIa07q_inspectorChips{flex-wrap:wrap;align-items:center;gap:6px;margin-top:24px;display:flex}.IIa07q_categoryChip{color:var(--mn-accent);background:color-mix(in srgb, var(--mn-accent) 10%, transparent);border-radius:999px;padding:3px 8px;font-size:10px;display:inline-flex}.IIa07q_inspectorTitleRow{align-items:flex-start;gap:8px;min-width:0;margin:12px 0 20px;display:flex}.IIa07q_inspectorTitle{overflow-wrap:anywhere;white-space:pre-wrap;-webkit-line-clamp:6;-webkit-box-orient:vertical;flex:1;min-width:0;margin:0;font-size:14px;line-height:1.6;display:-webkit-box;overflow:hidden}.IIa07q_inspectorEye{border:1px solid var(--mn-line);width:27px;height:27px;color:var(--mn-muted);background:var(--mn-layer-1);cursor:pointer;border-radius:7px;flex:none;place-items:center;transition:color .15s,border-color .15s,background-color .15s;display:grid}.IIa07q_inspectorEye:hover{color:var(--mn-accent);border-color:var(--mn-line-strong);background:var(--mn-hover)}.IIa07q_inspectorMeta{margin:0}.IIa07q_inspectorMeta>div{border-top:1px solid var(--mn-line);gap:3px;padding:11px 0;display:grid}.IIa07q_inspectorMeta dt{color:var(--mn-faint);font:9px var(--mn-code);text-transform:uppercase}.IIa07q_inspectorMeta dd{overflow-wrap:anywhere;color:var(--mn-muted);margin:0;font-size:11px}.IIa07q_inspectorActions{gap:8px;margin-top:20px;display:grid}.IIa07q_previewContent{white-space:pre-wrap;overflow-wrap:anywhere;color:var(--mn-text);margin:0;font-size:13px;line-height:1.7}.IIa07q_searchBar{border:1px solid var(--mn-line);background:var(--mn-layer-1);border-radius:13px;margin-bottom:18px;padding:13px}.IIa07q_queryField{border:1px solid var(--mn-line-strong);background:var(--mn-input);border-radius:9px;grid-template-columns:24px minmax(0,1fr) 24px;align-items:center;gap:5px;padding:0 10px;display:grid}.IIa07q_queryField>span{color:var(--mn-accent);font:18px var(--mn-code)}.IIa07q_queryField input{background:0 0;border:0;outline:0;width:100%;height:42px}.IIa07q_queryField kbd{color:var(--mn-faint);font:11px var(--mn-code)}.IIa07q_searchControls{justify-content:flex-end;align-items:flex-end;gap:10px;padding-top:10px;display:flex}.IIa07q_searchActions{align-items:center;gap:7px;display:flex}.IIa07q_agentAnswer{border:1px solid color-mix(in srgb, var(--mn-accent) 30%, var(--mn-line));background:linear-gradient(135deg, color-mix(in srgb, var(--mn-accent) 7%, var(--mn-layer-1)), var(--mn-layer-1) 60%);border-radius:11px;margin-bottom:16px;padding:16px 18px}.IIa07q_agentAnswerHeading{justify-content:space-between;align-items:flex-start;gap:16px;display:flex}.IIa07q_agentAnswerHeading span{color:var(--mn-accent);font:650 9px/1.2 var(--mn-code);letter-spacing:.08em}.IIa07q_agentAnswerHeading h3{margin:4px 0 0;font-size:15px}.IIa07q_agentAnswerHeading>code{color:var(--mn-faint);font-size:9px}.IIa07q_agentAnswer>p{white-space:pre-wrap;color:var(--mn-text);margin:12px 0;font-size:13px;line-height:1.7}.IIa07q_agentCitations{border-top:1px solid var(--mn-line);flex-wrap:wrap;gap:5px;padding-top:10px;display:flex}.IIa07q_agentCitations code{color:var(--mn-muted);background:var(--mn-layer-2);border-radius:5px;padding:3px 6px;font-size:9px}.IIa07q_searchControls label,.IIa07q_fieldWide{color:var(--mn-muted);gap:5px;font-size:11px;display:grid}.IIa07q_searchControls select,.IIa07q_listToolbar input,.IIa07q_listToolbar select,.IIa07q_entitySearch input{border:1px solid var(--mn-line);background:var(--mn-input);border-radius:8px;outline:0;min-width:140px;height:34px;padding:0 9px}.IIa07q_searchControls select:focus,.IIa07q_listToolbar input:focus,.IIa07q_listToolbar select:focus,.IIa07q_entitySearch input:focus,.IIa07q_supervisedForm textarea:focus{border-color:var(--mn-accent)}.IIa07q_singleColumn{max-width:830px}.IIa07q_resultLayout{grid-template-columns:minmax(0,1.15fr) minmax(300px,.85fr);align-items:start;gap:14px;display:grid}.IIa07q_results,.IIa07q_relatedPane,.IIa07q_entityResults{min-width:0}.IIa07q_relatedPane{border:1px solid var(--mn-line);background:var(--mn-layer-1);-webkit-overflow-scrolling:touch;border-radius:12px;max-height:calc(100dvh - 230px);padding:13px;scroll-margin-top:14px;position:sticky;top:12px;overflow:auto}.IIa07q_relatedSource{color:var(--mn-muted);background:var(--mn-layer-2);border-radius:8px;margin:0 0 13px;padding:10px;font-size:11px}.IIa07q_insightCard{border:1px solid var(--mn-line);background:var(--mn-layer-1);border-radius:11px;min-width:0;margin-bottom:9px;padding:14px;transition:border-color .15s,transform .15s,box-shadow .15s}.IIa07q_insightCard:hover{border-color:var(--mn-line-strong);transform:translateY(-1px)}.IIa07q_cardTop{justify-content:space-between;align-items:center;gap:10px;display:flex}.IIa07q_badges,.IIa07q_tags,.IIa07q_entities{flex-wrap:wrap;gap:5px;display:flex}.IIa07q_badge{color:var(--mn-muted);background:var(--mn-layer-2);border-radius:999px;padding:2px 6px;font-size:9px}.IIa07q_id{color:var(--mn-faint);font:9px var(--mn-code)}.IIa07q_content{white-space:pre-wrap;overflow-wrap:anywhere;margin:10px 0;line-height:1.65}.IIa07q_tags{color:var(--mn-accent);font-size:10px}.IIa07q_entities{margin-top:7px}.IIa07q_entities span{border:1px solid var(--mn-line);color:var(--mn-muted);border-radius:5px;padding:2px 6px;font-size:9px}.IIa07q_cardActions{border-top:1px solid var(--mn-line);justify-content:flex-end;align-items:center;gap:3px;min-height:30px;margin-top:10px;padding-top:8px;display:flex}.IIa07q_entityLayout{grid-template-columns:265px minmax(0,1fr);align-items:start;gap:16px;display:grid}.IIa07q_entityRail{border:1px solid var(--mn-line);background:var(--mn-layer-1);border-radius:12px;padding:13px;position:sticky;top:0}.IIa07q_entitySearch{grid-template-columns:minmax(0,1fr) auto;gap:7px;display:grid}.IIa07q_entitySearch input{min-width:0}.IIa07q_entityHeading{justify-content:space-between;align-items:center;margin:18px 2px 7px;display:flex}.IIa07q_entityHeading small{color:var(--mn-faint);font-size:9px}.IIa07q_entityList{gap:3px;display:grid}.IIa07q_entityList button{min-height:34px;color:var(--mn-muted);cursor:pointer;text-align:left;background:0 0;border:0;border-radius:7px;justify-content:space-between;align-items:center;gap:10px;padding:0 9px;display:flex}.IIa07q_entityList button:hover,.IIa07q_entityList button[aria-pressed=true]{color:var(--mn-text);background:var(--mn-hover)}.IIa07q_entityList button>span{text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;overflow:hidden}.IIa07q_entityList strong{color:var(--mn-faint);font:10px var(--mn-code);flex:none}.IIa07q_entityResults>.IIa07q_emptyState{min-height:360px}.IIa07q_supervisedComposer{border:1px solid var(--mn-line);background:var(--mn-layer-1);border-radius:12px;overflow:hidden}.IIa07q_supervisedForm{padding:18px}.IIa07q_supervisedHeading{justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:16px;display:flex}.IIa07q_supervisedHeading h3{margin:4px 0 0;font-size:17px}.IIa07q_sessionReady,.IIa07q_sessionMissing{font:650 9px var(--mn-code);border-radius:999px;padding:4px 8px}.IIa07q_sessionReady{color:var(--mn-success);background:color-mix(in srgb, var(--mn-success) 10%, transparent)}.IIa07q_sessionMissing{color:var(--mn-danger);background:color-mix(in srgb, var(--mn-danger) 10%, transparent)}.IIa07q_supervisedForm textarea{resize:vertical;border:1px solid var(--mn-line);width:100%;color:var(--mn-text);background:var(--mn-input);border-radius:9px;outline:0;padding:12px;line-height:1.65}.IIa07q_sessionHint{color:var(--mn-danger);margin:9px 0 0;font-size:11px}.IIa07q_fieldWide{grid-column:1/-1}.IIa07q_advancedWrite{border-top:1px solid var(--mn-line);background:color-mix(in srgb, var(--mn-layer-2) 45%, var(--mn-layer-1))}.IIa07q_advancedWrite summary{cursor:pointer;justify-content:space-between;align-items:center;gap:16px;min-height:58px;padding:10px 18px;list-style:none;display:flex}.IIa07q_advancedWrite summary::-webkit-details-marker{display:none}.IIa07q_advancedWrite summary>span:first-child{gap:2px;display:grid}.IIa07q_advancedWrite summary strong{font-size:12px}.IIa07q_advancedWrite summary small{color:var(--mn-faint);font-size:10px}.IIa07q_advancedWrite summary>span:last-child{color:var(--mn-accent);font:10px var(--mn-code)}.IIa07q_advancedWrite[open] summary{border-bottom:1px solid var(--mn-line)}.IIa07q_advancedWrite[open] summary>span:last-child{font-size:0}.IIa07q_advancedWrite[open] summary>span:last-child:after{content:\"−\";font-size:13px}.IIa07q_manualForm{padding:3px 18px 18px}.IIa07q_manualActions{justify-content:space-between;align-items:center;gap:14px;margin-top:15px;display:flex}.IIa07q_manualActions p{max-width:520px;color:var(--mn-faint);margin:0;font-size:10px}.IIa07q_listToolbar{border:1px solid var(--mn-line);background:var(--mn-layer-1);border-radius:11px;grid-template-columns:minmax(0,1fr) 170px auto;gap:9px;padding:12px;display:grid}.IIa07q_listToolbar input,.IIa07q_listToolbar select{width:100%;min-width:0}.IIa07q_listNotice{color:var(--mn-faint);margin:10px 0 16px;font-size:10px}.IIa07q_listNotice span{color:var(--mn-success);font:650 9px var(--mn-code);letter-spacing:.08em;margin-right:7px}.IIa07q_memoryList{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:9px;display:grid}.IIa07q_memoryList .IIa07q_insightCard{height:100%;margin:0}.IIa07q_modalFooterNote{max-width:54ch;color:var(--mn-muted);margin:0 auto 0 0;font-size:9px;line-height:1.5}.IIa07q_modalInlineStatus{color:var(--mn-muted);overflow-wrap:anywhere;margin:12px 0 0;font-size:11px;line-height:1.5}.IIa07q_metadataDialog{gap:12px;display:grid}.IIa07q_metadataToolbar{color:var(--mn-muted);justify-content:space-between;align-items:center;gap:12px;font-size:10px;display:flex}.IIa07q_metadataToolbar>span{align-items:center;gap:7px;min-width:0;display:flex}.IIa07q_metadataToolbar em{color:var(--mn-accent);background:color-mix(in srgb, var(--mn-accent) 9%, transparent);font:650 8px var(--mn-code);border-radius:999px;padding:2px 5px;font-style:normal}.IIa07q_metadataList{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;display:grid}.IIa07q_metadataEmpty{border:1px dashed var(--mn-line);color:var(--mn-muted);background:color-mix(in srgb, var(--mn-layer-2) 76%, transparent);text-align:center;border-radius:8px;grid-column:1/-1;padding:18px;font-size:10px}.IIa07q_metadataList>label{cursor:pointer;grid-template-columns:16px minmax(0,1fr);align-items:start;gap:9px;min-width:0;min-height:76px;padding:10px 10px 10px 13px;display:grid;position:relative}.IIa07q_metadataList>label[data-selected]{border-color:color-mix(in srgb, var(--mn-accent) 48%, var(--mn-line));box-shadow:inset 3px 0 0 var(--mn-provider-color), inset 0 0 0 1px color-mix(in srgb, var(--mn-accent) 10%, transparent)}.IIa07q_metadataList>label[data-refreshing]{overflow:hidden}.IIa07q_metadataList>label[data-refreshing]:after{content:\"\";background:linear-gradient(105deg, transparent 20%, color-mix(in srgb, var(--mn-provider-color) 16%, transparent) 45%, transparent 70%);pointer-events:none;animation:.9s ease-in-out infinite IIa07q_mnemon-metadata-sweep;position:absolute;inset:0;transform:translate(-120%)}.IIa07q_metadataList>label[data-refreshed]{animation:.9s ease-out IIa07q_mnemon-metadata-refreshed}.IIa07q_metadataList>label[data-failed]{border-color:color-mix(in srgb, var(--mn-danger) 42%, var(--mn-line))}.IIa07q_metadataList>label>input{opacity:0;pointer-events:none;width:1px;height:1px;position:absolute}.IIa07q_metadataList>label>span{gap:4px;min-width:0;display:grid}.IIa07q_metadataList strong{text-overflow:ellipsis;white-space:nowrap;font-size:11px;overflow:hidden}.IIa07q_metadataList small{color:var(--mn-muted);-webkit-line-clamp:2;-webkit-box-orient:vertical;font-size:9px;line-height:1.45;display:-webkit-box;overflow:hidden}.IIa07q_metadataList>label>span>span{align-items:center;gap:6px;min-width:0;display:flex}.IIa07q_metadataList code{color:var(--mn-faint);font:8px var(--mn-code);text-overflow:ellipsis;white-space:nowrap;overflow:hidden}.IIa07q_metadataTaskStatus{min-width:0;font:650 8px var(--mn-code);text-overflow:ellipsis;white-space:nowrap;overflow:hidden}.IIa07q_metadataTaskStatus[data-status=running]{color:var(--mn-provider-color)}.IIa07q_metadataTaskStatus[data-status=success]{color:var(--mn-success)}.IIa07q_metadataTaskStatus[data-status=error]{color:var(--mn-danger)}@media (prefers-reduced-motion:reduce){.IIa07q_metadataList>label[data-refreshing]:after,.IIa07q_metadataList>label[data-refreshed]{animation:none}}@media (width<=1000px){.IIa07q_graphLayout{display:block;position:relative}.IIa07q_graphInspector{width:auto;min-height:0;box-shadow:none;margin-top:10px;position:static;overflow:visible}.IIa07q_graphInspector[data-empty]{display:none}.IIa07q_resultLayout{grid-template-columns:1fr}.IIa07q_relatedPane{grid-row:1;max-height:none;position:static}.IIa07q_memoryList{grid-template-columns:1fr}}@media (width<=760px){.IIa07q_metadataList{grid-template-columns:1fr}.IIa07q_modalFooterNote{max-width:none;margin:0;font-size:10px}.IIa07q_modal .IIa07q_supervisedForm textarea{min-height:clamp(130px,30vh,210px)}.IIa07q_entityLayout{grid-template-columns:1fr}.IIa07q_manualActions{flex-direction:column;align-items:stretch}.IIa07q_entityRail{position:static}.IIa07q_searchControls{grid-template-columns:repeat(2,minmax(0,1fr));display:grid}.IIa07q_searchActions{grid-column:1/-1}.IIa07q_searchActions>button{flex:1}.IIa07q_searchControls select{width:100%;min-width:0}.IIa07q_listToolbar{grid-template-columns:1fr}.IIa07q_bodyDirectoryHeader{grid-template-columns:minmax(0,1fr);display:grid}.IIa07q_bodyDirectoryHeader>div{min-width:0}.IIa07q_bodyDirectoryPath{max-width:100%}.IIa07q_bodyDirectoryControls{flex-wrap:wrap;justify-content:flex-start;padding-right:0}.IIa07q_createIdentityGrid,.IIa07q_placementMode,.IIa07q_placementRuleGrid,.IIa07q_placementCandidates,.IIa07q_providerChoice,.IIa07q_providerAdvancedGrid{grid-template-columns:1fr}.IIa07q_graphViewport{min-height:360px}.IIa07q_graphSvg{height:390px}.IIa07q_graphCanvasControls{top:7px;right:7px}.IIa07q_graphCanvasControls span{display:none}}@media (width<=520px){.IIa07q_memoryHeaderActions{width:100%}.IIa07q_memoryHeaderActions>button{flex:1}.IIa07q_supervisedHeading,.IIa07q_cardTop{flex-direction:column;align-items:flex-start}.IIa07q_cardActions{flex-wrap:wrap;align-items:stretch}.IIa07q_cardActions button{flex:1}.IIa07q_searchControls{grid-template-columns:1fr}}@supports (height:100dvh){@media (width<=760px){.IIa07q_modal .IIa07q_supervisedForm textarea{min-height:clamp(130px,30dvh,210px)}}}@media (width<=1000px) and (height<=760px){.IIa07q_graphViewport{min-height:300px}.IIa07q_graphSvg{height:300px}}@media (prefers-reduced-motion:reduce){.IIa07q_insightCard:hover{transform:none}}";
+		const css$2 = ".IIa07q_entityHeading>span,.IIa07q_inspectorHeading>span{color:var(--mn-faint);font-size:12px;font-weight:500;line-height:18px}.IIa07q_memoryHeaderActions{align-items:center;gap:8px;display:flex}.IIa07q_memoryHeaderActions>button{white-space:nowrap}.IIa07q_asyncRegion{min-width:0;position:relative}.IIa07q_asyncResults{min-width:0;min-height:120px;position:relative}.IIa07q_asyncPlaceholder{border:.5px solid var(--mn-card-line);border-radius:var(--dsw-radius-lg);min-height:220px;color:var(--mn-faint);place-items:center;display:grid;position:relative}.IIa07q_muted{color:var(--mn-faint);padding:16px 0;font-size:13px}.IIa07q_readSources{border:.5px solid var(--mn-card-line);border-radius:var(--dsw-radius-lg);gap:8px;margin:0 0 16px;padding:12px 14px;display:grid}.IIa07q_readSources>header{justify-content:space-between;align-items:flex-start;gap:16px;display:flex}.IIa07q_readSources>header>div{gap:2px;display:grid}.IIa07q_readSources>header strong{font-size:13px;font-weight:500;line-height:20px}.IIa07q_readSources>header p{max-width:92ch;color:var(--mn-faint);margin:0;font-size:12px;line-height:18px}.IIa07q_readSources>header>button{border:.5px solid var(--mn-line-strong);border-radius:var(--dsw-radius-sm);min-height:28px;color:var(--mn-text);cursor:pointer;background:0 0;flex:none;padding:0 10px;font-size:12px;line-height:18px}.IIa07q_readSources>header>button:hover{background:var(--mn-hover)}.IIa07q_readSources>header>button[data-selected]{background:var(--mn-fill);border-color:#0000}.IIa07q_readSources>div{grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));gap:8px;display:grid}.IIa07q_readSourceCard,.IIa07q_bodyCard,.IIa07q_metadataList>label{border:.5px solid var(--mn-card-line);border-radius:var(--dsw-radius-md);color:var(--mn-text);background:0 0}.IIa07q_readSourceCard{text-align:left;grid-template-columns:6px minmax(0,1fr) auto;align-items:center;gap:10px;min-width:0;min-height:56px;padding:8px 10px 8px 12px;display:grid}button.IIa07q_readSourceCard{cursor:pointer}button.IIa07q_readSourceCard:hover{background:var(--mn-hover)}.IIa07q_readSourceCard[data-selected]{border-color:var(--mn-field-line);background:var(--mn-fill)}.IIa07q_readSourceSignal{background:var(--mn-success);border-radius:50%;width:6px;height:6px}.IIa07q_readSourceCard[data-mode=projection] .IIa07q_readSourceSignal,.IIa07q_readSourceCard[data-mode=enumerable] .IIa07q_readSourceSignal{background:var(--mn-success)}.IIa07q_readSourceCard[data-mode=query-only] .IIa07q_readSourceSignal{background:var(--mn-warn)}.IIa07q_readSourceCard[data-status=unavailable] .IIa07q_readSourceSignal{background:var(--mn-danger)}.IIa07q_readSourceCard[data-status=unsupported] .IIa07q_readSourceSignal,.IIa07q_readSourceCard[data-status=empty] .IIa07q_readSourceSignal{background:var(--mn-idle)}.IIa07q_readSourceCard[data-status=unsupported]{color:var(--mn-faint)}.IIa07q_readSourceIdentity,.IIa07q_readSourceState{gap:2px;min-width:0;display:grid}.IIa07q_readSourceIdentity strong{text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:500;line-height:20px;overflow:hidden}.IIa07q_readSourceMeta{align-items:center;gap:6px;min-width:0;display:flex}.IIa07q_readSourceMeta>small{color:var(--mn-faint);text-overflow:ellipsis;white-space:nowrap;font-size:12px;line-height:18px;overflow:hidden}.IIa07q_readSourceState{text-align:right;justify-items:end}.IIa07q_readSourceState em{width:fit-content;color:var(--mn-muted);background:var(--mn-fill);white-space:nowrap;border-radius:999px;padding:1px 8px;font-size:11px;font-style:normal;font-weight:500;line-height:17px}.IIa07q_readSourceCard[data-status=unsupported] .IIa07q_readSourceState em{border:.5px solid var(--mn-field-line);color:var(--mn-faint);background:0 0}.IIa07q_readSourceState small{color:var(--mn-faint);white-space:nowrap;font-size:11px;line-height:14px}.IIa07q_bodyDirectory{border:.5px solid var(--mn-card-line);border-radius:var(--dsw-radius-lg);margin-bottom:12px;padding:16px;position:relative}.IIa07q_bodyDirectoryHeader{flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:12px;display:flex}.IIa07q_bodyDirectoryHeader>div:first-child{flex:260px;min-width:0}.IIa07q_bodyDirectoryHeader h3{margin:0;font-size:13px;font-weight:500;line-height:20px}.IIa07q_bodyDirectoryHeader p{color:var(--mn-faint);margin:2px 0 0;font-size:12px;line-height:18px}.IIa07q_bodyDirectoryPath{max-width:100%;color:var(--mn-faint);text-overflow:ellipsis;white-space:nowrap;margin-top:4px;font-size:11px;line-height:16px;display:block;overflow:hidden}.IIa07q_bodyDirectoryControls{flex:none;justify-content:flex-end;align-items:center;gap:8px;padding-right:28px;display:flex}.IIa07q_bodyDirectoryControls>strong{color:var(--mn-muted);background:var(--mn-fill);font-variant-numeric:tabular-nums;border-radius:999px;flex:none;padding:1px 8px;font-size:11px;font-weight:500;line-height:17px}.IIa07q_bodyGrid{grid-template-columns:repeat(auto-fit,minmax(245px,1fr));gap:8px;display:grid}.IIa07q_bodyDirectoryEmpty{border-radius:var(--dsw-radius-md);min-height:96px;color:var(--mn-muted);background:var(--mn-block-fill,var(--mn-fill));grid-column:1/-1;justify-content:center;align-items:center;gap:12px;display:flex}.IIa07q_bodyDirectoryEmpty>span{color:var(--mn-faint);font-size:24px}.IIa07q_bodyDirectoryEmpty strong{color:var(--mn-text);font-weight:500;display:block}.IIa07q_bodyDirectoryEmpty p{color:var(--mn-faint);margin:2px 0 0;font-size:12px}.IIa07q_bodyCard{--mn-body-accent:var(--mn-success);min-width:0;padding:12px 14px;transition:border-color .16s,background-color .16s}.IIa07q_bodyCard:not([data-active]){background:var(--mn-fill);border-color:#0000}.IIa07q_bodyCard[data-reconnectable]{cursor:pointer}.IIa07q_bodyCard[data-reconnectable]:hover{border-color:var(--mn-field-line)}.IIa07q_bodyCard[data-reconnectable]:focus-visible{outline:var(--dsw-focus-ring-width,2px) solid var(--mn-focus);outline-offset:2px}.IIa07q_bodySignal{background:var(--mn-idle);border-radius:50%;width:6px;height:6px}.IIa07q_bodyCard[data-active] .IIa07q_bodySignal{background:var(--mn-body-accent)}.IIa07q_bodyCard:not([data-healthy]) .IIa07q_bodySignal{background:var(--mn-danger)}.IIa07q_bodyCard[data-status-loading] .IIa07q_bodySignal{background:var(--mn-idle)}.IIa07q_bodyCard[data-reconnecting] .IIa07q_bodySignal{box-sizing:border-box;border:1.5px solid color-mix(in srgb, var(--mn-faint) 25%, transparent);border-top-color:var(--mn-faint);background:0 0;width:8px;height:8px;animation:.9s linear infinite IIa07q_mnemon-spin}.IIa07q_bodyHealth{color:var(--mn-success);font-size:12px;line-height:18px}.IIa07q_bodyCard:not([data-healthy]) .IIa07q_bodyHealth{color:var(--mn-danger)}.IIa07q_bodyCard[data-status-loading] .IIa07q_bodyHealth{color:var(--mn-faint)}.IIa07q_mnemonDefaultBadge,.IIa07q_newSpaceBadge{width:fit-content;color:var(--mn-accent);background:color-mix(in srgb, var(--mn-accent) 10%, transparent);white-space:nowrap;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:500;line-height:17px}.IIa07q_rediscoveryNotice{border-radius:var(--dsw-radius-md);background:var(--dsw-alias-bg-module-platform);align-items:flex-start;gap:8px 12px;min-width:0;margin:0 0 12px;padding:10px 12px;display:flex}.IIa07q_rediscoveryNotice>div{flex:auto;gap:2px;min-width:0;display:grid}.IIa07q_rediscoveryNotice p{color:var(--dsw-alias-label-secondary);overflow-wrap:anywhere;margin:0;font-size:13px;line-height:20px}.IIa07q_rediscoveryNotice p[data-failed]{color:var(--mn-danger)}.IIa07q_rediscoveryNotice>button{flex:none}.IIa07q_providerBadge{width:fit-content;max-width:100%;color:var(--mn-muted);background:var(--mn-fill);text-align:center;text-overflow:ellipsis;vertical-align:middle;white-space:nowrap;border-radius:999px;flex:none;justify-content:center;align-items:center;padding:1px 8px;font-size:11px;font-weight:500;line-height:17px;display:inline-flex;overflow:hidden}.IIa07q_providerBadge,.IIa07q_readSourceCard,.IIa07q_bodyCard,.IIa07q_metadataList>label,.IIa07q_graphNode,.IIa07q_providerBadge[data-provider=mnemon-native],.IIa07q_readSourceCard[data-provider=mnemon-native],.IIa07q_bodyCard[data-provider=mnemon-native],.IIa07q_metadataList>label[data-provider=mnemon-native],.IIa07q_graphNode[data-provider=mnemon-native]{--mn-provider-color:#64748b}.IIa07q_providerBadge[data-provider=openviking],.IIa07q_readSourceCard[data-provider=openviking],.IIa07q_bodyCard[data-provider=openviking],.IIa07q_metadataList>label[data-provider=openviking],.IIa07q_graphNode[data-provider=openviking]{--mn-provider-color:#3b82d0}.IIa07q_providerBadge[data-provider=honcho],.IIa07q_readSourceCard[data-provider=honcho],.IIa07q_bodyCard[data-provider=honcho],.IIa07q_metadataList>label[data-provider=honcho],.IIa07q_graphNode[data-provider=honcho]{--mn-provider-color:#c44fcf}.IIa07q_providerBadge[data-provider=mem0],.IIa07q_readSourceCard[data-provider=mem0],.IIa07q_bodyCard[data-provider=mem0],.IIa07q_metadataList>label[data-provider=mem0],.IIa07q_graphNode[data-provider=mem0]{--mn-provider-color:#8b5cf6}.IIa07q_providerBadge[data-provider=hindsight],.IIa07q_readSourceCard[data-provider=hindsight],.IIa07q_bodyCard[data-provider=hindsight],.IIa07q_metadataList>label[data-provider=hindsight],.IIa07q_graphNode[data-provider=hindsight]{--mn-provider-color:#0891b2}.IIa07q_providerBadge[data-provider=holographic],.IIa07q_readSourceCard[data-provider=holographic],.IIa07q_bodyCard[data-provider=holographic],.IIa07q_metadataList>label[data-provider=holographic],.IIa07q_graphNode[data-provider=holographic]{--mn-provider-color:#6366d9}.IIa07q_providerBadge[data-provider=retaindb],.IIa07q_readSourceCard[data-provider=retaindb],.IIa07q_bodyCard[data-provider=retaindb],.IIa07q_metadataList>label[data-provider=retaindb],.IIa07q_graphNode[data-provider=retaindb]{--mn-provider-color:#d08a28}.IIa07q_providerBadge[data-provider=byterover],.IIa07q_readSourceCard[data-provider=byterover],.IIa07q_bodyCard[data-provider=byterover],.IIa07q_metadataList>label[data-provider=byterover],.IIa07q_graphNode[data-provider=byterover]{--mn-provider-color:#0f9a83}.IIa07q_providerBadge[data-provider=supermemory],.IIa07q_readSourceCard[data-provider=supermemory],.IIa07q_bodyCard[data-provider=supermemory],.IIa07q_metadataList>label[data-provider=supermemory],.IIa07q_graphNode[data-provider=supermemory]{--mn-provider-color:#df4d72}.IIa07q_bodySwitch{min-height:28px;color:var(--mn-faint);cursor:pointer;background:0 0;border:0;align-items:center;gap:8px;padding:0;font-size:12px;line-height:18px;display:flex}.IIa07q_bodySwitchTrack{box-sizing:border-box;background:var(--mn-line-strong);border-radius:999px;flex:none;width:36px;height:20px;padding:2px;transition:background-color .12s;position:relative}.IIa07q_bodySwitchTrack i{background:var(--dsw-alias-label-primary-foreground);border-radius:50%;width:16px;height:16px;transition:transform .12s;display:block}.IIa07q_bodySwitch:hover,.IIa07q_bodySwitch[aria-checked=true]{color:var(--mn-muted)}.IIa07q_bodySwitch[aria-checked=true] .IIa07q_bodySwitchTrack{background:var(--dsw-alias-brand-primary)}.IIa07q_bodySwitch[aria-checked=true] .IIa07q_bodySwitchTrack i{transform:translate(16px)}.IIa07q_bodyCardActions{align-items:center;gap:8px;display:flex}.IIa07q_bodyCreateForm{gap:16px;padding-top:0}.IIa07q_createSection{border:.5px solid var(--mn-card-line);border-radius:var(--dsw-radius-lg);gap:12px;padding:14px 16px;display:grid}.IIa07q_createSectionHeading{align-items:flex-start;gap:10px;display:flex}.IIa07q_createSectionHeading>span{min-width:22px;height:22px;color:var(--mn-muted);background:var(--mn-fill);border-radius:999px;flex:none;place-items:center;padding:0 6px;font-size:11px;font-weight:500;line-height:1;display:grid}.IIa07q_createSectionHeading>div{gap:2px;min-width:0;display:grid}.IIa07q_createSectionHeading strong{color:var(--mn-text);font-size:14px;font-weight:500;line-height:22px}.IIa07q_createSectionHeading small{color:var(--mn-faint);font-size:12px;line-height:18px}.IIa07q_createIdentityGrid{grid-template-columns:minmax(0,1fr);align-items:stretch;gap:12px;display:grid}.IIa07q_createIdentityGrid>label{align-content:start}.IIa07q_createIdentityGrid textarea{min-height:72px}.IIa07q_strategyForm{gap:16px;padding-top:0}.IIa07q_strategyLoading{border-radius:var(--dsw-radius-md);min-height:88px;color:var(--mn-faint);background:var(--mn-fill);justify-content:center;align-items:center;font-size:12px;display:flex;position:relative}.IIa07q_strategyLoading .IIa07q_sectionSpinner{top:10px;right:10px}.IIa07q_placementMode{border:0;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0;padding:0;display:grid}.IIa07q_placementMode legend{color:var(--mn-muted);margin-bottom:6px;font-size:12px;font-weight:500;line-height:18px}.IIa07q_placementMode label{border:.5px solid var(--mn-line-strong);border-radius:var(--dsw-radius-md);cursor:pointer;grid-template-columns:16px minmax(0,1fr);align-items:center;gap:10px;min-width:0;padding:12px;display:grid;position:relative}.IIa07q_placementMode label:hover{background:var(--mn-hover)}.IIa07q_placementMode label[data-selected]{border-color:var(--mn-field-line);background:var(--mn-fill)}.IIa07q_placementMode label[data-disabled]{cursor:not-allowed;opacity:.5}.IIa07q_placementMode input{opacity:0;pointer-events:none;width:1px;height:1px;position:absolute}.IIa07q_placementMode span{gap:2px;display:grid}.IIa07q_placementMode strong{color:var(--mn-text);font-size:13px;font-weight:500;line-height:20px}.IIa07q_placementMode strong em{color:var(--mn-muted);background:var(--mn-fill);border-radius:999px;margin-left:6px;padding:1px 8px;font-size:11px;font-style:normal;font-weight:500;line-height:17px}.IIa07q_placementMode small{color:var(--mn-faint);font-size:12px;line-height:18px}.IIa07q_placementPolicy{border:.5px solid var(--mn-card-line);border-radius:var(--dsw-radius-md);gap:10px;margin:0;padding:12px 14px;display:grid}.IIa07q_placementPolicyHeading{justify-content:space-between;align-items:flex-start;gap:12px;display:flex}.IIa07q_placementPolicyHeading>div{gap:2px;display:grid}.IIa07q_placementPolicyHeading strong{font-size:13px;font-weight:500;line-height:20px}.IIa07q_placementPolicyHeading small{color:var(--mn-faint);font-size:12px;line-height:18px}.IIa07q_placementPolicyHeading>span{color:var(--mn-muted);background:var(--mn-fill);border-radius:999px;flex:none;padding:1px 8px;font-size:11px;font-weight:500;line-height:17px}.IIa07q_placementRuleGrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;display:grid}.IIa07q_capabilityRules{border:0;flex-wrap:wrap;gap:6px;margin:0;padding:0;display:flex}.IIa07q_capabilityRules legend{width:100%;color:var(--mn-faint);margin-bottom:4px;font-size:12px;line-height:18px}.IIa07q_capabilityRules label{border:.5px solid var(--mn-line-strong);border-radius:var(--dsw-radius-sm);width:fit-content;min-height:28px;color:var(--mn-muted);cursor:pointer;align-items:center;gap:6px;padding:0 10px;font-size:12px;display:flex;position:relative}.IIa07q_capabilityRules label:hover{background:var(--mn-hover)}.IIa07q_capabilityRules label[data-selected]{border-color:var(--mn-field-line);color:var(--mn-text);background:var(--mn-fill)}.IIa07q_capabilityRules input{opacity:0;pointer-events:none;width:1px;height:1px;position:absolute}.IIa07q_placementCandidates{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;display:grid}.IIa07q_placementCandidates>span,.IIa07q_placementCandidates>label{border:.5px solid var(--mn-line-strong);border-radius:var(--dsw-radius-md);grid-template-columns:28px minmax(0,1fr) 16px;align-items:center;gap:10px;min-width:0;padding:8px 10px;display:grid;position:relative}.IIa07q_placementCandidates>label{cursor:pointer}.IIa07q_placementCandidates>label:hover{background:var(--mn-hover)}.IIa07q_placementCandidates>[data-selected]{border-color:var(--mn-field-line);background:var(--mn-fill)}.IIa07q_placementCandidates>label[data-disabled]{cursor:not-allowed;opacity:.5}.IIa07q_placementCandidates input{opacity:0;pointer-events:none;width:1px;height:1px;position:absolute}.IIa07q_placementCandidates>span>span:not(.IIa07q_candidateIcon),.IIa07q_placementCandidates>label>span:not(.IIa07q_candidateIcon){gap:2px;min-width:0;display:grid}.IIa07q_placementCandidates strong{color:var(--mn-text);font-size:13px;font-weight:500;line-height:20px}.IIa07q_placementCandidates small{color:var(--mn-faint);font-size:12px;line-height:18px}.IIa07q_providerChoice{border:0;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0;padding:0;display:grid}.IIa07q_providerChoice legend{color:var(--mn-muted);margin-bottom:6px;font-size:12px;font-weight:500;line-height:18px}.IIa07q_providerChoice label{border:.5px solid var(--mn-line-strong);border-radius:var(--dsw-radius-md);cursor:pointer;grid-template-columns:32px minmax(0,1fr) 16px;align-items:center;gap:10px;min-width:0;padding:10px 12px;display:grid;position:relative}.IIa07q_providerChoice label:hover{background:var(--mn-hover)}.IIa07q_providerChoice label[data-native]{grid-column:1/-1}.IIa07q_providerChoice label[data-selected]{border-color:var(--mn-field-line);background:var(--mn-fill)}.IIa07q_providerChoice label[data-disabled]{cursor:not-allowed;opacity:.5}.IIa07q_providerChoice input{opacity:0;pointer-events:none;width:1px;height:1px;position:absolute}.IIa07q_providerChoice span{gap:2px;display:grid}.IIa07q_providerChoice strong{color:var(--mn-text);font-size:13px;font-weight:500;line-height:20px}.IIa07q_providerChoice strong em{color:var(--mn-muted);background:var(--mn-fill);border-radius:999px;margin-left:6px;padding:1px 8px;font-size:11px;font-style:normal;font-weight:500;line-height:17px}.IIa07q_providerChoice label[data-selected] strong em{background:var(--mn-layer-1)}.IIa07q_providerChoice small{color:var(--mn-faint);-webkit-line-clamp:2;-webkit-box-orient:vertical;font-size:12px;line-height:18px;display:-webkit-box;overflow:hidden}.IIa07q_providerChoiceIcon,.IIa07q_candidateIcon,.IIa07q_providerFieldIcon{box-sizing:border-box;border:.5px solid var(--mn-line-strong);background:var(--mn-layer-1);place-items:center;display:grid;overflow:hidden}.IIa07q_providerChoiceIcon{border-radius:var(--dsw-radius-sm);width:32px;height:32px;padding:4px}.IIa07q_candidateIcon{border-radius:var(--dsw-radius-sm);width:28px;height:28px;padding:4px}.IIa07q_providerFieldIcon{border-radius:var(--dsw-radius-sm);flex:none;width:32px;height:32px;padding:4px}.IIa07q_providerChoiceIcon>img,.IIa07q_providerChoiceIcon>svg,.IIa07q_candidateIcon>img,.IIa07q_candidateIcon>svg,.IIa07q_providerFieldIcon>img,.IIa07q_providerFieldIcon>svg{object-fit:contain;border-radius:4px;width:100%;height:100%;display:block}.IIa07q_choiceControl{box-sizing:border-box;border:1px solid var(--mn-field-line);background:var(--mn-layer-1);border-radius:4px;flex:none;place-items:center;width:16px;height:16px;display:grid;position:relative}.IIa07q_choiceControl[data-kind=radio]{border-radius:50%}[data-selected]>.IIa07q_choiceControl{border-color:var(--dsw-alias-brand-primary);background:var(--dsw-alias-brand-primary)}[data-selected]>.IIa07q_choiceControl[data-kind=check]:after{border-bottom:1.5px solid var(--dsw-alias-label-primary-foreground);border-left:1.5px solid var(--dsw-alias-label-primary-foreground);content:\"\";width:7px;height:4px;transform:translateY(-1px)rotate(-45deg)}[data-selected]>.IIa07q_choiceControl[data-kind=radio]:after{content:\"\";background:var(--dsw-alias-label-primary-foreground);border-radius:50%;width:6px;height:6px}.IIa07q_placementMode label:has(input:focus-visible),.IIa07q_providerChoice label:has(input:focus-visible),.IIa07q_capabilityRules label:has(input:focus-visible),.IIa07q_placementCandidates label:has(input:focus-visible){outline:var(--dsw-focus-ring-width,2px) solid var(--mn-focus);outline-offset:1px}.IIa07q_providerFields{border:.5px solid var(--mn-card-line);border-radius:var(--dsw-radius-md);gap:10px;padding:12px 14px;display:grid}.IIa07q_providerFieldHeading{justify-content:space-between;align-items:flex-start;gap:12px;display:flex}.IIa07q_providerFieldIdentity{align-items:center;gap:10px;min-width:0;display:flex}.IIa07q_providerFieldIdentity>div{gap:2px;min-width:0;display:grid}.IIa07q_providerFieldHeading strong{color:var(--mn-text);font-size:13px;font-weight:500;line-height:20px}.IIa07q_providerFieldHeading small{color:var(--mn-faint);font-size:12px;line-height:18px}.IIa07q_providerFieldHeading>span{color:var(--mn-muted);background:var(--mn-fill);border-radius:999px;flex:none;padding:1px 8px;font-size:11px;font-weight:500;line-height:17px}.IIa07q_providerFields details{min-width:0}.IIa07q_providerFields summary{width:fit-content;color:var(--mn-muted);cursor:pointer;font-size:12px;line-height:18px}.IIa07q_providerFields summary:hover{color:var(--mn-text)}.IIa07q_providerEnableHint{color:var(--mn-faint);margin-top:8px;font-size:12px;line-height:18px;display:block}.IIa07q_providerAdvancedGrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:8px;display:grid}.IIa07q_providerFieldControl .IIa07q_providerSecretClear{color:var(--mn-muted);cursor:pointer;align-items:center;gap:6px;font-size:12px;font-weight:400;display:flex}.IIa07q_providerWriteHint{color:var(--mn-faint);margin-top:4px;font-size:12px;line-height:18px;display:block}.IIa07q_placementReceipt{border-radius:var(--dsw-radius-sm);min-width:0;color:var(--mn-muted);background:var(--mn-fill);align-items:flex-start;gap:8px;margin:8px 0;padding:8px 10px;display:flex}.IIa07q_placementReceipt>span{flex:none;font-size:12px}.IIa07q_placementReceipt>div{grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;min-width:0;display:grid}.IIa07q_placementReceipt strong,.IIa07q_placementReceipt small{text-overflow:ellipsis;white-space:nowrap;overflow:hidden}.IIa07q_placementReceipt strong{color:var(--mn-text);font-size:12px;font-weight:500;line-height:18px}.IIa07q_placementReceipt small{color:var(--mn-faint);font-size:11px;line-height:18px}.IIa07q_placementReceipt p{color:var(--mn-faint);text-overflow:ellipsis;white-space:nowrap;grid-column:1/-1;margin:0;font-size:12px;line-height:18px;overflow:hidden}.IIa07q_bodyCard>p{min-height:18px;color:var(--mn-muted);margin:8px 0;font-size:13px;line-height:20px}.IIa07q_bodyCard footer{border-top:.5px solid var(--mn-line);min-width:0;color:var(--mn-faint);flex-wrap:nowrap;gap:4px 12px;padding-top:8px;font-size:12px;line-height:18px;display:flex;overflow:hidden}.IIa07q_bodyFooterBlock{text-overflow:ellipsis;white-space:nowrap;flex:0 auto;min-width:0;display:block;overflow:hidden}.IIa07q_bodyFooterGrow{flex:auto}.IIa07q_graphLayout{grid-template-columns:minmax(0,1fr) minmax(240px,280px);gap:12px;display:grid}.IIa07q_graphPanel,.IIa07q_graphInspector{border:.5px solid var(--mn-card-line);border-radius:var(--dsw-radius-lg)}.IIa07q_graphPanel{min-width:0;position:relative;overflow:hidden}.IIa07q_graphToolbar,.IIa07q_graphFooter{min-height:44px;color:var(--mn-faint);justify-content:space-between;align-items:center;gap:16px;padding:0 14px;font-size:12px;line-height:18px;display:flex}.IIa07q_graphToolbar{border-bottom:.5px solid var(--mn-line)}.IIa07q_graphToolbar>div:first-child{align-items:center;gap:8px;display:flex}.IIa07q_graphToolbar small{color:var(--mn-faint)}.IIa07q_liveDot{background:var(--mn-success);border-radius:50%;width:6px;height:6px}.IIa07q_graphLegend{flex-wrap:wrap;justify-content:flex-end;gap:4px 12px;display:flex}.IIa07q_graphLegend span{align-items:center;gap:6px;display:flex}.IIa07q_graphLegend span:before{content:\"\";background:var(--edge-color);border-radius:2px;width:14px;height:2px}.IIa07q_graphLegend [data-edge=temporal]{--edge-color:#87909f}.IIa07q_graphLegend [data-edge=scope]{--edge-color:#708199}.IIa07q_graphLegend [data-edge=scope]:before{background:repeating-linear-gradient(90deg, var(--edge-color) 0 4px, transparent 4px 7px)}.IIa07q_graphLegend [data-edge=semantic]{--edge-color:#4d7cfe}.IIa07q_graphLegend [data-edge=causal]{--edge-color:#ef6b5b}.IIa07q_graphLegend [data-edge=entity]{--edge-color:#22a879}.IIa07q_graphViewport{min-height:clamp(390px,42vw,560px);position:relative;overflow:hidden}.IIa07q_graphCanvasControls{z-index:2;border-radius:var(--dsw-radius-md);background:var(--dsw-specific-menu,var(--mn-layer-2));box-shadow:var(--dsw-elevation-soft);backdrop-filter:var(--dsw-menu-backdrop-filter);align-items:center;gap:4px;padding:4px;display:flex;position:absolute;top:10px;right:10px}.IIa07q_graphCanvasControls span{color:var(--mn-faint);align-items:center;gap:6px;padding:0 6px;font-size:12px;display:flex}.IIa07q_graphCanvasControls span i{background:var(--mn-accent);border-radius:50%;width:6px;height:6px}.IIa07q_graphCanvasControls button{border-radius:var(--dsw-radius-sm);min-height:28px;color:var(--mn-muted);cursor:pointer;background:0 0;border:0;padding:0 10px;font-size:12px}.IIa07q_graphCanvasControls button:hover{color:var(--mn-text);background:var(--mn-hover)}.IIa07q_graphCanvasControls button[data-active]{color:var(--mn-text);background:var(--mn-fill)}.IIa07q_graphSvg{touch-action:pan-y pinch-zoom;user-select:none;width:100%;height:clamp(390px,42vw,560px);display:block}.IIa07q_graphBackdrop{fill:var(--mn-layer-1)}.IIa07q_graphGridLine{stroke:var(--mn-line);stroke-width:.6px;opacity:.5}.IIa07q_graphEdge{fill:none;stroke:#87909f;stroke-width:1px;opacity:.32;vector-effect:non-scaling-stroke}.IIa07q_graphEdge[data-edge=scope]{stroke:#708199;stroke-dasharray:4 5;opacity:.28}.IIa07q_graphEdge[data-edge=semantic]{stroke:#4d7cfe;opacity:.48}.IIa07q_graphEdge[data-edge=causal]{stroke:#ef6b5b;opacity:.52}.IIa07q_graphEdge[data-edge=entity]{stroke:#22a879;stroke-width:1.45px;opacity:.78}.IIa07q_graphNode{--node:#8290a8;cursor:grab;touch-action:none;outline:none}.IIa07q_graphNode[data-dragging]{cursor:grabbing}.IIa07q_graphNode[data-category=decision]{--node:#ef8354}.IIa07q_graphNode[data-category=preference]{--node:#a879e1}.IIa07q_graphNode[data-category=fact]{--node:#4d7cfe}.IIa07q_graphNode[data-category=insight]{--node:#19a77d}.IIa07q_graphNode[data-category=context]{--node:#d8a624}.IIa07q_graphNode[data-kind=space]{--node:var(--mn-provider-color)}.IIa07q_graphNode[data-kind=entity]{--node:#2b9db9}.IIa07q_nodeHalo{fill:color-mix(in srgb, var(--node) 18%, var(--mn-layer-1));stroke:color-mix(in srgb, var(--node) 60%, var(--mn-layer-1));stroke-width:1.5px;transition:r .16s}.IIa07q_nodeCore{fill:var(--node)}.IIa07q_nodeLabel{fill:var(--mn-muted);font:11px var(--mn-sans);pointer-events:auto}.IIa07q_nodeBodyLabel{fill:var(--mn-faint);font:500 11px var(--mn-sans);pointer-events:auto}.IIa07q_graphSvg[data-density=sparse] .IIa07q_nodeLabel{font-size:12px}.IIa07q_graphNode:hover .IIa07q_nodeHalo,.IIa07q_graphNode:focus .IIa07q_nodeHalo,.IIa07q_graphNode[data-selected] .IIa07q_nodeHalo{fill:color-mix(in srgb, var(--node) 28%, var(--mn-layer-1));stroke:var(--node)}.IIa07q_graphNode[data-selected] .IIa07q_nodeLabel{fill:var(--mn-text);font-weight:500}.IIa07q_graphFooter{border-top:.5px solid var(--mn-line);min-height:40px;color:var(--mn-faint)}.IIa07q_graphInspector{min-width:0;min-height:calc(clamp(390px,42vw,560px) + 84px);padding:16px;overflow:hidden}.IIa07q_inspectorEmpty{text-align:center;flex-direction:column;justify-content:center;align-items:center;height:100%;display:flex}.IIa07q_inspectorLogo{border-radius:var(--dsw-radius-lg);opacity:.72;width:48px;height:48px;margin-bottom:12px}.IIa07q_inspectorEmpty h3{margin:6px 0 2px;font-size:14px;font-weight:500;line-height:22px}.IIa07q_inspectorEmpty p{color:var(--mn-faint);margin:0;font-size:12px;line-height:18px}.IIa07q_inspectorHeading{justify-content:space-between;align-items:center;display:flex}.IIa07q_inspectorHeading button{border-radius:var(--dsw-radius-sm);width:28px;height:28px;color:var(--mn-muted);cursor:pointer;background:0 0;border:0;place-items:center;display:grid}.IIa07q_inspectorHeading button:hover{background:var(--mn-hover)}.IIa07q_inspectorChips{flex-wrap:wrap;align-items:center;gap:6px;margin-top:20px;display:flex}.IIa07q_categoryChip{color:var(--mn-muted);background:var(--mn-fill);border-radius:999px;padding:1px 8px;font-size:11px;font-weight:500;line-height:17px;display:inline-flex}.IIa07q_inspectorTitleRow{align-items:flex-start;gap:8px;min-width:0;margin:12px 0 20px;display:flex}.IIa07q_inspectorTitle{overflow-wrap:anywhere;white-space:pre-wrap;-webkit-line-clamp:6;-webkit-box-orient:vertical;flex:1;min-width:0;margin:0;font-size:14px;font-weight:400;line-height:22px;display:-webkit-box;overflow:hidden}.IIa07q_inspectorEye{border:.5px solid var(--mn-line-strong);border-radius:var(--dsw-radius-sm);width:28px;height:28px;color:var(--mn-muted);cursor:pointer;background:0 0;flex:none;place-items:center;transition:color .15s,background-color .15s;display:grid}.IIa07q_inspectorEye:hover{color:var(--mn-text);background:var(--mn-hover)}.IIa07q_inspectorMeta{margin:0}.IIa07q_inspectorMeta>div{border-top:.5px solid var(--mn-line);gap:2px;padding:10px 0;display:grid}.IIa07q_inspectorMeta dt{color:var(--mn-faint);font-size:12px;line-height:18px}.IIa07q_inspectorMeta dd{overflow-wrap:anywhere;color:var(--mn-muted);margin:0;font-size:13px;line-height:20px}.IIa07q_inspectorActions{gap:8px;margin-top:20px;display:grid}.IIa07q_previewContent{white-space:pre-wrap;overflow-wrap:anywhere;color:var(--mn-text);margin:0;font-size:14px;line-height:22px}.IIa07q_searchBar{border:.5px solid var(--mn-card-line);border-radius:var(--dsw-radius-lg);margin-bottom:16px;padding:14px}.IIa07q_queryField{width:100%;height:40px}.IIa07q_searchChoice{min-width:160px}.IIa07q_searchControls{justify-content:flex-end;align-items:flex-end;gap:12px;padding-top:12px;display:flex}.IIa07q_searchActions{align-items:center;gap:8px;display:flex}.IIa07q_agentAnswer{border:.5px solid var(--mn-card-line);border-radius:var(--dsw-radius-lg);margin-bottom:16px;padding:16px}.IIa07q_agentAnswerHeading{justify-content:space-between;align-items:flex-start;gap:16px;display:flex}.IIa07q_agentAnswerHeading span{color:var(--mn-faint);font-size:12px;font-weight:500;line-height:18px}.IIa07q_agentAnswerHeading h3{margin:2px 0 0;font-size:14px;font-weight:500;line-height:22px}.IIa07q_agentAnswerHeading>code{color:var(--mn-faint);font-size:11px}.IIa07q_agentAnswer>p{white-space:pre-wrap;color:var(--mn-text);margin:12px 0;font-size:14px;line-height:22px}.IIa07q_agentCitations{border-top:.5px solid var(--mn-line);flex-wrap:wrap;align-items:center;gap:6px;padding-top:10px;display:flex}.IIa07q_agentCitations small{color:var(--mn-faint);font-size:12px;line-height:18px}.IIa07q_agentCitations span{max-width:100%;color:var(--mn-muted);background:var(--mn-fill);text-overflow:ellipsis;white-space:nowrap;border-radius:999px;padding:1px 8px;font-size:12px;line-height:18px;overflow:hidden}.IIa07q_fieldWide{color:var(--mn-muted);gap:6px;font-size:12px;font-weight:500;line-height:18px;display:grid}.IIa07q_supervisedForm textarea:focus{border-color:var(--mn-accent)}.IIa07q_singleColumn{max-width:830px}.IIa07q_resultLayout{grid-template-columns:minmax(0,1.15fr) minmax(300px,.85fr);align-items:start;gap:16px;display:grid}.IIa07q_results,.IIa07q_relatedPane,.IIa07q_entityResults{min-width:0}.IIa07q_relatedPane{border:.5px solid var(--mn-card-line);border-radius:var(--dsw-radius-lg);-webkit-overflow-scrolling:touch;max-height:calc(100dvh - 230px);padding:14px;scroll-margin-top:14px;position:sticky;top:12px;overflow:auto}.IIa07q_relatedSource{border-radius:var(--dsw-radius-sm);color:var(--mn-muted);background:var(--mn-fill);margin:0 0 12px;padding:10px 12px;font-size:13px;line-height:20px}.IIa07q_insightCard{border:.5px solid var(--mn-card-line);border-radius:var(--dsw-radius-lg);min-width:0;margin-bottom:8px;padding:14px 16px;transition:background-color .15s}.IIa07q_insightCard:hover{background:color-mix(in srgb, var(--mn-hover) 50%, transparent)}.IIa07q_cardTop{justify-content:space-between;align-items:center;gap:12px;display:flex}.IIa07q_badges,.IIa07q_tags,.IIa07q_entities{flex-wrap:wrap;gap:6px;display:flex}.IIa07q_badge{color:var(--mn-muted);background:var(--mn-fill);border-radius:999px;padding:1px 8px;font-size:11px;font-weight:500;line-height:17px}.IIa07q_id{color:var(--mn-faint);font-size:11px}.IIa07q_content{white-space:pre-wrap;overflow-wrap:anywhere;margin:10px 0;font-size:14px;line-height:22px}.IIa07q_tags{color:var(--mn-accent);font-size:12px;line-height:18px}.IIa07q_entities{margin-top:8px}.IIa07q_entities span{border:.5px solid var(--mn-field-line);color:var(--mn-faint);border-radius:999px;padding:1px 8px;font-size:11px;font-weight:500;line-height:17px}.IIa07q_cardActions{border-top:.5px solid var(--mn-line);justify-content:flex-end;align-items:center;gap:4px;min-height:32px;margin-top:10px;padding-top:8px;display:flex}.IIa07q_entityLayout{grid-template-columns:264px minmax(0,1fr);align-items:start;gap:16px;display:grid}.IIa07q_entityRail{border:.5px solid var(--mn-card-line);border-radius:var(--dsw-radius-lg);padding:12px;position:sticky;top:0}.IIa07q_entitySearch{grid-template-columns:minmax(0,1fr) auto;gap:8px;display:grid}.IIa07q_entitySearch input{min-width:0}.IIa07q_entityHeading{justify-content:space-between;align-items:center;margin:16px 4px 6px;display:flex}.IIa07q_entityHeading small{color:var(--mn-faint);font-size:12px}.IIa07q_entityList{gap:2px;display:grid}.IIa07q_entityList button{border-radius:var(--dsw-radius-sm);min-height:32px;color:var(--mn-muted);cursor:pointer;text-align:left;background:0 0;border:0;justify-content:space-between;align-items:center;gap:10px;padding:0 10px;display:flex}.IIa07q_entityList button:hover,.IIa07q_entityList button[aria-pressed=true]{color:var(--mn-text);background:var(--mn-hover)}.IIa07q_entityList button[aria-pressed=true]{background:var(--mn-fill)}.IIa07q_entityList button>span{text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;overflow:hidden}.IIa07q_entityList strong{color:var(--mn-faint);font-variant-numeric:tabular-nums;flex:none;font-size:12px;font-weight:400}.IIa07q_entityResults>.IIa07q_emptyState{min-height:360px}.IIa07q_entitySection{min-width:0}.IIa07q_entitySection+.IIa07q_entitySection{margin-top:24px}.IIa07q_entitySectionBody{min-height:116px}.IIa07q_entityQuiet{color:var(--mn-faint);margin:0 0 8px;padding:12px 2px;font-size:13px;line-height:20px}.IIa07q_entityRetry{flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 12px;display:flex}.IIa07q_entityRelatedHead{justify-content:space-between;align-items:flex-start;gap:12px;display:flex}.IIa07q_entityRelatedHead>div:first-child{flex:1;min-width:0}.IIa07q_entityRelatedHead>button{flex:none;margin-top:2px}.IIa07q_insightSkeleton{border:.5px solid var(--mn-card-line);border-radius:var(--dsw-radius-lg);align-content:start;gap:12px;min-height:108px;margin-bottom:8px;padding:16px;display:grid;position:relative;overflow:hidden}.IIa07q_insightSkeleton>span{background:var(--mn-fill);border-radius:999px;height:10px;display:block}.IIa07q_insightSkeleton>span:first-child{width:36%}.IIa07q_insightSkeleton>span:nth-child(2){width:94%}.IIa07q_insightSkeleton>span:nth-child(3){width:68%}.IIa07q_entityRailSkeleton{border-radius:var(--dsw-radius-sm);background:color-mix(in srgb, var(--mn-fill) 55%, transparent);height:32px;display:block;position:relative;overflow:hidden}.IIa07q_insightSkeleton:after,.IIa07q_entityRailSkeleton:after{content:\"\";background:linear-gradient(105deg, transparent 20%, color-mix(in srgb, var(--mn-text) 5%, transparent) 45%, transparent 70%);pointer-events:none;animation:1.2s ease-in-out infinite IIa07q_entity-skeleton-sweep;position:absolute;inset:0;transform:translate(-120%)}@keyframes IIa07q_entity-skeleton-sweep{to{transform:translate(120%)}}@media (prefers-reduced-motion:reduce){.IIa07q_insightSkeleton:after,.IIa07q_entityRailSkeleton:after{animation:none}}.IIa07q_readSourceCard[data-status=loading] .IIa07q_readSourceSignal{background:var(--mn-idle)}.IIa07q_supervisedComposer{border:.5px solid var(--mn-card-line);border-radius:var(--dsw-radius-lg);overflow:hidden}.IIa07q_supervisedForm{padding:16px}.IIa07q_candidateHeading{justify-content:space-between;align-items:center;gap:8px;min-width:0;margin-bottom:8px;display:flex}.IIa07q_candidateHeading>label{color:var(--mn-text);font-size:13px;font-weight:500;line-height:20px}.IIa07q_supervisedForm textarea{resize:vertical;border:.5px solid var(--mn-field-line);border-radius:var(--dsw-radius-md);width:100%;color:var(--mn-text);background:var(--mn-input);outline:0;padding:10px 12px;font-size:14px;line-height:22px}.IIa07q_sessionHint{color:var(--mn-danger);margin:8px 0 0;font-size:12px;line-height:18px}.IIa07q_fieldWide{grid-column:1/-1}.IIa07q_advancedWrite{border-top:.5px solid var(--mn-line)}.IIa07q_advancedWrite summary{cursor:pointer;justify-content:space-between;align-items:center;gap:16px;min-height:56px;padding:10px 16px;list-style:none;display:flex}.IIa07q_advancedWrite summary:hover{background:var(--mn-hover)}.IIa07q_advancedWrite summary::-webkit-details-marker{display:none}.IIa07q_advancedWrite summary>span:first-child{gap:2px;display:grid}.IIa07q_advancedWrite summary strong{font-size:13px;font-weight:500;line-height:20px}.IIa07q_advancedWrite summary small{color:var(--mn-faint);font-size:12px;line-height:18px}.IIa07q_advancedWrite summary>span:last-child{color:var(--mn-faint);font-size:16px;line-height:1}.IIa07q_advancedWrite[open] summary{border-bottom:.5px solid var(--mn-line)}.IIa07q_advancedWrite[open] summary>span:last-child{font-size:0}.IIa07q_advancedWrite[open] summary>span:last-child:after{content:\"−\";font-size:16px}.IIa07q_manualForm{padding:4px 16px 16px}.IIa07q_manualActions{justify-content:space-between;align-items:center;gap:16px;margin-top:16px;display:flex}.IIa07q_manualActions p{max-width:520px;color:var(--mn-faint);margin:0;font-size:12px;line-height:18px}.IIa07q_listToolbar{border:.5px solid var(--mn-card-line);border-radius:var(--dsw-radius-lg);grid-template-columns:minmax(0,1fr) 180px auto;gap:8px;padding:12px;display:grid}.IIa07q_listToolbar>*{min-width:0}.IIa07q_listNotice{color:var(--mn-faint);margin:10px 2px 16px;font-size:12px;line-height:18px}.IIa07q_listNotice span{color:var(--mn-success);background:color-mix(in srgb, var(--mn-success) 10%, transparent);border-radius:999px;margin-right:8px;padding:1px 8px;font-size:11px;font-weight:500;line-height:17px}.IIa07q_memoryList{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:8px;display:grid}.IIa07q_memoryList .IIa07q_insightCard{height:100%;margin:0}.IIa07q_modalFooterNote{max-width:54ch;color:var(--mn-faint);margin:0 auto 0 0;font-size:12px;line-height:18px}.IIa07q_modalInlineStatus{color:var(--mn-muted);overflow-wrap:anywhere;margin:12px 0 0;font-size:12px;line-height:18px}.IIa07q_metadataDialog{gap:12px;display:grid}.IIa07q_metadataToolbar{color:var(--mn-faint);justify-content:space-between;align-items:center;gap:12px;font-size:12px;line-height:18px;display:flex}.IIa07q_metadataToolbar>span{align-items:center;gap:8px;min-width:0;display:flex}.IIa07q_metadataToolbar em{color:var(--mn-muted);background:var(--mn-fill);border-radius:999px;padding:1px 8px;font-size:11px;font-style:normal;font-weight:500;line-height:17px}.IIa07q_metadataList{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;display:grid}.IIa07q_metadataEmpty{border-radius:var(--dsw-radius-md);color:var(--mn-faint);background:var(--mn-fill);text-align:center;grid-column:1/-1;padding:20px;font-size:12px}.IIa07q_metadataList>label{cursor:pointer;grid-template-columns:16px minmax(0,1fr);align-items:start;gap:10px;min-width:0;min-height:76px;padding:12px;display:grid;position:relative}.IIa07q_metadataList>label:hover{background:var(--mn-hover)}.IIa07q_metadataList>label[data-selected]{border-color:var(--mn-field-line);background:var(--mn-fill)}.IIa07q_metadataList>label[data-refreshing]{overflow:hidden}.IIa07q_metadataList>label[data-refreshing]:after{content:\"\";background:linear-gradient(105deg, transparent 20%, color-mix(in srgb, var(--mn-accent) 10%, transparent) 45%, transparent 70%);pointer-events:none;animation:.9s ease-in-out infinite IIa07q_mnemon-metadata-sweep;position:absolute;inset:0;transform:translate(-120%)}.IIa07q_metadataList>label[data-refreshed]{animation:.9s ease-out IIa07q_mnemon-metadata-refreshed}.IIa07q_metadataList>label[data-failed]{border-color:color-mix(in srgb, var(--mn-danger) 40%, transparent)}.IIa07q_metadataList>label>input{opacity:0;pointer-events:none;width:1px;height:1px;position:absolute}.IIa07q_metadataList>label>span{gap:4px;min-width:0;display:grid}.IIa07q_metadataList strong{text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:500;line-height:20px;overflow:hidden}.IIa07q_metadataList small{color:var(--mn-faint);-webkit-line-clamp:2;-webkit-box-orient:vertical;font-size:12px;line-height:18px;display:-webkit-box;overflow:hidden}.IIa07q_metadataList>label>span>span{align-items:center;gap:6px;min-width:0;display:flex}.IIa07q_metadataList code{color:var(--mn-faint);text-overflow:ellipsis;white-space:nowrap;font-size:11px;overflow:hidden}.IIa07q_metadataTaskStatus{text-overflow:ellipsis;white-space:nowrap;min-width:0;font-size:12px;line-height:18px;overflow:hidden}.IIa07q_metadataTaskStatus[data-status=running]{color:var(--mn-faint)}.IIa07q_metadataTaskStatus[data-status=success]{color:var(--mn-success)}.IIa07q_metadataTaskStatus[data-status=error]{color:var(--mn-danger)}@media (prefers-reduced-motion:reduce){.IIa07q_metadataList>label[data-refreshing]:after,.IIa07q_metadataList>label[data-refreshed]{animation:none}}@media (width<=1000px){.IIa07q_graphLayout{display:block;position:relative}.IIa07q_graphInspector{width:auto;min-height:0;box-shadow:none;margin-top:12px;position:static;overflow:visible}.IIa07q_graphInspector[data-empty]{display:none}.IIa07q_resultLayout{grid-template-columns:1fr}.IIa07q_relatedPane{grid-row:1;max-height:none;position:static}.IIa07q_memoryList{grid-template-columns:1fr}}@media (width<=760px){.IIa07q_metadataList{grid-template-columns:1fr}.IIa07q_modalFooterNote{max-width:none;margin:0}.IIa07q_modal .IIa07q_supervisedForm textarea{min-height:clamp(130px,30vh,210px)}.IIa07q_entityLayout{grid-template-columns:1fr}.IIa07q_manualActions{flex-direction:column;align-items:stretch}.IIa07q_entityRail{position:static}.IIa07q_searchControls{grid-template-columns:repeat(2,minmax(0,1fr));display:grid}.IIa07q_searchActions{grid-column:1/-1}.IIa07q_searchActions>button{flex:1}.IIa07q_listToolbar{grid-template-columns:1fr}.IIa07q_bodyDirectoryHeader{grid-template-columns:minmax(0,1fr);display:grid}.IIa07q_bodyDirectoryHeader>div{min-width:0}.IIa07q_bodyDirectoryPath{max-width:100%}.IIa07q_bodyDirectoryControls{flex-wrap:wrap;justify-content:flex-start;padding-right:0}.IIa07q_createIdentityGrid,.IIa07q_placementMode,.IIa07q_placementRuleGrid,.IIa07q_placementCandidates,.IIa07q_providerChoice,.IIa07q_providerAdvancedGrid{grid-template-columns:1fr}.IIa07q_graphViewport{min-height:360px}.IIa07q_graphSvg{height:390px}.IIa07q_graphCanvasControls{top:8px;right:8px}.IIa07q_graphCanvasControls span{display:none}}@media (width<=520px){.IIa07q_memoryHeaderActions{width:100%}.IIa07q_memoryHeaderActions>button{flex:1}.IIa07q_cardTop{flex-direction:column;align-items:flex-start}.IIa07q_cardActions{flex-wrap:wrap;align-items:stretch}.IIa07q_cardActions button{flex:1}.IIa07q_searchControls{grid-template-columns:1fr}}@supports (height:100dvh){@media (width<=760px){.IIa07q_modal .IIa07q_supervisedForm textarea{min-height:clamp(130px,30dvh,210px)}}}@media (width<=1000px) and (height<=760px){.IIa07q_graphViewport{min-height:300px}.IIa07q_graphSvg{height:300px}}";
 		const id$1 = "dsh-mnemon-source-memory-spaces/presentation/page.module.css";
 		if (typeof document !== "undefined") {
 			let tag = document.querySelector("style[data-plugin-css=" + JSON.stringify(id$1) + "]");
@@ -760,6 +1066,7 @@ window.__ModuleLoader__.load({
 			"bodySignal": "IIa07q_bodySignal",
 			"bodySwitch": "IIa07q_bodySwitch",
 			"bodySwitchTrack": "IIa07q_bodySwitchTrack",
+			"candidateHeading": "IIa07q_candidateHeading",
 			"candidateIcon": "IIa07q_candidateIcon",
 			"capabilityRules": "IIa07q_capabilityRules",
 			"cardActions": "IIa07q_cardActions",
@@ -772,12 +1079,19 @@ window.__ModuleLoader__.load({
 			"createSectionHeading": "IIa07q_createSectionHeading",
 			"emptyState": "IIa07q_emptyState",
 			"entities": "IIa07q_entities",
+			"entity-skeleton-sweep": "IIa07q_entity-skeleton-sweep",
 			"entityHeading": "IIa07q_entityHeading",
 			"entityLayout": "IIa07q_entityLayout",
 			"entityList": "IIa07q_entityList",
+			"entityQuiet": "IIa07q_entityQuiet",
 			"entityRail": "IIa07q_entityRail",
+			"entityRailSkeleton": "IIa07q_entityRailSkeleton",
+			"entityRelatedHead": "IIa07q_entityRelatedHead",
 			"entityResults": "IIa07q_entityResults",
+			"entityRetry": "IIa07q_entityRetry",
 			"entitySearch": "IIa07q_entitySearch",
+			"entitySection": "IIa07q_entitySection",
+			"entitySectionBody": "IIa07q_entitySectionBody",
 			"fieldWide": "IIa07q_fieldWide",
 			"graphBackdrop": "IIa07q_graphBackdrop",
 			"graphCanvasControls": "IIa07q_graphCanvasControls",
@@ -794,6 +1108,7 @@ window.__ModuleLoader__.load({
 			"graphViewport": "IIa07q_graphViewport",
 			"id": "IIa07q_id",
 			"insightCard": "IIa07q_insightCard",
+			"insightSkeleton": "IIa07q_insightSkeleton",
 			"inspectorActions": "IIa07q_inspectorActions",
 			"inspectorChips": "IIa07q_inspectorChips",
 			"inspectorEmpty": "IIa07q_inspectorEmpty",
@@ -823,6 +1138,7 @@ window.__ModuleLoader__.load({
 			"modalFooterNote": "IIa07q_modalFooterNote",
 			"modalInlineStatus": "IIa07q_modalInlineStatus",
 			"muted": "IIa07q_muted",
+			"newSpaceBadge": "IIa07q_newSpaceBadge",
 			"nodeBodyLabel": "IIa07q_nodeBodyLabel",
 			"nodeCore": "IIa07q_nodeCore",
 			"nodeHalo": "IIa07q_nodeHalo",
@@ -838,6 +1154,7 @@ window.__ModuleLoader__.load({
 			"providerBadge": "IIa07q_providerBadge",
 			"providerChoice": "IIa07q_providerChoice",
 			"providerChoiceIcon": "IIa07q_providerChoiceIcon",
+			"providerEnableHint": "IIa07q_providerEnableHint",
 			"providerFieldControl": "IIa07q_providerFieldControl",
 			"providerFieldHeading": "IIa07q_providerFieldHeading",
 			"providerFieldIcon": "IIa07q_providerFieldIcon",
@@ -852,28 +1169,27 @@ window.__ModuleLoader__.load({
 			"readSourceSignal": "IIa07q_readSourceSignal",
 			"readSourceState": "IIa07q_readSourceState",
 			"readSources": "IIa07q_readSources",
+			"rediscoveryNotice": "IIa07q_rediscoveryNotice",
 			"relatedPane": "IIa07q_relatedPane",
 			"relatedSource": "IIa07q_relatedSource",
 			"resultLayout": "IIa07q_resultLayout",
 			"results": "IIa07q_results",
 			"searchActions": "IIa07q_searchActions",
 			"searchBar": "IIa07q_searchBar",
+			"searchChoice": "IIa07q_searchChoice",
 			"searchControls": "IIa07q_searchControls",
 			"sectionSpinner": "IIa07q_sectionSpinner",
 			"sessionHint": "IIa07q_sessionHint",
-			"sessionMissing": "IIa07q_sessionMissing",
-			"sessionReady": "IIa07q_sessionReady",
 			"singleColumn": "IIa07q_singleColumn",
 			"strategyForm": "IIa07q_strategyForm",
 			"strategyLoading": "IIa07q_strategyLoading",
 			"supervisedComposer": "IIa07q_supervisedComposer",
 			"supervisedForm": "IIa07q_supervisedForm",
-			"supervisedHeading": "IIa07q_supervisedHeading",
 			"tags": "IIa07q_tags"
 		};
 		//#endregion
 		//#region \0source-css:/home/runner/work/dsh-mnemon/dsh-mnemon/plugins/dsh-mnemon-source-memory-spaces/presentation/sidebar.module.css.mjs
-		const css$1 = "._Bh55G_shell ._Bh55G_memoryWorkspace{border-bottom:1px solid var(--dsw-alias-border-l1);background:var(--mn-surface);flex:none;padding:12px 16px 0}._Bh55G_shell ._Bh55G_memoryWorkspace>[class*=pageHeader]{margin-bottom:8px}._Bh55G_shell ._Bh55G_memoryNavigation{flex:none;align-items:flex-end;gap:12px;min-width:0;padding:0;display:flex}._Bh55G_shell ._Bh55G_memoryTabs{scrollbar-width:none;flex:1;gap:2px;min-width:0;display:flex;overflow-x:auto}._Bh55G_shell ._Bh55G_memoryTabs::-webkit-scrollbar{display:none}._Bh55G_shell ._Bh55G_memoryTabs button{min-width:max-content;min-height:0;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:0;border-bottom:2px solid #0000;border-radius:6px 6px 0 0;padding:6px 12px;font-size:13px}._Bh55G_shell ._Bh55G_memoryTabs button:hover{background:var(--dsw-alias-interactive-bg-hover)}._Bh55G_shell ._Bh55G_memoryTabs button[data-active]{border-bottom-color:var(--dsw-alias-state-business-primary);color:var(--dsw-alias-label-primary);font-weight:600}._Bh55G_shell ._Bh55G_memoryWriteButton{flex:none}._Bh55G_shell ._Bh55G_modal section[class*=supervisedComposer]{overflow:visible}._Bh55G_shell ._Bh55G_modal form[class*=supervisedForm]{padding:0}._Bh55G_shell ._Bh55G_modal [class*=supervisedHeading]{margin-bottom:10px}._Bh55G_shell ._Bh55G_modal [class*=supervisedHeading] h3{display:none}._Bh55G_shell ._Bh55G_modal details[class*=advancedWrite]{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);border-radius:10px;margin-top:14px;overflow:hidden}._Bh55G_shell [class*=inspectorEye],._Bh55G_shell [class*=inspectorHeading] button{width:26px;height:26px;min-height:0;color:var(--dsw-alias-label-secondary);background:0 0;border:0;border-radius:6px;justify-content:center;align-items:center;padding:0;font-size:13px;display:inline-flex}._Bh55G_shell [class*=inspectorEye]:hover:not(:disabled),._Bh55G_shell [class*=inspectorHeading] button:hover:not(:disabled){color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover);border:0}._Bh55G_shell [class*=inspectorEye],._Bh55G_shell [class*=inspectorHeading] button{cursor:pointer;transition:background-color .12s,color .12s,border-color .12s,outline-color .12s,box-shadow .12s,transform .12s}._Bh55G_shell [class*=inspectorEye]:active:not(:disabled),._Bh55G_shell [class*=inspectorHeading] button:active:not(:disabled){transform:translateY(1px)}._Bh55G_shell [class*=inspectorEye]:disabled{cursor:default;opacity:.45}._Bh55G_shell [class*=searchControls] label,._Bh55G_shell [class*=fieldWide]{color:var(--dsw-alias-label-secondary);gap:5px;font-size:12px;font-weight:500}._Bh55G_shell [class*=searchControls] select,._Bh55G_shell [class*=listToolbar] input,._Bh55G_shell [class*=listToolbar] select,._Bh55G_shell [class*=entitySearch] input{border:1px solid var(--dsw-alias-border-l2);min-height:34px;color:var(--dsw-alias-label-primary);background:var(--dsw-specific-input-major);border-radius:8px;padding:7px 10px;font-size:13px;font-weight:400}._Bh55G_shell [class*=entityHeading]>span,._Bh55G_shell [class*=inspectorHeading]>span{letter-spacing:.06em;font-size:11px}._Bh55G_shell [class*=bodyDirectoryHeader] p,._Bh55G_shell [class*=bodyCard]>p,._Bh55G_shell [class*=graphToolbar],._Bh55G_shell [class*=graphFooter],._Bh55G_shell [class*=manualActions] p{font-size:12px}._Bh55G_shell [class*=bodyDirectoryPath],._Bh55G_shell [class*=bodyCard] footer,._Bh55G_shell [class*=bodyHealth],._Bh55G_shell [class*=badge],._Bh55G_shell [class*=entities] span{font-size:11px}._Bh55G_shell [class*=bodySwitch],._Bh55G_shell [class*=graphCanvasControls] button,._Bh55G_shell [class*=advancedWrite] summary small{font-size:12px}._Bh55G_shell [class*=inspectorMeta] dd{font-size:13px}._Bh55G_shell [class*=bodyGrid]{grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr))}._Bh55G_shell article[class*=bodyCard]{border-color:var(--mn-line);background:linear-gradient(90deg, color-mix(in srgb, var(--mn-provider-color) 5%, var(--mn-layer-1)), var(--mn-layer-1) 34%);height:100%;box-shadow:inset 3px 0 0 color-mix(in srgb, var(--mn-provider-color) 68%, transparent);border-radius:8px;flex-direction:column;padding:11px 11px 11px 14px;display:flex}._Bh55G_shell article[class*=bodyCard][data-active]{border-color:var(--mn-line);box-shadow:inset 3px 0 0 color-mix(in srgb, var(--mn-provider-color) 78%, transparent)}._Bh55G_shell ._Bh55G_bodyCardHeader{justify-content:space-between;align-items:flex-start;gap:12px;min-width:0;display:flex}._Bh55G_shell ._Bh55G_bodyDirectoryActions{flex:none;align-items:center;gap:8px;display:flex}._Bh55G_shell ._Bh55G_bodyDirectoryActions>strong{color:var(--dsw-alias-state-business-primary);background:color-mix(in srgb, var(--dsw-alias-state-business-primary) 8%, transparent);white-space:nowrap;border-radius:999px;padding:5px 8px;font-size:11px;font-weight:600}._Bh55G_shell ._Bh55G_bodyCardIdentity{flex:1;align-items:flex-start;gap:8px;min-width:0;display:flex}._Bh55G_shell ._Bh55G_bodyCardIdentity>[class*=bodySignal]{flex:none;width:6px;height:6px;margin-top:7px}._Bh55G_shell article[class*=bodyCard][data-reconnecting] ._Bh55G_bodyCardIdentity>[class*=bodySignal]{width:6px;height:6px}._Bh55G_shell ._Bh55G_bodyCardIdentity>div{flex:1;gap:2px;min-width:0;display:grid}._Bh55G_shell ._Bh55G_bodyCardIdentity strong{text-overflow:ellipsis;white-space:nowrap;font-size:13px;line-height:20px;overflow:hidden}._Bh55G_shell ._Bh55G_bodyCardMeta{flex-wrap:wrap;align-items:center;gap:4px 8px;min-width:0;display:flex}._Bh55G_shell ._Bh55G_bodyCardMeta code{min-width:0;color:var(--dsw-alias-label-tertiary);text-overflow:ellipsis;white-space:nowrap;font-size:11px;overflow:hidden}._Bh55G_shell ._Bh55G_bodyCardMeta [class*=bodyHealth]{letter-spacing:0;flex:none;font-size:11px}._Bh55G_shell ._Bh55G_bodyCardHeader>[class*=bodySwitch]{flex:none;min-height:24px}._Bh55G_shell article[class*=bodyCard]>p{-webkit-line-clamp:4;-webkit-box-orient:vertical;min-height:6.2em;max-height:6.2em;margin:12px 0;line-height:1.55;display:-webkit-box;overflow:hidden}._Bh55G_shell ._Bh55G_bodyCardFooter{white-space:nowrap;grid-template-columns:minmax(0,1fr) max-content;align-items:center;gap:10px;min-width:0;margin-top:auto;padding-top:9px;display:grid}._Bh55G_shell ._Bh55G_bodyCardStats{flex-wrap:nowrap;align-items:center;gap:10px;min-width:0;display:flex;overflow:hidden}._Bh55G_shell ._Bh55G_bodyCardFooter [class*=bodyCardActions]{flex-wrap:nowrap;flex:none;align-items:center;gap:6px;display:flex}._Bh55G_shell [class*=cardActions]{gap:6px}._Bh55G_shell ._Bh55G_inspectorGlyph{border:1px solid var(--dsw-alias-border-l1);width:44px;height:44px;color:var(--dsw-alias-label-tertiary);background:var(--dsw-alias-bg-layer-1);font:20px/1 var(--mn-code);opacity:1;border-radius:10px;place-items:center;margin-bottom:10px;display:grid}@media (width<=760px){._Bh55G_shell ._Bh55G_memoryNavigation{padding-inline:12px}._Bh55G_shell ._Bh55G_memoryTabs button{padding-inline:10px}}@media (width<=520px){._Bh55G_shell ._Bh55G_memoryTabs button{padding-inline:8px;font-size:12px}}@media (prefers-reduced-motion:reduce){._Bh55G_shell [class*=inspectorEye],._Bh55G_shell [class*=inspectorHeading] button{transition:none}}";
+		const css$1 = "._Bh55G_shell ._Bh55G_memoryWorkspace{z-index:12;border-bottom:.5px solid var(--dsw-alias-border-l2);background:var(--mn-surface);flex:none;margin:-20px -24px 16px;padding:20px 24px 0;position:sticky;top:0}._Bh55G_shell ._Bh55G_memoryWorkspace>[class*=pageHeader],._Bh55G_shell ._Bh55G_memoryWorkspace~[class*=page]>[class*=pageHeader]{margin-bottom:12px}._Bh55G_shell ._Bh55G_memoryWorkspace~[class*=page]>[class*=pageHeader] h2{font-size:14px;line-height:22px}._Bh55G_shell ._Bh55G_memoryWorkspace~[class*=page]>[class*=pageHeader] p{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}._Bh55G_shell [class*=relatedPane],._Bh55G_shell [class*=entityRail]{position:static}._Bh55G_shell ._Bh55G_memoryNavigation{flex:none;align-items:flex-end;gap:12px;min-width:0;padding:0;display:flex}._Bh55G_shell ._Bh55G_memoryTabs{scrollbar-width:none;flex:1;gap:22px;min-width:0;display:flex;overflow-x:auto}._Bh55G_shell ._Bh55G_memoryTabs::-webkit-scrollbar{display:none}._Bh55G_shell ._Bh55G_memoryTabs button{min-width:max-content;min-height:0;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:0;border-bottom:2px solid #0000;margin-bottom:-.5px;padding:6px 1px 9px;font-size:13px;line-height:20px;position:relative}._Bh55G_shell ._Bh55G_memoryTabs button:hover{color:var(--dsw-alias-label-primary)}._Bh55G_shell ._Bh55G_memoryTabs button[data-active]{border-bottom-color:var(--dsw-alias-label-primary);color:var(--dsw-alias-label-primary)}._Bh55G_shell ._Bh55G_memoryWriteButton{flex:none}._Bh55G_shell ._Bh55G_modal section[class*=supervisedComposer]{border:0;overflow:visible}._Bh55G_shell ._Bh55G_modal form[class*=supervisedForm]{padding:0}._Bh55G_shell ._Bh55G_modal [class*=supervisedHeading]{margin-bottom:12px}._Bh55G_shell ._Bh55G_modal [class*=supervisedHeading] h3{display:none}._Bh55G_shell ._Bh55G_modal details[class*=advancedWrite]{border:.5px solid var(--dsw-alias-settings-card-stroke);border-radius:var(--dsw-radius-md);margin-top:16px;overflow:hidden}._Bh55G_shell [class*=inspectorEye],._Bh55G_shell [class*=inspectorHeading] button{border-radius:var(--dsw-radius-sm);width:28px;height:28px;min-height:0;color:var(--dsw-alias-label-caption);cursor:pointer;background:0 0;border:0;justify-content:center;align-items:center;padding:0;font-size:13px;transition:background-color .12s,color .12s;display:inline-flex}._Bh55G_shell [class*=inspectorEye]:hover:not(:disabled),._Bh55G_shell [class*=inspectorHeading] button:hover:not(:disabled){color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-interactive-bg-hover)}._Bh55G_shell [class*=inspectorEye]:disabled{cursor:default;opacity:.4}._Bh55G_shell [class*=bodyGrid]{grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr))}._Bh55G_shell article[class*=bodyCard]{flex-direction:column;height:100%;display:flex}._Bh55G_shell ._Bh55G_bodyCardHeader{justify-content:space-between;align-items:flex-start;gap:12px;min-width:0;display:flex}._Bh55G_shell ._Bh55G_bodyDirectoryActions{flex:none;align-items:center;gap:8px;display:flex}._Bh55G_shell ._Bh55G_bodyCardIdentity{flex:1;align-items:flex-start;gap:8px;min-width:0;display:flex}._Bh55G_shell ._Bh55G_bodyCardIdentity>[class*=bodySignal]{flex:none;width:6px;height:6px;margin-top:7px}._Bh55G_shell article[class*=bodyCard][data-reconnecting] ._Bh55G_bodyCardIdentity>[class*=bodySignal]{width:8px;height:8px;margin-top:6px}._Bh55G_shell ._Bh55G_bodyCardIdentity>div{flex:1;gap:2px;min-width:0;display:grid}._Bh55G_shell ._Bh55G_bodyCardIdentity strong{text-overflow:ellipsis;white-space:nowrap;font-size:14px;font-weight:500;line-height:20px;overflow:hidden}._Bh55G_shell ._Bh55G_bodyCardMeta{flex-wrap:wrap;align-items:center;gap:4px 8px;min-width:0;display:flex}._Bh55G_shell ._Bh55G_bodyCardMeta code{min-width:0;color:var(--dsw-alias-label-tertiary);text-overflow:ellipsis;white-space:nowrap;font-size:11px;overflow:hidden}._Bh55G_shell ._Bh55G_bodyCardMeta [class*=bodyHealth],._Bh55G_shell ._Bh55G_bodyCardHeader>[class*=bodySwitch]{flex:none}._Bh55G_shell article[class*=bodyCard]>p{-webkit-line-clamp:2;-webkit-box-orient:vertical;min-height:40px;max-height:40px;margin:10px 0;display:-webkit-box;overflow:hidden}._Bh55G_shell ._Bh55G_bodyCardFooter{white-space:nowrap;grid-template-columns:minmax(0,1fr) max-content;align-items:center;gap:12px;min-width:0;margin-top:auto;padding-top:10px;display:grid}._Bh55G_shell ._Bh55G_bodyCardStats{flex-wrap:nowrap;align-items:center;gap:12px;min-width:0;display:flex;overflow:hidden}._Bh55G_shell ._Bh55G_bodyCardFooter [class*=bodyCardActions]{flex-wrap:nowrap;flex:none;align-items:center;gap:8px;display:flex}._Bh55G_shell [class*=cardActions]{gap:8px}._Bh55G_shell ._Bh55G_inspectorGlyph{border:.5px solid var(--dsw-alias-border-l3);border-radius:var(--dsw-radius-lg);width:48px;height:48px;color:var(--dsw-alias-label-tertiary);place-items:center;margin-bottom:12px;font-size:20px;line-height:1;display:grid}@media (width<=760px){._Bh55G_shell ._Bh55G_memoryWorkspace{margin:-16px -16px 16px;padding:16px 16px 0}}@media (width<=520px){._Bh55G_shell ._Bh55G_memoryTabs{gap:18px}}@media (prefers-reduced-motion:reduce){._Bh55G_shell [class*=inspectorEye],._Bh55G_shell [class*=inspectorHeading] button{transition:none}}";
 		const id = "dsh-mnemon-source-memory-spaces/presentation/sidebar.module.css";
 		if (typeof document !== "undefined") {
 			let tag = document.querySelector("style[data-plugin-css=" + JSON.stringify(id) + "]");
@@ -909,18 +1225,61 @@ window.__ModuleLoader__.load({
 			...dsh_mnemon_client.memorySidebarStyles,
 			...sidebar_module_css_default
 		};
+		const TranslationOverride = (0, react.createContext)(void 0);
+		const SourceTranslation = TranslationOverride.Provider;
+		function interpolate(text, params) {
+			return params === void 0 ? text : text.replace(/\{(\w+)\}/g, (match, name) => name in params ? String(params[name]) : match);
+		}
 		function useT() {
+			const override = (0, react.useContext)(TranslationOverride);
 			const fallback = (0, dsh_mnemon_client.useT)();
 			const locale = (0, dsh_mnemon_client.useLocale)();
-			return (0, react.useMemo)(() => (key, params) => {
+			return (0, react.useMemo)(() => override ?? ((key, params) => {
 				const dictionary = locale.startsWith("en") ? en : zh;
 				if (!Object.hasOwn(dictionary, key)) return fallback(key, params);
-				const text = dictionary[key];
-				return params === void 0 ? text : text.replace(/\{(\w+)\}/g, (match, name) => name in params ? String(params[name]) : match);
-			}, [locale, fallback]);
+				return interpolate(dictionary[key], params);
+			}), [
+				override,
+				locale,
+				fallback
+			]);
+		}
+		/** The languages DSH asks for a key: the active one, then each one's fallback. */
+		function languageChain(snapshot) {
+			const fallbacks = new Map(snapshot.locales.map((locale) => [locale.id, locale.fallback]));
+			const chain = [];
+			for (let id = snapshot.active; id !== void 0 && !chain.includes(id); id = fallbacks.get(id)) chain.push(id);
+			return chain;
+		}
+		/**
+		* Translate as dsh-mnemon drew these settings, through DSH's language chain
+		* and the `mnemon` namespace it registers this copy in. This copy answers in
+		* the first of zh and en the chain reaches; a language pack ahead of that one
+		* is asked first, through the namespace, as dsh-mnemon asked it; a key this
+		* copy lacks goes to the namespace too. Without DSH's chain the page's
+		* language picks the copy, as the page frame does.
+		*/
+		function settingsTranslate(locale, chain, language) {
+			const bound = locale.bind("mnemon");
+			const head = chain === void 0 ? language.startsWith("en") ? "en" : "zh" : chain.find((id) => id === "zh" || id === "en") ?? "en";
+			const own = head === "en" ? en : zh;
+			const packFirst = chain !== void 0 && chain.length > 0 && chain[0] !== head;
+			return (key, params) => {
+				if (packFirst) {
+					const text = bound(key, params);
+					if (text !== key) return text;
+				}
+				return Object.hasOwn(own, key) ? interpolate(own[key], params) : bound(key, params);
+			};
 		}
 		//#endregion
 		//#region src/contracts.ts
+		/**
+		* The Mnemon Native Provider's id. Its package names its descriptor and driver
+		* with it, the Starter installs it under it, and a stored space that names no
+		* Provider belongs to it.
+		*/
+		const NATIVE_PROVIDER_ID = "mnemon-native";
 		const CATEGORIES = [
 			"preference",
 			"decision",
@@ -929,6 +1288,22 @@ window.__ModuleLoader__.load({
 			"context",
 			"general"
 		];
+		/**
+		* One spelling-insensitive key per entity. The Host's entity index and the Client's graph
+		* both count an entity's memories by it, so their numbers agree.
+		*/
+		function normalizeEntityKey(entity) {
+			return entity.normalize("NFKC").trim().toLocaleLowerCase();
+		}
+		/** Wire protocols accepted by the embedding protocol override; single source for schema, resolver, and UI validation. */
+		const MNEMON_EMBEDDING_PROTOCOLS = [
+			"auto",
+			"ollama",
+			"openai"
+		];
+		const EMBEDDING_ENVIRONMENT_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/u;
+		/** The most characters a space's routing description holds. */
+		const MEMORY_SPACE_DESCRIPTION_MAX_LENGTH = 1e3;
 		//#endregion
 		//#region src/client/ProviderIcon.tsx
 		function GenericProviderMark() {
@@ -978,9 +1353,6 @@ window.__ModuleLoader__.load({
 		}
 		//#endregion
 		//#region src/client/provider-presentation.ts
-		function providerDisplayLabel(_providerId, label) {
-			return label;
-		}
 		function providerSummary(t, provider) {
 			if (provider.summaryI18nKey === void 0) return provider.summary;
 			const localized = t(provider.summaryI18nKey);
@@ -997,7 +1369,165 @@ window.__ModuleLoader__.load({
 			return typeof localized !== "string" || localized.length === 0 || localized === option.i18nKey ? option.label : localized;
 		}
 		//#endregion
-		//#region src/client/pages.tsx
+		//#region src/client/provider-field.tsx
+		const SAVED_SECRET_MASK = "••••••••••••";
+		function inputType(field, secretVisible) {
+			return field.input === "secret" ? secretVisible ? "text" : "password" : field.input === "number" ? "number" : field.input === "url" ? "url" : "text";
+		}
+		function SecretVisibilityIcon({ visible }) {
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("svg", {
+				viewBox: "0 0 20 20",
+				fill: "none",
+				"aria-hidden": "true",
+				children: [
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
+						d: "M2.3 10s2.8-4.5 7.7-4.5 7.7 4.5 7.7 4.5-2.8 4.5-7.7 4.5S2.3 10 2.3 10Z",
+						stroke: "currentColor",
+						strokeWidth: "1.4",
+						strokeLinecap: "round",
+						strokeLinejoin: "round"
+					}),
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("circle", {
+						cx: "10",
+						cy: "10",
+						r: "2.1",
+						stroke: "currentColor",
+						strokeWidth: "1.4"
+					}),
+					visible && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", {
+						d: "m3.5 3.5 13 13",
+						stroke: "currentColor",
+						strokeWidth: "1.4",
+						strokeLinecap: "round"
+					})
+				]
+			});
+		}
+		/** One field of a Provider descriptor, wherever it is edited. */
+		function ProviderField(props) {
+			return props.layout === "settings" ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(SettingsField, { ...props }) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)(DialogField, { ...props });
+		}
+		function SettingsField(props) {
+			const t = useT();
+			const settings = dsh_mnemon_client.memorySettingsStyles;
+			const [secretVisible, setSecretVisible] = (0, react.useState)(false);
+			const { field } = props;
+			const label = providerFieldLabel(t, field);
+			const disabled = props.disabled === true;
+			const required = field.required && !props.saved;
+			const secret = field.input === "secret";
+			const fieldValue = String(props.value ?? "");
+			const showingSavedMask = secret && props.saved && fieldValue === "";
+			const displayValue = showingSavedMask ? secretVisible ? t("config.providerSecretStoredValue") : SAVED_SECRET_MASK : fieldValue;
+			const input = field.input === "boolean" ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("label", {
+				className: settings.providerBoolean,
+				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
+					"aria-label": label,
+					type: "checkbox",
+					checked: Boolean(props.value),
+					disabled,
+					onChange: (event) => props.onChange(event.target.checked)
+				}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: label })]
+			}) : field.input === "select" ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.SelectField, {
+				label,
+				value: String(props.value ?? ""),
+				disabled,
+				options: (field.options ?? []).map((option) => ({
+					value: option.value,
+					label: providerOptionLabel(t, option)
+				})),
+				onChange: (next) => props.onChange(next)
+			}) : /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("label", { children: [label, /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+				className: secret ? settings.providerSecretInput : void 0,
+				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
+					"aria-label": label,
+					type: inputType(field, secretVisible),
+					value: displayValue,
+					required,
+					disabled,
+					autoComplete: secret ? "new-password" : void 0,
+					placeholder: field.placeholder ?? (secret ? t("overview.providerApiKeyOptional") : void 0),
+					maxLength: field.maxLength ?? (secret ? 8e3 : 2e3),
+					min: field.min,
+					max: field.max,
+					pattern: field.pattern,
+					step: field.input === "number" ? "any" : void 0,
+					onFocus: (event) => {
+						if (showingSavedMask) event.currentTarget.select();
+					},
+					onClick: (event) => {
+						if (showingSavedMask) event.currentTarget.select();
+					},
+					onChange: (event) => {
+						const value = showingSavedMask ? event.target.value.replace(SAVED_SECRET_MASK, "").replace(t("config.providerSecretStoredValue"), "") : event.target.value;
+						props.onChange(value);
+					}
+				}), secret && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+					type: "button",
+					className: settings.providerSecretVisibility,
+					"aria-label": t(secretVisible ? "config.providerSecretHide" : "config.providerSecretShow"),
+					title: t(secretVisible ? "config.providerSecretHide" : "config.providerSecretShow"),
+					"aria-pressed": secretVisible,
+					disabled,
+					onClick: () => setSecretVisible((value) => !value),
+					children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(SecretVisibilityIcon, { visible: secretVisible })
+				})]
+			})] });
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+				className: settings.providerFieldControl,
+				"data-input": field.input,
+				children: input
+			});
+		}
+		function DialogField(props) {
+			const t = useT();
+			const { field } = props;
+			const label = providerFieldLabel(t, field);
+			const value = props.value ?? "";
+			const clearing = props.clearing === true;
+			const required = field.required && (!props.saved || clearing);
+			const input = field.input === "boolean" ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
+				"aria-label": label,
+				type: "checkbox",
+				checked: Boolean(value),
+				onChange: (event) => props.onChange(event.target.checked)
+			}) : field.input === "select" ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.SelectField, {
+				hideLabel: true,
+				label,
+				value: String(value),
+				options: (field.options ?? []).map((option) => ({
+					value: option.value,
+					label: providerOptionLabel(t, option)
+				})),
+				onChange: (next) => props.onChange(next)
+			}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
+				"aria-label": label,
+				type: inputType(field, false),
+				value: String(value),
+				required,
+				autoComplete: field.input === "secret" ? "new-password" : void 0,
+				placeholder: props.saved ? t("overview.providerApiKeyKeep") : field.placeholder ?? (field.input === "secret" ? t("overview.providerApiKeyOptional") : void 0),
+				maxLength: field.maxLength ?? (field.input === "secret" ? 8e3 : 2e3),
+				min: field.min,
+				max: field.max,
+				pattern: field.pattern,
+				step: field.input === "number" ? "any" : void 0,
+				onChange: (event) => props.onChange(event.target.value)
+			});
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+				className: css.providerFieldControl,
+				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("label", { children: [label, input] }), field.input === "secret" && props.saved && props.onClearChange !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("label", {
+					className: css.providerSecretClear,
+					children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
+						type: "checkbox",
+						checked: clearing,
+						onChange: (event) => props.onClearChange(event.target.checked)
+					}), t("overview.providerSecretClear")]
+				})]
+			});
+		}
+		//#endregion
+		//#region src/client/widgets.tsx
 		function memoryProviderFields(provider) {
 			return provider.fields.filter((field) => field.scope !== "service");
 		}
@@ -1011,8 +1541,21 @@ window.__ModuleLoader__.load({
 			}]));
 		}
 		function providerDraftComplete(provider, connection) {
-			if (provider === void 0 || provider.origin === "native") return true;
-			return provider.serviceConfigured !== false && memoryProviderFields(provider).every((field) => !field.required || String(connection?.[field.key] ?? "").trim() !== "");
+			if (provider === void 0 || provider.serviceConfigured === false) return false;
+			return provider.origin === "native" || memoryProviderFields(provider).every((field) => !field.required || String(connection?.[field.key] ?? "").trim() !== "");
+		}
+		/** Keep a ready provider; otherwise Mnemon Native while its CLI is available, then the first other ready one. */
+		function readyProviderId(providers, current) {
+			const ready = providers.filter((provider) => provider.serviceConfigured !== false);
+			return ready.find((provider) => provider.id === current)?.id ?? (ready.find((provider) => provider.origin === "native") ?? ready[0])?.id;
+		}
+		/** Ready Providers first, in catalog order, so the choices that work lead the list. */
+		function readyFirst(providers) {
+			return [...providers].sort((left, right) => Number(left.serviceConfigured === false) - Number(right.serviceConfigured === false));
+		}
+		/** Why a provider cannot be chosen: Mnemon Native needs its CLI, the others a service configured on the dsh-mnemon page under Plugins. */
+		function providerUnavailableKey(provider) {
+			return provider.origin === "native" ? "overview.nativeCliRequired" : "overview.providerServiceRequired";
 		}
 		function nativeSpaceProvider(provider) {
 			return provider.origin === "native";
@@ -1042,49 +1585,16 @@ window.__ModuleLoader__.load({
 					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 						className: css.providerAdvancedGrid,
 						children: memoryProviderFields(props.provider).map((field) => {
-							const label = providerFieldLabel(t, field);
-							const value = props.connection[field.key] ?? "";
-							const savedSecret = props.body?.provider.configuredSecrets.includes(field.key) === true;
-							const clearingSecret = props.clearSecrets?.includes(field.key) === true;
-							const required = field.required && (!savedSecret || clearingSecret);
-							const input = field.input === "boolean" ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
-								"aria-label": label,
-								type: "checkbox",
-								checked: Boolean(value),
-								onChange: (event) => props.onChange(field.key, event.target.checked)
-							}) : field.input === "select" ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)("select", {
-								"aria-label": label,
-								value: String(value),
-								required,
-								onChange: (event) => props.onChange(field.key, event.target.value),
-								children: field.options?.map((option) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("option", {
-									value: option.value,
-									children: providerOptionLabel(t, option)
-								}, option.value))
-							}) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
-								"aria-label": label,
-								type: field.input === "secret" ? "password" : field.input === "number" ? "number" : field.input === "url" ? "url" : "text",
-								value: String(value),
-								required,
-								autoComplete: field.input === "secret" ? "new-password" : void 0,
-								placeholder: savedSecret ? t("overview.providerApiKeyKeep") : field.placeholder ?? (field.input === "secret" ? t("overview.providerApiKeyOptional") : void 0),
-								maxLength: field.maxLength ?? (field.input === "secret" ? 8e3 : 2e3),
-								min: field.min,
-								max: field.max,
-								pattern: field.pattern,
-								step: field.input === "number" ? "any" : void 0,
-								onChange: (event) => props.onChange(field.key, event.target.value)
-							});
-							return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-								className: css.providerFieldControl,
-								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("label", { children: [label, input] }), props.body !== void 0 && field.input === "secret" && savedSecret && props.onClearSecretsChange !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("label", {
-									className: css.providerSecretClear,
-									children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
-										type: "checkbox",
-										checked: clearingSecret,
-										onChange: (event) => props.onClearSecretsChange(event.target.checked ? [.../* @__PURE__ */ new Set([...props.clearSecrets ?? [], field.key])] : (props.clearSecrets ?? []).filter((key) => key !== field.key))
-									}), t("overview.providerSecretClear")]
-								})]
+							const saved = props.body?.provider.configuredSecrets.includes(field.key) === true;
+							const clearSecrets = props.clearSecrets ?? [];
+							return /* @__PURE__ */ (0, react_jsx_runtime.jsx)(ProviderField, {
+								field,
+								value: props.connection[field.key],
+								layout: "dialog",
+								saved,
+								clearing: clearSecrets.includes(field.key),
+								onChange: (value) => props.onChange(field.key, value),
+								...props.body === void 0 || props.onClearSecretsChange === void 0 ? {} : { onClearChange: (clearing) => props.onClearSecretsChange(clearing ? [.../* @__PURE__ */ new Set([...clearSecrets, field.key])] : clearSecrets.filter((key) => key !== field.key)) }
 							}, field.key);
 						})
 					}),
@@ -1114,12 +1624,11 @@ window.__ModuleLoader__.load({
 			return `${insight.memoryBodyId ?? "memory"}:${insight.id}`;
 		}
 		function MemoryProviderBadge(props) {
-			const label = providerDisplayLabel(props.providerId, props.label);
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
 				className: css.providerBadge,
 				"data-provider": props.providerId,
-				title: label,
-				children: label
+				title: props.label,
+				children: props.label
 			});
 		}
 		function ReadSourcePanel(props) {
@@ -1142,7 +1651,7 @@ window.__ModuleLoader__.load({
 				}),
 				/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
 					className: css.readSourceState,
-					children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("em", { children: t(`readSources.mode.${source.mode}`) }), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("small", { children: [t(`readSources.status.${source.status}`, { count: source.itemCount }), source.edgeCount === void 0 || source.edgeCount === 0 ? "" : ` · ${t("readSources.edges", { count: source.edgeCount })}`] })]
+					children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("em", { children: t(`readSources.mode.${source.mode}`) }), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("small", { children: [source.mode === "entities" && source.status === "ready" ? t(source.complete === false ? "entities.sourcePartial" : "entities.sourceReady", { count: source.itemCount }) : t(`readSources.status.${source.status}`, { count: source.itemCount }), source.edgeCount === void 0 || source.edgeCount === 0 ? "" : ` · ${t("readSources.edges", { count: source.edgeCount })}`] })]
 				})
 			] });
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("section", {
@@ -1175,30 +1684,12 @@ window.__ModuleLoader__.load({
 				}, source.memoryBodyId)) })]
 			});
 		}
-		/** Full-text popup for a selected graph node whose inspector preview is clamped. */
-		function ContentPreview(props) {
-			const t = useT();
-			const meta = [
-				props.kind,
-				props.node.id,
-				props.node.memoryBodyName
-			].filter((entry) => entry !== void 0).join(" · ");
-			return /* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.SidebarModal, {
-				title: t("overview.previewTitle"),
-				description: meta,
-				onClose: props.onClose,
-				children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-					className: css.previewContent,
-					children: props.node.content
-				})
-			});
-		}
 		function InsightCard(props) {
 			const t = useT();
 			const [confirming, setConfirming] = (0, react.useState)(false);
 			const [forgetting, setForgetting] = (0, react.useState)(false);
 			const { insight } = props;
-			const neutralActionClass = (0, dsh_mnemon_client.appearanceClass)(css.ghostButton, sidebarCss.itemActionButton);
+			const neutralActionClass = (0, dsh_mnemon_client.appearanceClass)(css.ghostButton, (0, dsh_mnemon_client.appearanceClass)(sidebarCss.itemActionButton, sidebarCss.itemEditAction));
 			const forgetActionClass = (0, dsh_mnemon_client.appearanceClass)(css.dangerButton, (0, dsh_mnemon_client.appearanceClass)(sidebarCss.itemActionButton, sidebarCss.itemDangerAction));
 			const providerLabel = insight.memoryProviderLabel ?? insight.memoryProviderId;
 			const supportsRelated = insight.memoryCapabilities?.related === true;
@@ -1208,7 +1699,7 @@ window.__ModuleLoader__.load({
 				providerLabel,
 				insight.category !== void 0 ? categoryLabel(t, insight.category) : void 0,
 				insight.importance !== void 0 ? t("common.importance", { value: insight.importance }) : void 0,
-				insight.score !== void 0 ? `score ${insight.score.toFixed(3)}` : void 0,
+				insight.score !== void 0 ? t("common.score", { value: insight.score.toFixed(2) }) : void 0,
 				insight.depth !== void 0 ? t("common.hops", { count: insight.depth }) : void 0
 			].filter((entry) => entry !== void 0);
 			const forget = async () => {
@@ -1223,19 +1714,15 @@ window.__ModuleLoader__.load({
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("article", {
 				className: css.insightCard,
 				children: [
-					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 						className: css.cardTop,
-						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+						children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 							className: css.badges,
 							children: meta.map((entry) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
 								className: css.badge,
 								children: entry
 							}, entry))
-						}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("code", {
-							className: css.id,
-							title: insight.id,
-							children: insight.id.slice(0, 8)
-						})]
+						})
 					}),
 					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
 						className: css.content,
@@ -1267,7 +1754,7 @@ window.__ModuleLoader__.load({
 							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 								type: "button",
 								className: neutralActionClass,
-								onClick: () => void navigator.clipboard?.writeText(insight.id),
+								onClick: () => void (0, _deepseek_ai_dsh_client_ui_primitives.writeClipboard)(insight.id),
 								children: t("common.copyId")
 							}),
 							props.writeEnabled && supportsForget && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
@@ -1290,7 +1777,7 @@ window.__ModuleLoader__.load({
 						type: "button",
 						"data-dialog-close": true,
 						"data-autofocus": true,
-						className: css.ghostButton,
+						className: css.secondaryButton,
 						disabled: forgetting,
 						onClick: () => setConfirming(false),
 						children: t("common.cancel")
@@ -1314,6 +1801,10 @@ window.__ModuleLoader__.load({
 				})
 			})] });
 		}
+		/** @deprecated Use nativeSpaceProvider. */
+		const nativeBodyProvider = nativeSpaceProvider;
+		//#endregion
+		//#region src/client/memory-graph.tsx
 		const GRAPH_WIDTH = 930;
 		const GRAPH_HEIGHT = 520;
 		const GRAPH_MARGIN_X = 58;
@@ -1345,9 +1836,8 @@ window.__ModuleLoader__.load({
 		function entityGraphId(entity) {
 			return `entity:${encodeURIComponent(normalizeEntity(entity))}`;
 		}
-		function normalizeEntity(entity) {
-			return entity.normalize("NFKC").trim().toLocaleLowerCase();
-		}
+		/** The graph and the Entities page count an entity by the same key. */
+		const normalizeEntity = normalizeEntityKey;
 		/** Add routing scopes and entity indexes without issuing another recall. */
 		function enrichMultiSpaceGraph(graph, bodies) {
 			if (graph.nodes.length === 0) return graph;
@@ -1923,6 +2413,26 @@ window.__ModuleLoader__.load({
 				]
 			})] });
 		}
+		//#endregion
+		//#region src/client/overview-page.tsx
+		/** Full-text popup for a selected graph node whose inspector preview is clamped. */
+		function ContentPreview(props) {
+			const t = useT();
+			const meta = [
+				props.kind,
+				props.node.id,
+				props.node.memoryBodyName
+			].filter((entry) => entry !== void 0).join(" · ");
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.SidebarModal, {
+				title: t("overview.previewTitle"),
+				description: meta,
+				onClose: props.onClose,
+				children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
+					className: css.previewContent,
+					children: props.node.content
+				})
+			});
+		}
 		function OverviewPage(props) {
 			const t = useT();
 			const locale = (0, dsh_mnemon_client.useLocale)();
@@ -1941,7 +2451,7 @@ window.__ModuleLoader__.load({
 			const [creatingSpaceOpen, setCreatingSpaceOpen] = (0, react.useState)(false);
 			const [spaceName, setSpaceName] = (0, react.useState)("");
 			const [spaceDescription, setSpaceDescription] = (0, react.useState)("");
-			const [spaceProviderId, setSpaceProviderId] = (0, react.useState)("mnemon-native");
+			const [spaceProviderId, setSpaceProviderId] = (0, react.useState)(NATIVE_PROVIDER_ID);
 			const [providerDrafts, setProviderDrafts] = (0, react.useState)({});
 			const [catalogUnavailable, setCatalogUnavailable] = (0, react.useState)(false);
 			const [editingSpace, setEditingSpace] = (0, react.useState)(null);
@@ -1957,6 +2467,9 @@ window.__ModuleLoader__.load({
 			const [metadataSelection, setMetadataSelection] = (0, react.useState)([]);
 			const [metadataTasks, setMetadataTasks] = (0, react.useState)({});
 			const [lastFullSyncAt, setLastFullSyncAt] = (0, react.useState)(null);
+			const [rediscovering, setRediscovering] = (0, react.useState)(false);
+			const [pageRediscovery, setPageRediscovery] = (0, react.useState)(null);
+			const [seenRediscovery, setSeenRediscovery] = (0, react.useState)(readSeenRediscovery);
 			const [syncClock, setSyncClock] = (0, react.useState)(() => Date.now());
 			const loadRequest = (0, react.useRef)(0);
 			const initialSyncStarted = (0, react.useRef)(false);
@@ -1985,24 +2498,13 @@ window.__ModuleLoader__.load({
 							generatedAt: (/* @__PURE__ */ new Date()).toISOString()
 						};
 					});
-					const normalizedProviders = nextCatalog.providers;
-					const normalizedCatalog = {
-						...nextCatalog,
-						providers: normalizedProviders,
-						items: nextCatalog.items
-					};
 					if (request !== loadRequest.current) return;
-					setProviderDrafts((current) => mergeProviderDefaults(normalizedCatalog.providers, current));
-					setCatalog(normalizedCatalog);
+					setProviderDrafts((current) => mergeProviderDefaults(nextCatalog.providers, current));
+					setCatalog(nextCatalog);
 					setCatalogLoading(false);
 					props.client.bodies().then((next) => {
 						if (request !== loadRequest.current) return;
-						const full = {
-							...next,
-							providers: next.providers,
-							items: next.items
-						};
-						setCatalog(full);
+						setCatalog(next);
 					}).catch((reason) => {
 						if (request === loadRequest.current && !quiet && !directoryUnavailable) setError((0, dsh_mnemon_client.message)(reason));
 					}).finally(() => {
@@ -2010,7 +2512,7 @@ window.__ModuleLoader__.load({
 					});
 					props.client.graph().then((next) => {
 						if (request !== loadRequest.current) return;
-						const enriched = enrichMultiSpaceGraph(next, normalizedCatalog.items);
+						const enriched = enrichMultiSpaceGraph(next, nextCatalog.items);
 						setGraph(enriched);
 						setSelected((current) => current === null ? null : enriched.nodes.find((node) => graphNodeKey(node) === graphNodeKey(current)) ?? null);
 					}).catch((reason) => {
@@ -2037,6 +2539,12 @@ window.__ModuleLoader__.load({
 				initialSyncStarted.current = true;
 				load();
 			}, [load]);
+			const seenReload = (0, react.useRef)(props.reloadKey);
+			(0, react.useEffect)(() => {
+				if (seenReload.current === props.reloadKey) return;
+				seenReload.current = props.reloadKey;
+				load(true);
+			}, [load, props.reloadKey]);
 			(0, react.useEffect)(() => {
 				if (!catalogUnavailable || !props.catalogKnown || directoryRetryStarted.current) return;
 				directoryRetryStarted.current = true;
@@ -2047,9 +2555,37 @@ window.__ModuleLoader__.load({
 				props.catalogKnown
 			]);
 			(0, react.useEffect)(() => {
+				if (props.active === false) return;
 				const timer = window.setInterval(() => setSyncClock(Date.now()), 1e3);
 				return () => window.clearInterval(timer);
-			}, []);
+			}, [props.active]);
+			(0, react.useEffect)(() => {
+				setSpaceProviderId((current) => readyProviderId(catalog?.providers ?? [], current) ?? current);
+			}, [catalog]);
+			const hostRediscovering = catalog?.rediscovery?.running === true && !rediscovering;
+			(0, react.useEffect)(() => {
+				if (!hostRediscovering || props.active === false) return;
+				let active = true;
+				const timer = window.setInterval(() => {
+					props.client.bodyDirectory().then((next) => {
+						if (!active || next.rediscovery?.running === true) return;
+						active = false;
+						window.clearInterval(timer);
+						load(true);
+						if (next.rediscovery?.last?.results.some((result) => result.added.length > 0)) props.onMutate();
+					}).catch(() => {});
+				}, REDISCOVERY_POLL_MS);
+				return () => {
+					active = false;
+					window.clearInterval(timer);
+				};
+			}, [
+				hostRediscovering,
+				load,
+				props.active,
+				props.client,
+				props.onMutate
+			]);
 			const toggle = async (body) => {
 				setChanging(body.id);
 				setError(null);
@@ -2148,7 +2684,7 @@ window.__ModuleLoader__.load({
 					});
 					setSpaceName("");
 					setSpaceDescription("");
-					setSpaceProviderId(providers.find((provider) => provider.origin === "native")?.id ?? providers[0]?.id ?? "mnemon-native");
+					setSpaceProviderId((current) => readyProviderId(providers) ?? current);
 					setProviderDrafts((current) => Object.fromEntries(providers.map((provider) => [provider.id, Object.fromEntries(Object.entries(current[provider.id] ?? {}).map(([key, value]) => [key, provider.fields.some((field) => field.key === key && field.input === "secret") ? "" : value]))])));
 					setCreatingSpaceOpen(false);
 					await load(true);
@@ -2158,6 +2694,25 @@ window.__ModuleLoader__.load({
 				} finally {
 					setCreating(false);
 				}
+			};
+			const rediscover = async () => {
+				if (props.client.rediscoverBodies === void 0 || rediscovering) return;
+				setRediscovering(true);
+				setError(null);
+				try {
+					const outcome = await props.client.rediscoverBodies();
+					setPageRediscovery(outcome);
+					await load(true);
+					if (outcome.results.some((result) => result.added.length > 0)) props.onMutate();
+				} catch (reason) {
+					setError((0, dsh_mnemon_client.message)(reason));
+				} finally {
+					setRediscovering(false);
+				}
+			};
+			const dismissRediscovery = (at) => {
+				setSeenRediscovery(at);
+				writeSeenRediscovery(at);
 			};
 			const deleteBody = async (body) => {
 				setDeletingSpace(body.id);
@@ -2252,6 +2807,15 @@ window.__ModuleLoader__.load({
 				return t("overview.fullSyncDays", { count: Math.floor(hours / 24) });
 			})();
 			const selectedProvider = providers.find((provider) => provider.id === spaceProviderId);
+			const directoryRediscovery = catalog?.rediscovery?.last ?? null;
+			const rediscovery = pageRediscovery !== null && (directoryRediscovery === null || pageRediscovery.at >= directoryRediscovery.at) ? pageRediscovery : directoryRediscovery;
+			const rediscoveryAdded = rediscovery?.results.flatMap((result) => result.added) ?? [];
+			const rediscoveryDisconnected = rediscovery?.results.reduce((sum, result) => sum + result.disconnected, 0) ?? 0;
+			const rediscoveryFailures = rediscovery?.results.filter((result) => result.error !== void 0) ?? [];
+			const rediscoveryShown = rediscovery !== null && rediscovery.at !== seenRediscovery && (rediscovery === pageRediscovery || rediscoveryAdded.length > 0 || rediscoveryFailures.length > 0);
+			const newSpaceIds = new Set(rediscoveryShown ? rediscoveryAdded.map((body) => body.id) : []);
+			const canRediscover = props.writeEnabled && !catalogUnavailable && props.client.rediscoverBodies !== void 0 && providers.some((provider) => provider.origin !== "native" && provider.serviceConfigured === true);
+			const rediscoveryRunning = rediscovering || catalog?.rediscovery?.running === true;
 			const nativeSpaceCount = catalog?.items.filter((body) => nativeSpaceProvider(body.provider)).length ?? 0;
 			const canDeleteSpace = (body) => !nativeSpaceProvider(body.provider) || nativeSpaceCount > 1;
 			const updateProviderDraft = (providerId, key, value) => setProviderDrafts((current) => ({
@@ -2290,7 +2854,7 @@ window.__ModuleLoader__.load({
 						value: editDescription,
 						onChange: (event) => setEditDescription(event.target.value),
 						rows: 4,
-						maxLength: 1e3
+						maxLength: MEMORY_SPACE_DESCRIPTION_MAX_LENGTH
 					})] }),
 					!nativeSpaceProvider(body.provider) && (() => {
 						const descriptor = providers.find((provider) => provider.id === body.provider.id);
@@ -2310,7 +2874,7 @@ window.__ModuleLoader__.load({
 			});
 			const spaceCreateForm = /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("form", {
 				id: spaceCreateFormId,
-				className: (0, dsh_mnemon_client.appearanceClass)(css.bodyEdit, css.spaceCreateForm),
+				className: (0, dsh_mnemon_client.appearanceClass)(css.bodyEdit, css.bodyCreateForm),
 				onSubmit: (event) => void create(event),
 				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("section", {
 					className: css.createSection,
@@ -2333,7 +2897,7 @@ window.__ModuleLoader__.load({
 							onChange: (event) => setSpaceDescription(event.target.value),
 							placeholder: t("overview.createDescriptionPlaceholder"),
 							rows: 3,
-							maxLength: 1e3,
+							maxLength: MEMORY_SPACE_DESCRIPTION_MAX_LENGTH,
 							required: true
 						})] })]
 					})]
@@ -2346,8 +2910,8 @@ window.__ModuleLoader__.load({
 						}),
 						/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("fieldset", {
 							className: css.providerChoice,
-							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("legend", { children: t("overview.providerLabel") }), providers.map((provider) => {
-								const serviceMissing = provider.origin !== "native" && provider.serviceConfigured === false;
+							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("legend", { children: t("overview.providerLabel") }), readyFirst(providers).map((provider) => {
+								const serviceMissing = provider.serviceConfigured === false;
 								return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("label", {
 									"data-selected": spaceProviderId === provider.id || void 0,
 									"data-native": provider.origin === "native" || void 0,
@@ -2366,7 +2930,7 @@ window.__ModuleLoader__.load({
 											icon: provider.icon,
 											className: css.providerChoiceIcon
 										}),
-										/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("strong", { children: [provider.label, provider.origin === "native" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("em", { children: t("overview.nativeOfficial") })] }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("small", { children: serviceMissing ? t("overview.providerServiceRequired") : `${t(`overview.workspaceBinding.${provider.workspaceBinding}`)} · ${providerSummary(t, provider)}` })] }),
+										/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("strong", { children: [provider.label, provider.origin === "native" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("em", { children: t("overview.nativeOfficial") })] }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("small", { children: serviceMissing ? t(providerUnavailableKey(provider)) : `${t(`overview.workspaceBinding.${provider.workspaceBinding}`)} · ${providerSummary(t, provider)}` })] }),
 										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("i", {
 											className: css.choiceControl,
 											"data-kind": "radio",
@@ -2375,6 +2939,10 @@ window.__ModuleLoader__.load({
 									]
 								}, provider.id);
 							})]
+						}),
+						providers.some((provider) => provider.serviceConfigured === false) && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("small", {
+							className: css.providerEnableHint,
+							children: t("overview.providerEnableHint")
 						}),
 						selectedProvider !== void 0 && selectedProvider.origin !== "native" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(ProviderMemoryFields, {
 							provider: selectedProvider,
@@ -2407,14 +2975,7 @@ window.__ModuleLoader__.load({
 						title: t("nav.overview"),
 						description: t("overview.pageDescription"),
 						meta: fullSyncAge,
-						...loading ? { loadingLabel: catalogLoading ? t("overview.directoryLoading") : graphLoading ? t("overview.snapshotLoading") : t("overview.healthLoading") } : {},
-						action: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-							type: "button",
-							className: css.secondaryButton,
-							disabled: loading,
-							onClick: () => void load(),
-							children: loading ? t("overview.syncing") : t("overview.syncNow")
-						})
+						...loading ? { loadingLabel: catalogLoading ? t("overview.directoryLoading") : graphLoading ? t("overview.snapshotLoading") : t("overview.healthLoading") } : {}
 					}),
 					error !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 						className: css.inlineError,
@@ -2424,148 +2985,187 @@ window.__ModuleLoader__.load({
 					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("section", {
 						className: css.bodyDirectory,
 						"aria-label": t("overview.directory"),
-						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-							className: css.bodyDirectoryHeader,
-							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", { children: [
-								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("h3", { children: t("overview.directory") }),
-								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", { children: t("overview.directory.description") }),
-								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("code", {
-									className: css.bodyDirectoryPath,
-									children: catalogUnavailable ? t("overview.directory.unsynced") : catalog?.directory || props.fallbackDirectory || t("overview.directory.waiting")
+						children: [
+							/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+								className: css.bodyDirectoryHeader,
+								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", { children: [
+									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("h3", { children: t("overview.directory") }),
+									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", { children: t("overview.directory.description") }),
+									catalogUnavailable && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("code", {
+										className: css.bodyDirectoryPath,
+										children: t("overview.directory.unsynced")
+									})
+								] }), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+									className: (0, dsh_mnemon_client.appearanceClass)(css.bodyDirectoryControls, sidebarCss.bodyDirectoryActions),
+									children: [
+										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("strong", { children: catalogUnavailable ? t("overview.directory.unsyncedBadge") : `${catalog?.activeCount ?? "—"} / ${catalog?.total ?? "—"} ${t("common.active")}` }),
+										canRediscover && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+											type: "button",
+											className: spaceEditActionClass,
+											title: t("overview.rediscoverHint"),
+											"aria-busy": rediscoveryRunning || void 0,
+											onClick: () => void rediscover(),
+											children: rediscoveryRunning ? t("overview.rediscovering") : t("overview.rediscoverAction")
+										}),
+										props.writeEnabled && !catalogUnavailable && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+											type: "button",
+											className: spaceEditActionClass,
+											title: !props.agentAvailable ? t("overview.metadataUnavailable") : void 0,
+											onClick: () => {
+												setMetadataSelection([]);
+												setMetadataTasks({});
+												setMetadataOpen(true);
+												if (!props.agentAvailable) props.onAgentRefresh();
+											},
+											children: t("overview.metadataAction")
+										}),
+										props.writeEnabled && !catalogUnavailable && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+											type: "button",
+											className: spaceEditActionClass,
+											onClick: () => setCreatingSpaceOpen(true),
+											children: t("overview.createTitle")
+										})
+									]
+								})]
+							}),
+							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+								role: "status",
+								children: rediscoveryShown && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+									className: css.rediscoveryNotice,
+									children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", { children: [
+										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", { children: rediscoveryAdded.length > 0 ? t("overview.rediscoveryAdded", { count: rediscoveryAdded.length }) : t("overview.rediscoveryNone") }),
+										rediscoveryDisconnected > 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", { children: t("overview.rediscoveryDisconnected", { count: rediscoveryDisconnected }) }),
+										rediscoveryFailures.map((result) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
+											"data-failed": "",
+											children: result.timedOut === true ? t("overview.rediscoveryTimedOut", { provider: result.label }) : t("overview.rediscoveryFailed", {
+												provider: result.label,
+												error: result.error ?? ""
+											})
+										}, result.providerId))
+									] }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+										type: "button",
+										className: spaceEditActionClass,
+										onClick: () => dismissRediscovery(rediscovery.at),
+										children: t("overview.rediscoveryDismiss")
+									})]
 								})
-							] }), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-								className: (0, dsh_mnemon_client.appearanceClass)(css.bodyDirectoryControls, sidebarCss.bodyDirectoryActions),
-								children: [
-									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("strong", { children: catalogUnavailable ? t("overview.directory.unsyncedBadge") : `${catalog?.activeCount ?? "—"} / ${catalog?.total ?? "—"} ${t("common.active")}` }),
-									props.writeEnabled && !catalogUnavailable && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-										type: "button",
-										className: spaceEditActionClass,
-										title: !props.agentAvailable ? t("overview.metadataUnavailable") : void 0,
-										onClick: () => {
-											setMetadataSelection([]);
-											setMetadataTasks({});
-											setMetadataOpen(true);
-											if (!props.agentAvailable) props.onAgentRefresh();
-										},
-										children: t("overview.metadataAction")
-									}),
-									props.writeEnabled && !catalogUnavailable && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-										type: "button",
-										className: spaceEditActionClass,
-										onClick: () => setCreatingSpaceOpen(true),
-										children: t("overview.createTitle")
-									})
-								]
-							})]
-						}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-							className: css.bodyGrid,
-							children: [catalog?.items.map((body) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("article", {
-								className: css.bodyCard,
-								"data-provider": body.provider.id,
-								"data-active": body.active || void 0,
-								"data-healthy": !body.statusLoading && body.healthy || void 0,
-								"data-status-loading": body.statusLoading || void 0,
-								"data-reconnectable": "",
-								"data-reconnecting": reconnectingSpace === body.id || void 0,
-								"data-mnemon-default": body.mnemonDefault || void 0,
-								"data-editing": void 0,
-								tabIndex: 0,
-								"aria-label": t("overview.reconnectAria", { name: body.name }),
-								title: reconnectingSpace === body.id ? t("overview.reconnecting") : body.error ?? t("overview.reconnectHint"),
-								onClick: (event) => {
-									if (event.target instanceof Element && event.target.closest("button, input, textarea, select, label, a, [role=\"switch\"]") !== null) return;
-									reconnect(body);
-								},
-								onKeyDown: (event) => {
-									if (event.target !== event.currentTarget || event.key !== "Enter" && event.key !== " ") return;
-									event.preventDefault();
-									reconnect(body);
-								},
-								children: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
-									/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-										className: sidebarCss.bodyCardHeader,
-										children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-											className: sidebarCss.bodyCardIdentity,
-											children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: css.bodySignal }), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("strong", { children: body.name }), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-												className: sidebarCss.bodyCardMeta,
-												children: [
-													/* @__PURE__ */ (0, react_jsx_runtime.jsx)("code", { children: body.id }),
-													/* @__PURE__ */ (0, react_jsx_runtime.jsx)(MemoryProviderBadge, {
-														providerId: body.provider.id,
-														label: body.provider.label
+							}),
+							/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+								className: css.bodyGrid,
+								children: [catalog?.items.map((body) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("article", {
+									className: css.bodyCard,
+									"data-provider": body.provider.id,
+									"data-active": body.active || void 0,
+									"data-healthy": !body.statusLoading && body.healthy || void 0,
+									"data-status-loading": body.statusLoading || void 0,
+									"data-reconnectable": "",
+									"data-reconnecting": reconnectingSpace === body.id || void 0,
+									"data-mnemon-default": body.mnemonDefault || void 0,
+									"data-editing": void 0,
+									tabIndex: 0,
+									"aria-label": t("overview.reconnectAria", { name: body.name }),
+									title: reconnectingSpace === body.id ? t("overview.reconnecting") : body.error ?? t("overview.reconnectHint"),
+									onClick: (event) => {
+										if (event.target instanceof Element && event.target.closest("button, input, textarea, select, label, a, [role=\"switch\"]") !== null) return;
+										reconnect(body);
+									},
+									onKeyDown: (event) => {
+										if (event.target !== event.currentTarget || event.key !== "Enter" && event.key !== " ") return;
+										event.preventDefault();
+										reconnect(body);
+									},
+									children: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
+										/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+											className: sidebarCss.bodyCardHeader,
+											children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+												className: sidebarCss.bodyCardIdentity,
+												children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: css.bodySignal }), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("strong", {
+													title: body.id,
+													children: body.name
+												}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+													className: sidebarCss.bodyCardMeta,
+													children: [
+														/* @__PURE__ */ (0, react_jsx_runtime.jsx)(MemoryProviderBadge, {
+															providerId: body.provider.id,
+															label: body.provider.label
+														}),
+														/* @__PURE__ */ (0, react_jsx_runtime.jsx)("small", {
+															className: css.bodyHealth,
+															children: reconnectingSpace === body.id ? t("overview.reconnecting") : body.statusLoading ? t("overview.storageChecking") : body.healthy ? t("overview.storageHealthy") : t("overview.storageUnhealthy")
+														}),
+														body.mnemonDefault && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("small", {
+															className: css.mnemonDefaultBadge,
+															children: t("overview.mnemonDefault")
+														}),
+														newSpaceIds.has(body.id) && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("small", {
+															className: css.newSpaceBadge,
+															children: t("overview.newSpace")
+														})
+													]
+												})] })]
+											}), spaceToggle(body)]
+										}),
+										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
+											title: body.description || t("overview.noDescription"),
+											children: body.description || t("overview.noDescription")
+										}),
+										placementReceipt(body),
+										/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("footer", {
+											className: sidebarCss.bodyCardFooter,
+											children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+												className: sidebarCss.bodyCardStats,
+												children: !nativeSpaceProvider(body.provider) ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+													className: css.bodyFooterBlock,
+													title: t(body.provider.kind === "remote" ? "overview.providerRemote" : "overview.providerLocal"),
+													children: t(body.provider.kind === "remote" ? "overview.providerRemote" : "overview.providerLocal")
+												}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+													className: `${css.bodyFooterBlock} ${css.bodyFooterGrow}`,
+													title: body.provider.location || body.provider.label,
+													children: body.provider.location || body.provider.label
+												})] }) : /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
+													/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+														className: css.bodyFooterBlock,
+														title: t("common.memories", { count: body.stats?.totalInsights ?? 0 }),
+														children: t("common.memories", { count: body.stats?.totalInsights ?? 0 })
 													}),
-													/* @__PURE__ */ (0, react_jsx_runtime.jsx)("small", {
-														className: css.bodyHealth,
-														children: reconnectingSpace === body.id ? t("overview.reconnecting") : body.statusLoading ? t("overview.storageChecking") : body.healthy ? t("overview.storageHealthy") : t("overview.storageUnhealthy")
+													/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+														className: css.bodyFooterBlock,
+														title: t("common.edges", { count: body.stats?.edgeCount ?? 0 }),
+														children: t("common.edges", { count: body.stats?.edgeCount ?? 0 })
 													}),
-													body.mnemonDefault && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("small", {
-														className: css.mnemonDefaultBadge,
-														children: t("overview.mnemonDefault")
+													/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+														className: css.bodyFooterBlock,
+														title: (0, dsh_mnemon_client.humanBytes)(body.stats?.dbSizeBytes ?? 0),
+														children: (0, dsh_mnemon_client.humanBytes)(body.stats?.dbSizeBytes ?? 0)
 													})
-												]
-											})] })]
-										}), spaceToggle(body)]
-									}),
-									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-										title: body.description || t("overview.noDescription"),
-										children: body.description || t("overview.noDescription")
-									}),
-									placementReceipt(body),
-									/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("footer", {
-										className: sidebarCss.bodyCardFooter,
-										children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-											className: sidebarCss.bodyCardStats,
-											children: !nativeSpaceProvider(body.provider) ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-												className: css.bodyFooterBlock,
-												title: t(body.provider.kind === "remote" ? "overview.providerRemote" : "overview.providerLocal"),
-												children: t(body.provider.kind === "remote" ? "overview.providerRemote" : "overview.providerLocal")
-											}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-												className: `${css.bodyFooterBlock} ${css.bodyFooterGrow}`,
-												title: body.provider.location || body.provider.label,
-												children: body.provider.location || body.provider.label
-											})] }) : /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
-												/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-													className: css.bodyFooterBlock,
-													title: t("common.memories", { count: body.stats?.totalInsights ?? 0 }),
-													children: t("common.memories", { count: body.stats?.totalInsights ?? 0 })
-												}),
-												/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-													className: css.bodyFooterBlock,
-													title: t("common.edges", { count: body.stats?.edgeCount ?? 0 }),
-													children: t("common.edges", { count: body.stats?.edgeCount ?? 0 })
-												}),
-												/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-													className: css.bodyFooterBlock,
-													title: (0, dsh_mnemon_client.humanBytes)(body.stats?.dbSizeBytes ?? 0),
-													children: (0, dsh_mnemon_client.humanBytes)(body.stats?.dbSizeBytes ?? 0)
-												})
-											] })
-										}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-											className: css.bodyCardActions,
-											children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-												type: "button",
-												className: spaceEditActionClass,
-												"aria-label": t("overview.editSpaceAria", { name: body.name }),
-												disabled: !props.writeEnabled || deletingSpace === body.id,
-												onClick: () => beginEdit(body),
-												children: t("overview.editSpace")
-											}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
-												type: "button",
-												className: spaceDeleteActionClass,
-												"aria-label": t(!nativeSpaceProvider(body.provider) ? "overview.disconnectSpaceAria" : "overview.deleteSpaceAria", { name: body.name }),
-												title: canDeleteSpace(body) ? void 0 : t("overview.lastStoreDeleteHint"),
-												disabled: !props.writeEnabled || deletingSpace === body.id || !canDeleteSpace(body),
-												onClick: () => setConfirmingDeleteSpace(body.id),
-												children: !nativeSpaceProvider(body.provider) ? t("overview.disconnectSpace") : t("overview.deleteSpace")
+												] })
+											}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+												className: css.bodyCardActions,
+												children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+													type: "button",
+													className: spaceEditActionClass,
+													"aria-label": t("overview.editSpaceAria", { name: body.name }),
+													disabled: !props.writeEnabled || deletingSpace === body.id,
+													onClick: () => beginEdit(body),
+													children: t("overview.editSpace")
+												}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+													type: "button",
+													className: spaceDeleteActionClass,
+													"aria-label": t(!nativeSpaceProvider(body.provider) ? "overview.disconnectSpaceAria" : "overview.deleteSpaceAria", { name: body.name }),
+													title: canDeleteSpace(body) ? void 0 : t("overview.lastStoreDeleteHint"),
+													disabled: !props.writeEnabled || deletingSpace === body.id || !canDeleteSpace(body),
+													onClick: () => setConfirmingDeleteSpace(body.id),
+													children: !nativeSpaceProvider(body.provider) ? t("overview.disconnectSpace") : t("overview.deleteSpace")
+												})]
 											})]
-										})]
-									})
-								] })
-							}, body.id)), catalog?.total === 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-								className: css.bodyDirectoryEmpty,
-								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: "◇" }), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("strong", { children: catalogUnavailable ? t("overview.unsyncedTitle") : t("overview.emptyTitle") }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", { children: catalogUnavailable ? t("overview.unsyncedShort") : t("overview.emptyShort") })] })]
-							})]
-						})]
+										})
+									] })
+								}, body.id)), catalog?.total === 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+									className: css.bodyDirectoryEmpty,
+									children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: "◇" }), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("strong", { children: catalogUnavailable ? t("overview.unsyncedTitle") : t("overview.emptyTitle") }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", { children: catalogUnavailable ? t("overview.unsyncedShort") : t("overview.emptyShort") })] })]
+								})]
+							})
+						]
 					}),
 					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 						className: css.asyncRegion,
@@ -2586,7 +3186,7 @@ window.__ModuleLoader__.load({
 							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 								type: "button",
 								"data-dialog-close": true,
-								className: css.ghostButton,
+								className: css.secondaryButton,
 								disabled: creating,
 								onClick: () => setCreatingSpaceOpen(false),
 								children: t("common.cancel")
@@ -2614,7 +3214,7 @@ window.__ModuleLoader__.load({
 							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 								type: "button",
 								"data-dialog-close": true,
-								className: css.ghostButton,
+								className: css.secondaryButton,
 								disabled: metadataBusy,
 								onClick: () => setMetadataOpen(false),
 								children: t("common.cancel")
@@ -2702,7 +3302,7 @@ window.__ModuleLoader__.load({
 							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 								type: "button",
 								"data-dialog-close": true,
-								className: css.ghostButton,
+								className: css.secondaryButton,
 								disabled: savingSpace === editingSpaceView.id,
 								onClick: () => setEditingSpace(null),
 								children: t("common.cancel")
@@ -2727,7 +3327,7 @@ window.__ModuleLoader__.load({
 								type: "button",
 								"data-dialog-close": true,
 								"data-autofocus": true,
-								className: css.ghostButton,
+								className: css.secondaryButton,
 								disabled: deletingSpace === deletingSpaceView.id,
 								onClick: () => setConfirmingDeleteSpace(null),
 								children: t("common.cancel")
@@ -2906,7 +3506,7 @@ window.__ModuleLoader__.load({
 									}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 										type: "button",
 										className: css.secondaryButton,
-										onClick: () => void navigator.clipboard?.writeText(selected.id),
+										onClick: () => void (0, _deepseek_ai_dsh_client_ui_primitives.writeClipboard)(selected.id),
 										children: t("common.copyId")
 									})]
 								})
@@ -2940,6 +3540,24 @@ window.__ModuleLoader__.load({
 				]
 			});
 		}
+		/** The rediscovery a person last dismissed on this browser, so the same news is not shown twice. */
+		const REDISCOVERY_SEEN_KEY = "dsh-mnemon.memory-spaces.rediscovery-seen";
+		/** How often an open page looks again while the Host asks the Providers. */
+		const REDISCOVERY_POLL_MS = 2e3;
+		function readSeenRediscovery() {
+			try {
+				return globalThis.localStorage?.getItem(REDISCOVERY_SEEN_KEY) ?? null;
+			} catch {
+				return null;
+			}
+		}
+		function writeSeenRediscovery(at) {
+			try {
+				globalThis.localStorage?.setItem(REDISCOVERY_SEEN_KEY, at);
+			} catch {}
+		}
+		//#endregion
+		//#region src/client/explore-page.tsx
 		function ExplorePage(props) {
 			const t = useT();
 			const pageSize = 6;
@@ -2950,9 +3568,15 @@ window.__ModuleLoader__.load({
 			const [sources, setSources] = (0, react.useState)([]);
 			const [searchKind, setSearchKind] = (0, react.useState)(null);
 			const [agentAnswer, setAgentAnswer] = (0, react.useState)(null);
+			/** A citation names the recalled memory it points at, not its identifiers. */
+			const citationLabel = (citation) => {
+				const cited = results.find((result) => `${result.memoryBodyId}/${result.id}` === citation || result.id === citation);
+				return cited === void 0 ? (0, dsh_mnemon_client.short)(citation.split("/").at(-1) ?? citation, 12) : (0, dsh_mnemon_client.short)(cited.content, 40);
+			};
 			const [searched, setSearched] = (0, react.useState)(false);
 			const [error, setError] = (0, react.useState)(null);
 			const [relatedTo, setRelatedTo] = (0, react.useState)(null);
+			const relatedPaneRef = (0, react.useRef)(null);
 			const [related, setRelated] = (0, react.useState)([]);
 			const [relatedLoading, setRelatedLoading] = (0, react.useState)(false);
 			const [visibleResultLimit, setVisibleResultLimit] = (0, react.useState)(pageSize);
@@ -2961,8 +3585,32 @@ window.__ModuleLoader__.load({
 			(0, react.useEffect)(() => {
 				if (props.seed !== "") setQuery(props.seed);
 			}, [props.seed]);
-			const runSearch = async (withAgent) => {
-				if (query.trim() === "") return;
+			const ranSeed = (0, react.useRef)("");
+			(0, react.useEffect)(() => {
+				if (props.seed === "" || props.status === null || ranSeed.current === props.seed) return;
+				ranSeed.current = props.seed;
+				runSearch(false, props.seed);
+			}, [props.seed, props.status]);
+			(0, react.useEffect)(() => {
+				if (relatedTo === null || props.onRevealElement === void 0) return;
+				const reveal = () => {
+					if (relatedPaneRef.current !== null && relatedRequests.isCurrent(relatedTo.request)) props.onRevealElement?.(relatedPaneRef.current);
+				};
+				if (typeof window.requestAnimationFrame !== "function") {
+					reveal();
+					return;
+				}
+				const frame = window.requestAnimationFrame(reveal);
+				return () => {
+					if (typeof window.cancelAnimationFrame === "function") window.cancelAnimationFrame(frame);
+				};
+			}, [
+				relatedTo,
+				relatedRequests,
+				props.onRevealElement
+			]);
+			const runSearch = async (withAgent, text = query) => {
+				if (text.trim() === "") return;
 				relatedRequests.begin();
 				setSearchKind(withAgent ? "agent" : "direct");
 				setSearched(true);
@@ -2973,7 +3621,7 @@ window.__ModuleLoader__.load({
 				setVisibleRelatedLimit(pageSize);
 				try {
 					const request = {
-						query,
+						query: text,
 						mode,
 						...category === "" ? {} : { category },
 						limit: props.status?.defaultRecallLimit ?? 10
@@ -3008,15 +3656,14 @@ window.__ModuleLoader__.load({
 			const searching = searchKind !== null;
 			const showRelated = async (insight) => {
 				const request = relatedRequests.begin();
-				setRelatedTo(insight);
+				setRelatedTo({
+					insight,
+					request
+				});
 				setRelated([]);
 				setRelatedLoading(true);
 				setError(null);
 				setVisibleRelatedLimit(pageSize);
-				if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(() => document.getElementById("mnemon-related-pane")?.scrollIntoView?.({
-					block: "nearest",
-					behavior: "smooth"
-				}));
 				try {
 					const response = await props.client.related(insight.id, insight.memoryBodyId);
 					if (relatedRequests.isCurrent(request)) setRelated(response);
@@ -3030,7 +3677,7 @@ window.__ModuleLoader__.load({
 				await props.onForget(insight);
 				setResults((items) => items.filter((item) => insightKey(item) !== insightKey(insight)));
 				setRelated((items) => items.filter((item) => insightKey(item) !== insightKey(insight)));
-				if (relatedTo !== null && insightKey(relatedTo) === insightKey(insight)) setRelatedTo(null);
+				if (relatedTo !== null && insightKey(relatedTo.insight) === insightKey(insight)) setRelatedTo(null);
 			};
 			const visibleResults = results.slice(0, visibleResultLimit);
 			const visibleRelated = related.slice(0, visibleRelatedLimit);
@@ -3045,55 +3692,50 @@ window.__ModuleLoader__.load({
 					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("form", {
 						className: css.searchBar,
 						onSubmit: (event) => void search(event),
-						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.SearchField, {
 							className: css.queryField,
-							children: [
-								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-									"aria-hidden": "true",
-									children: "⌕"
-								}),
-								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
-									value: query,
-									onChange: (event) => setQuery(event.target.value),
-									placeholder: t("search.placeholder"),
-									"aria-label": t("search.queryAria")
-								}),
-								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("kbd", { children: "↵" })
-							]
+							label: t("search.queryAria"),
+							value: query,
+							onChange: (event) => setQuery(event.target.value),
+							placeholder: t("search.placeholder")
 						}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 							className: css.searchControls,
 							children: [
-								/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("label", { children: [t("common.category"), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("select", {
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.SelectField, {
+									className: css.searchChoice,
+									label: t("common.category"),
+									ariaLabel: t("search.categoryAria"),
 									value: category,
-									onChange: (event) => setCategory(event.target.value),
-									"aria-label": t("search.categoryAria"),
-									children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("option", {
+									options: [{
 										value: "",
-										children: t("common.allCategories")
-									}), CATEGORIES.map((value) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("option", {
+										label: t("common.allCategories")
+									}, ...CATEGORIES.map((value) => ({
 										value,
-										children: categoryLabel(t, value)
-									}, value))]
-								})] }),
-								/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("label", { children: [t("search.strategy"), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("select", {
+										label: categoryLabel(t, value)
+									}))],
+									onChange: setCategory
+								}),
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.SelectField, {
+									className: css.searchChoice,
+									label: t("search.strategy"),
+									ariaLabel: t("search.modeAria"),
 									value: mode,
-									onChange: (event) => setMode(event.target.value),
-									"aria-label": t("search.modeAria"),
-									children: [
-										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("option", {
+									options: [
+										{
 											value: "smart",
-											children: t("search.modeSmart")
-										}),
-										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("option", {
+											label: t("search.modeSmart")
+										},
+										{
 											value: "keyword",
-											children: t("search.modeKeyword")
-										}),
-										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("option", {
+											label: t("search.modeKeyword")
+										},
+										{
 											value: "basic",
-											children: t("search.modeBasic")
-										})
-									]
-								})] }),
+											label: t("search.modeBasic")
+										}
+									],
+									onChange: setMode
+								}),
 								/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 									className: css.searchActions,
 									children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
@@ -3124,14 +3766,21 @@ window.__ModuleLoader__.load({
 								className: css.agentAnswer,
 								"aria-label": t("search.agentAnswer"),
 								children: [
-									/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 										className: css.agentAnswerHeading,
-										children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: t("search.agentAnswerHint") }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("h3", { children: t("search.agentAnswer") })] }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("code", { children: agentAnswer.runId.slice(0, 8) })]
+										children: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: t("search.agentAnswerHint") }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("h3", { children: t("search.agentAnswer") })] })
 									}),
 									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", { children: agentAnswer.answer }),
-									agentAnswer.citations.length > 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+									agentAnswer.citations.length > 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 										className: css.agentCitations,
-										children: agentAnswer.citations.map((citation) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("code", { children: citation }, citation))
+										children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("small", { children: t("search.citations") }), agentAnswer.citations.map((citation, index) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
+											title: citation,
+											children: [
+												index + 1,
+												". ",
+												citationLabel(citation)
+											]
+										}, citation))]
 									})
 								]
 							}),
@@ -3173,7 +3822,7 @@ window.__ModuleLoader__.load({
 										})
 									]
 								}), relatedTo !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("aside", {
-									id: "mnemon-related-pane",
+									ref: relatedPaneRef,
 									className: css.relatedPane,
 									children: [
 										/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
@@ -3191,7 +3840,7 @@ window.__ModuleLoader__.load({
 										}),
 										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
 											className: css.relatedSource,
-											children: relatedTo.content
+											children: relatedTo.insight.content
 										}),
 										relatedLoading && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 											className: css.loading,
@@ -3221,76 +3870,320 @@ window.__ModuleLoader__.load({
 				]
 			});
 		}
+		//#endregion
+		//#region src/client/entities-page.tsx
+		/** Show a loading placeholder only when a read outlasts this, so a quick read never flashes one. */
+		const ENTITY_PLACEHOLDER_DELAY_MS = 160;
+		const ENTITY_RAIL_PAGE = 10;
+		const ENTITY_CARD_PAGE = 6;
+		/** Memories one entity-memories read returns; more pages load as the list is revealed. */
+		const ENTITY_MEMORY_BATCH = 48;
+		const ENTITY_RELATED_LIMIT = 20;
+		/** The choice to find related memories lasts for this browser session; each new session starts collapsed. */
+		const RELATED_PREFERENCE_KEY = "dsh-mnemon.memory-spaces.entities.related";
+		function readRelatedPreference() {
+			try {
+				return globalThis.sessionStorage?.getItem(RELATED_PREFERENCE_KEY) === "open";
+			} catch {
+				return false;
+			}
+		}
+		function writeRelatedPreference(open) {
+			try {
+				if (open) globalThis.sessionStorage?.setItem(RELATED_PREFERENCE_KEY, "open");
+				else globalThis.sessionStorage?.removeItem(RELATED_PREFERENCE_KEY);
+			} catch {}
+		}
+		function useDelayedFlag(active, delayMs = ENTITY_PLACEHOLDER_DELAY_MS) {
+			const [shown, setShown] = (0, react.useState)(false);
+			(0, react.useEffect)(() => {
+				if (!active) {
+					setShown(false);
+					return;
+				}
+				const timer = setTimeout(() => setShown(true), delayMs);
+				return () => clearTimeout(timer);
+			}, [active, delayMs]);
+			return active && shown;
+		}
+		function InsightSkeletons(props) {
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+				"aria-hidden": "true",
+				"data-placeholder": "",
+				children: Array.from({ length: props.count }, (_, index) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+					className: css.insightSkeleton,
+					children: [
+						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {}),
+						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {}),
+						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {})
+					]
+				}, index))
+			});
+		}
+		/** ProgressiveFooter's layout, with a busy button while the next page loads. */
+		function EntityFooter(props) {
+			const t = useT();
+			if (props.total === 0) return null;
+			const remaining = Math.max(0, props.total - props.visible);
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+				className: css.listProgress,
+				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: t("common.showing", {
+					visible: props.visible,
+					total: props.total
+				}) }), remaining > 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+					type: "button",
+					className: css.secondaryButton,
+					disabled: props.busy,
+					"aria-busy": props.busy || void 0,
+					onClick: props.onMore,
+					children: t("common.showMore", { count: Math.min(props.pageSize, remaining) })
+				})]
+			});
+		}
+		/** The active spaces from the directory, shown while their entity indexes are read. */
+		function pendingEntitySources(catalog) {
+			return catalog.items.filter((body) => body.active && body.providerEnabled !== false).map((body) => ({
+				memoryBodyId: body.id,
+				memoryBodyName: body.name,
+				providerId: body.provider.id,
+				providerLabel: body.provider.label,
+				mode: body.provider.capabilities.entities ? "entities" : "unsupported",
+				status: body.provider.capabilities.entities ? "loading" : "unsupported",
+				itemCount: 0
+			}));
+		}
 		function EntitiesPage(props) {
 			const t = useT();
-			const entityPageSize = 10;
-			const insightPageSize = 6;
-			const [view, setView] = (0, react.useState)({
-				items: [],
-				insights: []
-			});
+			const { client } = props;
+			const [rail, setRail] = (0, react.useState)(null);
+			const [railLoading, setRailLoading] = (0, react.useState)(true);
+			const [railError, setRailError] = (0, react.useState)(null);
+			const [pendingSources, setPendingSources] = (0, react.useState)([]);
 			const [entity, setEntity] = (0, react.useState)("");
 			const [entityFilter, setEntityFilter] = (0, react.useState)("");
-			const [loading, setLoading] = (0, react.useState)(true);
-			const [error, setError] = (0, react.useState)(null);
-			const [visibleEntityLimit, setVisibleEntityLimit] = (0, react.useState)(entityPageSize);
-			const [visibleInsightLimit, setVisibleInsightLimit] = (0, react.useState)(insightPageSize);
-			const entityRequests = (0, dsh_mnemon_client.useRequestVersion)();
-			const load = (0, react.useCallback)(async (selected) => {
-				const request = entityRequests.begin();
-				setLoading(true);
-				setError(null);
-				setVisibleInsightLimit(insightPageSize);
-				if (selected === void 0) setVisibleEntityLimit(entityPageSize);
+			const [visibleEntityLimit, setVisibleEntityLimit] = (0, react.useState)(ENTITY_RAIL_PAGE);
+			const [selected, setSelected] = (0, react.useState)(void 0);
+			const [memories, setMemories] = (0, react.useState)(null);
+			const [memoriesLoading, setMemoriesLoading] = (0, react.useState)(false);
+			const [memoriesError, setMemoriesError] = (0, react.useState)(null);
+			const [moreLoading, setMoreLoading] = (0, react.useState)(false);
+			const [visibleMemoryLimit, setVisibleMemoryLimit] = (0, react.useState)(ENTITY_CARD_PAGE);
+			const [related, setRelated] = (0, react.useState)(null);
+			const [relatedLoading, setRelatedLoading] = (0, react.useState)(false);
+			const [relatedError, setRelatedError] = (0, react.useState)(null);
+			const [visibleRelatedLimit, setVisibleRelatedLimit] = (0, react.useState)(ENTITY_CARD_PAGE);
+			const [relatedOpen, setRelatedOpen] = (0, react.useState)(readRelatedPreference);
+			const relatedOpenRef = (0, react.useRef)(relatedOpen);
+			const relatedAutoRef = (0, react.useRef)(false);
+			const relatedId = (0, react.useId)();
+			const railRequests = (0, dsh_mnemon_client.useRequestVersion)();
+			const directoryRequests = (0, dsh_mnemon_client.useRequestVersion)();
+			const memoryRequests = (0, dsh_mnemon_client.useRequestVersion)();
+			const moreRequests = (0, dsh_mnemon_client.useRequestVersion)();
+			const relatedRequests = (0, dsh_mnemon_client.useRequestVersion)();
+			const selectedRef = (0, react.useRef)(void 0);
+			const revisionRef = (0, react.useRef)(props.revision);
+			const [view] = (0, react.useState)(() => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+			const split = client.entityMemories !== void 0 && client.entityRelated !== void 0;
+			const loadRail = (0, react.useCallback)(async () => {
+				const request = railRequests.begin();
+				setRailLoading(true);
+				setRailError(null);
 				try {
-					const response = await props.client.entities(selected, 20);
-					if (entityRequests.isCurrent(request)) setView(response);
+					const view = await client.entities();
+					if (railRequests.isCurrent(request)) setRail(view);
 				} catch (reason) {
-					if (entityRequests.isCurrent(request)) setError((0, dsh_mnemon_client.message)(reason));
+					if (railRequests.isCurrent(request)) setRailError((0, dsh_mnemon_client.message)(reason));
 				} finally {
-					if (entityRequests.isCurrent(request)) setLoading(false);
+					if (railRequests.isCurrent(request)) setRailLoading(false);
 				}
+			}, [client, railRequests]);
+			const loadRelated = (0, react.useCallback)((name) => {
+				if (client.entityRelated === void 0) return;
+				const request = relatedRequests.begin();
+				setRelatedLoading(true);
+				setRelatedError(null);
+				client.entityRelated(name, ENTITY_RELATED_LIMIT, view).then((next) => {
+					if (relatedRequests.isCurrent(request)) setRelated(next);
+				}, (reason) => {
+					if (relatedRequests.isCurrent(request)) setRelatedError((0, dsh_mnemon_client.message)(reason));
+				}).finally(() => {
+					if (relatedRequests.isCurrent(request)) setRelatedLoading(false);
+				});
 			}, [
-				entityPageSize,
-				entityRequests,
-				insightPageSize,
-				props.client
+				client,
+				relatedRequests,
+				view
 			]);
+			/**
+			* The carrying memories load at once; related memories only when they were asked for, or when
+			* nothing carries the name. A refresh keeps the current cards until they are replaced.
+			*/
+			const loadSelection = (0, react.useCallback)((name, refresh) => {
+				const memoryRequest = memoryRequests.begin();
+				relatedRequests.begin();
+				moreRequests.begin();
+				setMoreLoading(false);
+				setRelatedLoading(false);
+				setRelatedError(null);
+				if (!refresh) {
+					setMemories(null);
+					setVisibleMemoryLimit(ENTITY_CARD_PAGE);
+					setVisibleRelatedLimit(ENTITY_CARD_PAGE);
+					relatedAutoRef.current = false;
+				}
+				if (!refresh || !(relatedOpenRef.current || relatedAutoRef.current)) setRelated(null);
+				setMemoriesLoading(true);
+				setMemoriesError(null);
+				(split ? client.entityMemories(name, 0, ENTITY_MEMORY_BATCH) : client.entities(name, 20).then((view) => ({
+					entity: view.selected ?? name,
+					total: view.insights.length,
+					offset: 0,
+					items: view.insights,
+					complete: view.complete ?? true,
+					sources: view.sources ?? []
+				}))).then((next) => {
+					if (!memoryRequests.isCurrent(memoryRequest)) return;
+					setMemories(next);
+					const auto = split && next.total === 0;
+					if (auto && !relatedOpenRef.current) loadRelated(name);
+					else if (relatedAutoRef.current && !relatedOpenRef.current) setRelated(null);
+					relatedAutoRef.current = auto;
+				}, (reason) => {
+					if (memoryRequests.isCurrent(memoryRequest)) setMemoriesError((0, dsh_mnemon_client.message)(reason));
+				}).finally(() => {
+					if (memoryRequests.isCurrent(memoryRequest)) setMemoriesLoading(false);
+				});
+				if (split && relatedOpenRef.current) loadRelated(name);
+			}, [
+				client,
+				loadRelated,
+				memoryRequests,
+				moreRequests,
+				relatedRequests,
+				split
+			]);
+			const select = (name) => {
+				const trimmed = name.trim();
+				if (trimmed === "") return;
+				selectedRef.current = trimmed;
+				setSelected(trimmed);
+				setEntity(trimmed);
+				loadSelection(trimmed, false);
+			};
 			(0, react.useEffect)(() => {
-				load();
-			}, [load, props.revision]);
+				const request = directoryRequests.begin();
+				client.bodyDirectory().then((catalog) => {
+					if (directoryRequests.isCurrent(request)) setPendingSources(pendingEntitySources(catalog));
+				}, () => void 0);
+			}, [client, directoryRequests]);
+			(0, react.useEffect)(() => {
+				loadRail();
+			}, [loadRail, props.revision]);
+			(0, react.useEffect)(() => {
+				if (revisionRef.current === props.revision) return;
+				revisionRef.current = props.revision;
+				if (selectedRef.current !== void 0) loadSelection(selectedRef.current, true);
+			}, [loadSelection, props.revision]);
+			const showMoreMemories = () => {
+				const current = memories;
+				if (current === null || moreLoading) return;
+				const nextVisible = visibleMemoryLimit + ENTITY_CARD_PAGE;
+				if (nextVisible <= current.items.length || current.items.length >= current.total || client.entityMemories === void 0) {
+					setVisibleMemoryLimit(nextVisible);
+					return;
+				}
+				const request = moreRequests.begin();
+				setMoreLoading(true);
+				client.entityMemories(current.entity, current.items.length, ENTITY_MEMORY_BATCH).then((page) => {
+					if (!moreRequests.isCurrent(request)) return;
+					setMemories((previous) => {
+						if (previous === null) return previous;
+						const seen = new Set(previous.items.map(insightKey));
+						return {
+							...page,
+							offset: 0,
+							items: [...previous.items, ...page.items.filter((item) => !seen.has(insightKey(item)))]
+						};
+					});
+					setVisibleMemoryLimit(nextVisible);
+				}, (reason) => {
+					if (moreRequests.isCurrent(request)) setMemoriesError((0, dsh_mnemon_client.message)(reason));
+				}).finally(() => {
+					if (moreRequests.isCurrent(request)) setMoreLoading(false);
+				});
+			};
+			const findRelated = () => {
+				relatedOpenRef.current = true;
+				setRelatedOpen(true);
+				writeRelatedPreference(true);
+				if (selected !== void 0 && related === null && !relatedLoading) loadRelated(selected);
+			};
+			const hideRelated = () => {
+				relatedOpenRef.current = false;
+				setRelatedOpen(false);
+				writeRelatedPreference(false);
+			};
+			/** A forgotten memory leaves both lists at once; the refresh that follows replaces them. */
+			const forget = async (insight) => {
+				await props.onForget(insight);
+				const key = insightKey(insight);
+				setMemories((current) => {
+					const items = current?.items.filter((item) => insightKey(item) !== key);
+					return current === null || items === void 0 || items.length === current.items.length ? current : {
+						...current,
+						total: Math.max(0, current.total - 1),
+						items
+					};
+				});
+				setRelated((current) => current === null ? current : {
+					...current,
+					items: current.items.filter((item) => insightKey(item) !== key)
+				});
+			};
 			const submit = (event) => {
 				event.preventDefault();
-				if (entity.trim() !== "") load(entity);
+				select(entity);
 			};
-			const visibleEntities = (0, react.useMemo)(() => {
-				const query = entityFilter.trim().toLocaleLowerCase();
-				return (query === "" ? view.items : view.items.filter((item) => item.entity.toLocaleLowerCase().includes(query))).slice(0, visibleEntityLimit);
-			}, [
-				view.items,
-				visibleEntityLimit,
-				entityFilter
-			]);
-			const filteredTotal = (0, react.useMemo)(() => {
-				const query = entityFilter.trim().toLocaleLowerCase();
-				return query === "" ? view.items.length : view.items.filter((item) => item.entity.toLocaleLowerCase().includes(query)).length;
-			}, [view.items, entityFilter]);
-			const visibleInsights = view.insights.slice(0, visibleInsightLimit);
-			const sources = view.sources ?? [];
+			const items = rail?.items ?? [];
+			const filterKey = entityFilter.trim().toLocaleLowerCase();
+			const filteredItems = (0, react.useMemo)(() => filterKey === "" ? items : items.filter((item) => item.entity.toLocaleLowerCase().includes(filterKey)), [items, filterKey]);
+			const visibleEntities = filteredItems.slice(0, visibleEntityLimit);
+			const selectedKey = selected === void 0 ? void 0 : normalizeEntityKey(selected);
+			const railCount = selectedKey === void 0 ? void 0 : items.find((item) => normalizeEntityKey(item.entity) === selectedKey)?.count;
+			const sources = rail?.sources ?? pendingSources;
 			const hasEntityProvider = sources.length === 0 || sources.some((source) => source.mode === "entities" && source.status !== "unavailable");
+			const railPlaceholder = useDelayedFlag(rail === null && railLoading);
+			const memoryPlaceholder = useDelayedFlag(memories === null && memoriesLoading);
+			const relatedAuto = memories !== null && memories.total === 0;
+			const relatedShown = split && (relatedOpen || relatedAuto);
+			const relatedPlaceholder = useDelayedFlag(relatedShown && related === null && relatedLoading);
+			const railBusy = useDelayedFlag(railLoading);
+			const detailBusy = useDelayedFlag(memoriesLoading || relatedShown && relatedLoading);
+			const memoryTotal = memories?.total ?? railCount;
+			const visibleMemories = memories?.items.slice(0, visibleMemoryLimit) ?? [];
+			const visibleRelated = related?.items.slice(0, visibleRelatedLimit) ?? [];
+			const nothingFound = memories !== null && memories.total === 0 && (!split || related !== null && related.items.length === 0);
+			const card = (insight) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)(InsightCard, {
+				insight,
+				writeEnabled: props.writeEnabled,
+				onForget: forget,
+				onRelated: () => props.onExplore(insight.content)
+			}, insightKey(insight));
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 				className: css.page,
 				children: [
 					/* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.PageHeader, {
 						title: t("entities.title"),
 						description: t("entities.description"),
-						meta: t("entities.count", { count: view.items.length })
+						...rail === null ? {} : { meta: t("entities.count", { count: rail.total ?? rail.items.length }) },
+						...railBusy ? { loadingLabel: t("entities.railLoading") } : {}
 					}),
 					/* @__PURE__ */ (0, react_jsx_runtime.jsx)(ReadSourcePanel, {
 						title: t("entities.sourcesTitle"),
 						sources
 					}),
-					!loading && !hasEntityProvider ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.EmptyState, {
+					rail !== null && !hasEntityProvider ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.EmptyState, {
 						glyph: "◎",
 						title: t("entities.unsupportedTitle"),
 						children: t("entities.unsupportedText")
@@ -3298,16 +4191,18 @@ window.__ModuleLoader__.load({
 						className: css.entityLayout,
 						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("aside", {
 							className: css.entityRail,
+							"aria-busy": rail === null && railLoading ? true : void 0,
 							children: [
 								/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("form", {
 									className: css.entitySearch,
 									onSubmit: submit,
-									children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
-										"aria-label": t("entities.nameAria"),
+									children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.SearchField, {
+										label: t("entities.nameAria"),
 										value: entity,
 										onChange: (event) => {
 											setEntity(event.target.value);
 											setEntityFilter(event.target.value);
+											setVisibleEntityLimit(ENTITY_RAIL_PAGE);
 										},
 										onKeyDown: (event) => {
 											if (event.key === "Escape" && entityFilter !== "") {
@@ -3318,8 +4213,8 @@ window.__ModuleLoader__.load({
 										placeholder: t("entities.placeholder")
 									}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 										type: "submit",
-										className: css.primaryButton,
-										disabled: loading || entity.trim() === "",
+										className: css.secondaryButton,
+										disabled: entity.trim() === "",
 										children: t("entities.action")
 									})]
 								}),
@@ -3327,72 +4222,153 @@ window.__ModuleLoader__.load({
 									className: css.entityHeading,
 									children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: t("entities.top") }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("small", { children: entityFilter === "" ? t("entities.frequency") : t("entities.filterHint") })]
 								}),
+								railPlaceholder && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+									className: css.entityList,
+									"aria-hidden": "true",
+									"data-placeholder": "",
+									children: Array.from({ length: 8 }, (_, index) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { className: css.entityRailSkeleton }, index))
+								}),
 								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 									className: css.entityList,
 									children: visibleEntities.map((item) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("button", {
 										type: "button",
-										"aria-pressed": view.selected === item.entity,
-										onClick: () => {
-											setEntity(item.entity);
-											load(item.entity);
-										},
+										"aria-pressed": selectedKey === normalizeEntityKey(item.entity),
+										onClick: () => select(item.entity),
 										children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: item.entity }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("strong", { children: item.count })]
 									}, item.entity))
 								}),
-								visibleEntities.length > 0 && filteredTotal > visibleEntityLimit && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.ProgressiveFooter, {
+								visibleEntities.length > 0 && filteredItems.length > visibleEntityLimit && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.ProgressiveFooter, {
 									compact: true,
 									visible: visibleEntities.length,
-									total: filteredTotal,
-									pageSize: entityPageSize,
-									onMore: () => setVisibleEntityLimit((value) => value + entityPageSize)
+									total: filteredItems.length,
+									pageSize: ENTITY_RAIL_PAGE,
+									onMore: () => setVisibleEntityLimit((value) => value + ENTITY_RAIL_PAGE)
 								}),
-								!loading && view.items.length === 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
+								rail === null && railError !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+									className: (0, dsh_mnemon_client.appearanceClass)(css.inlineError, css.entityRetry),
+									role: "alert",
+									children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: railError }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+										type: "button",
+										className: css.secondaryButton,
+										onClick: () => void loadRail(),
+										children: t("entities.retry")
+									})]
+								}),
+								rail !== null && items.length === 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
 									className: css.muted,
 									children: t("entities.emptyRail")
 								}),
-								!loading && view.items.length > 0 && visibleEntities.length === 0 && entityFilter !== "" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
+								rail !== null && items.length > 0 && visibleEntities.length === 0 && entityFilter !== "" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
 									className: css.muted,
 									children: t("entities.filterEmpty")
 								})
 							]
 						}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("section", {
 							className: (0, dsh_mnemon_client.appearanceClass)(css.entityResults, css.asyncResults),
+							"aria-busy": memoriesLoading || relatedShown && relatedLoading ? true : void 0,
 							children: [
-								loading && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.SectionSpinner, { label: t("entities.loading") }),
-								error !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
-									className: css.inlineError,
-									role: "alert",
-									children: error
-								}),
-								!loading && view.selected === void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.EmptyState, {
+								detailBusy && selected !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.SectionSpinner, { label: t("entities.loading") }),
+								selected === void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.EmptyState, {
 									glyph: "◎",
 									title: t("entities.selectTitle"),
 									children: t("entities.selectText")
 								}),
-								view.selected !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-									className: css.sectionHeading,
-									children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", { children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("h3", { children: view.selected }) }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("strong", { children: view.insights.length })]
-								}), !loading && view.insights.length === 0 ? /* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.EmptyState, {
+								selected !== void 0 && nothingFound && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.EmptyState, {
 									glyph: "0",
 									title: t("entities.emptyTitle"),
 									children: t("entities.emptyText")
-								}) : /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [visibleInsights.map((insight) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)(InsightCard, {
-									insight,
-									writeEnabled: props.writeEnabled,
-									onForget: props.onForget,
-									onRelated: () => props.onExplore(insight.content)
-								}, insightKey(insight))), !loading && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.ProgressiveFooter, {
-									visible: visibleInsights.length,
-									total: view.insights.length,
-									pageSize: insightPageSize,
-									onMore: () => setVisibleInsightLimit((value) => value + insightPageSize)
-								})] })] })
+								}),
+								selected !== void 0 && !nothingFound && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+									className: css.entitySection,
+									children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+										className: css.sectionHeading,
+										children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("h3", { children: memories?.entity ?? selected }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: t("entities.memoriesHint") })] }), memoryTotal !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("strong", { children: memoryTotal })]
+									}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+										className: css.entitySectionBody,
+										children: [
+											memoriesError !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+												className: (0, dsh_mnemon_client.appearanceClass)(css.inlineError, css.entityRetry),
+												role: "alert",
+												children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: memoriesError }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+													type: "button",
+													className: css.secondaryButton,
+													onClick: () => loadSelection(selected, memories !== null),
+													children: t("entities.retry")
+												})]
+											}),
+											memoryPlaceholder && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(InsightSkeletons, { count: Math.min(3, Math.max(1, railCount ?? 3)) }),
+											memories !== null && memories.total === 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
+												className: css.entityQuiet,
+												children: t("entities.noCarrying")
+											}),
+											visibleMemories.map(card),
+											memories !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(EntityFooter, {
+												visible: visibleMemories.length,
+												total: memories.total,
+												pageSize: ENTITY_CARD_PAGE,
+												busy: moreLoading,
+												onMore: showMoreMemories
+											})
+										]
+									})]
+								}), split && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+									className: css.entitySection,
+									children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+										className: css.entityRelatedHead,
+										children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+											className: css.sectionHeading,
+											children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("h3", {
+												id: `${relatedId}-title`,
+												children: t("entities.relatedTitle")
+											}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: t("entities.relatedHint") })] }), relatedShown && related !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("strong", { children: related.items.length })]
+										}), !relatedAuto && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+											type: "button",
+											className: css.secondaryButton,
+											"aria-expanded": relatedShown,
+											"aria-controls": `${relatedId}-list`,
+											onClick: relatedShown ? hideRelated : findRelated,
+											children: t(relatedShown ? "entities.hideRelated" : "entities.findRelated")
+										})]
+									}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+										id: `${relatedId}-list`,
+										role: "region",
+										"aria-labelledby": `${relatedId}-title`,
+										className: css.entitySectionBody,
+										hidden: !relatedShown,
+										children: relatedShown && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
+											relatedError !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+												className: (0, dsh_mnemon_client.appearanceClass)(css.inlineError, css.entityRetry),
+												role: "alert",
+												children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: relatedError }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+													type: "button",
+													className: css.secondaryButton,
+													onClick: () => loadRelated(selected),
+													children: t("entities.retry")
+												})]
+											}),
+											relatedPlaceholder && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(InsightSkeletons, { count: 2 }),
+											related !== null && related.items.length === 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
+												className: css.entityQuiet,
+												children: t("entities.noRelated")
+											}),
+											visibleRelated.map(card),
+											related !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.ProgressiveFooter, {
+												visible: visibleRelated.length,
+												total: related.items.length,
+												pageSize: ENTITY_CARD_PAGE,
+												onMore: () => setVisibleRelatedLimit((value) => value + ENTITY_CARD_PAGE)
+											})
+										] })
+									})]
+								})] })
 							]
 						})]
 					})
 				]
 			});
 		}
+		//#endregion
+		//#region src/client/persistence-strategy-dialog.tsx
 		function PersistenceStrategyDialog(props) {
 			const t = useT();
 			const strategyFormId = (0, react.useId)();
@@ -3416,7 +4392,12 @@ window.__ModuleLoader__.load({
 					const next = catalog.providers;
 					setProviders(next);
 					setProviderDrafts((previous) => mergeProviderDefaults(next, previous));
-					setProviderId((currentProviderId) => next.some((provider) => provider.id === currentProviderId && (provider.origin === "native" || provider.serviceConfigured !== false)) ? currentProviderId : next.find((provider) => provider.origin === "native")?.id ?? next[0]?.id ?? "mnemon-native");
+					setProviderId((currentProviderId) => readyProviderId(next, currentProviderId) ?? currentProviderId);
+					if (configured?.rules?.allowedProviderIds === void 0) setAutomaticProviderIds((current) => {
+						const ready = current.filter((id) => next.some((provider) => provider.id === id && provider.serviceConfigured !== false));
+						const first = readyProviderId(next);
+						return ready.length > 0 || first === void 0 ? ready : [first];
+					});
 				}).catch((reason) => {
 					if (current) setError((0, dsh_mnemon_client.message)(reason));
 				}).finally(() => {
@@ -3476,7 +4457,7 @@ window.__ModuleLoader__.load({
 					children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 						type: "button",
 						"data-dialog-close": true,
-						className: css.ghostButton,
+						className: css.secondaryButton,
 						disabled: saving,
 						onClick: props.onClose,
 						children: t("common.cancel")
@@ -3562,8 +4543,8 @@ window.__ModuleLoader__.load({
 								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: "02" }), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("strong", { children: t(mode === "manual" ? "strategy.manualTitle" : "strategy.automaticTitle") }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("small", { children: t(mode === "manual" ? "strategy.manualDescription" : "strategy.automaticDescription") })] })]
 							}), mode === "manual" ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("fieldset", {
 								className: css.providerChoice,
-								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("legend", { children: t("overview.providerLabel") }), providers.map((provider) => {
-									const disabled = provider.origin !== "native" && provider.serviceConfigured === false;
+								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("legend", { children: t("overview.providerLabel") }), readyFirst(providers).map((provider) => {
+									const disabled = provider.serviceConfigured === false;
 									return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("label", {
 										"data-selected": providerId === provider.id || void 0,
 										"data-native": provider.origin === "native" || void 0,
@@ -3582,7 +4563,7 @@ window.__ModuleLoader__.load({
 												icon: provider.icon,
 												className: css.providerChoiceIcon
 											}),
-											/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("strong", { children: [provider.label, provider.origin === "native" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("em", { children: t("overview.nativeOfficial") })] }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("small", { children: disabled ? t("overview.providerServiceRequired") : `${t(`overview.workspaceBinding.${provider.workspaceBinding}`)} · ${providerSummary(t, provider)}` })] }),
+											/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("strong", { children: [provider.label, provider.origin === "native" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("em", { children: t("overview.nativeOfficial") })] }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("small", { children: disabled ? t(providerUnavailableKey(provider)) : `${t(`overview.workspaceBinding.${provider.workspaceBinding}`)} · ${providerSummary(t, provider)}` })] }),
 											/* @__PURE__ */ (0, react_jsx_runtime.jsx)("i", {
 												className: css.choiceControl,
 												"data-kind": "radio",
@@ -3601,7 +4582,7 @@ window.__ModuleLoader__.load({
 								children: [
 									/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 										className: css.placementPolicyHeading,
-										children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("strong", { children: t("overview.placementPolicy") }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("small", { children: t("overview.placementPolicyHint") })] }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: props.agentAvailable ? t("strategy.taskAgentReady") : t("strategy.taskAgentUnavailable") })]
+										children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("strong", { children: t("overview.placementPolicy") }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("small", { children: t("overview.placementPolicyHint") })] }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.TaskAgentTag, { available: props.agentAvailable })]
 									}),
 									/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("label", { children: [t("overview.placementPrompt"), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("textarea", {
 										"aria-label": t("overview.placementPrompt"),
@@ -3613,40 +4594,39 @@ window.__ModuleLoader__.load({
 									})] }),
 									/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 										className: css.placementRuleGrid,
-										children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("label", { children: [t("overview.dataBoundary"), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("select", {
-											"aria-label": t("overview.dataBoundary"),
+										children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.SelectField, {
+											label: t("overview.dataBoundary"),
 											value: dataBoundary,
-											onChange: (event) => {
-												const value = event.target.value;
+											options: [{
+												value: "allow-remote",
+												label: t("overview.dataBoundaryRemote")
+											}, {
+												value: "local-only",
+												label: t("overview.dataBoundaryLocal")
+											}],
+											onChange: (value) => {
 												setDataBoundary(value);
 												if (value === "local-only") setAutomaticProviderIds((current) => current.filter((id) => providers.find((provider) => provider.id === id)?.kind === "local"));
-											},
-											children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("option", {
-												value: "allow-remote",
-												children: t("overview.dataBoundaryRemote")
-											}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("option", {
-												value: "local-only",
-												children: t("overview.dataBoundaryLocal")
-											})]
-										})] }), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("label", { children: [t("overview.preference"), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("select", {
-											"aria-label": t("overview.preference"),
+											}
+										}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.SelectField, {
+											label: t("overview.preference"),
 											value: preference,
-											onChange: (event) => setPreference(event.target.value),
-											children: [
-												/* @__PURE__ */ (0, react_jsx_runtime.jsx)("option", {
+											options: [
+												{
 													value: "balanced",
-													children: t("overview.preferenceBalanced")
-												}),
-												/* @__PURE__ */ (0, react_jsx_runtime.jsx)("option", {
+													label: t("overview.preferenceBalanced")
+												},
+												{
 													value: "local-first",
-													children: t("overview.preferenceLocal")
-												}),
-												/* @__PURE__ */ (0, react_jsx_runtime.jsx)("option", {
+													label: t("overview.preferenceLocal")
+												},
+												{
 													value: "shared-first",
-													children: t("overview.preferenceShared")
-												})
-											]
-										})] })]
+													label: t("overview.preferenceShared")
+												}
+											],
+											onChange: setPreference
+										})]
 									}),
 									/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("fieldset", {
 										className: css.capabilityRules,
@@ -3676,9 +4656,9 @@ window.__ModuleLoader__.load({
 									}),
 									/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 										className: css.placementCandidates,
-										children: providers.map((provider) => {
-											const disabled = provider.serviceConfigured === false || dataBoundary === "local-only" && provider.kind === "remote";
+										children: readyFirst(providers).map((provider) => {
 											const selected = automaticProviderIds.includes(provider.id);
+											const disabled = provider.serviceConfigured === false && !selected || dataBoundary === "local-only" && provider.kind === "remote";
 											return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("label", {
 												"data-selected": selected || void 0,
 												"data-disabled": disabled || void 0,
@@ -3694,7 +4674,7 @@ window.__ModuleLoader__.load({
 														icon: provider.icon,
 														className: css.candidateIcon
 													}),
-													/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("strong", { children: provider.label }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("small", { children: provider.serviceConfigured === false ? t("overview.providerServiceRequired") : provider.origin === "native" ? t("overview.candidateNativeReady") : provider.kind === "local" ? t("overview.candidateLocal") : t("overview.candidateRemote") })] }),
+													/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("strong", { children: provider.label }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("small", { children: provider.serviceConfigured === false ? t(providerUnavailableKey(provider)) : provider.origin === "native" ? t("overview.candidateNativeReady") : provider.kind === "local" ? t("overview.candidateLocal") : t("overview.candidateRemote") })] }),
 													/* @__PURE__ */ (0, react_jsx_runtime.jsx)("i", {
 														className: css.choiceControl,
 														"data-kind": "check",
@@ -3719,9 +4699,13 @@ window.__ModuleLoader__.load({
 				})
 			});
 		}
+		//#endregion
+		//#region src/client/remember-page.tsx
+		/** `embeddingManaged`, from this Source's status, words a memory saved without a vector; left out, the receipt keeps the caution. */
 		function RememberPage(props) {
 			const t = useT();
 			const rememberFormId = (0, react.useId)();
+			const candidateId = (0, react.useId)();
 			const [content, setContent] = (0, react.useState)(props.seed);
 			const [category, setCategory] = (0, react.useState)("general");
 			const [importance, setImportance] = (0, react.useState)(3);
@@ -3730,7 +4714,7 @@ window.__ModuleLoader__.load({
 			const [memoryBodyId, setMemoryBodyId] = (0, react.useState)("");
 			const [supervising, setSupervising] = (0, react.useState)(false);
 			const [saving, setSaving] = (0, react.useState)(false);
-			const [result, setResult] = (0, react.useState)(null);
+			const [outcome, setOutcome] = (0, react.useState)(null);
 			(0, react.useEffect)(() => {
 				if (props.seed !== "") setContent(props.seed);
 			}, [props.seed]);
@@ -3738,33 +4722,41 @@ window.__ModuleLoader__.load({
 				if (memoryBodyId === "" && props.memoryBodies.length > 0) setMemoryBodyId((props.memoryBodies.find((body) => body.active) ?? props.memoryBodies[0]).id);
 			}, [memoryBodyId, props.memoryBodies]);
 			const selectedMemoryBody = props.memoryBodies.find((body) => body.id === memoryBodyId);
+			const candidate = content.trim();
+			const answered = outcome !== null && outcome.content === candidate;
+			const busy = supervising || saving;
 			const supervise = async (event) => {
 				event.preventDefault();
-				if (content.trim() === "" || !props.agentAvailable) return;
+				if (candidate === "" || !props.agentAvailable || answered || busy) return;
 				setSupervising(true);
-				setResult(null);
+				setOutcome(null);
 				try {
-					const response = await props.client.supervise(content);
-					setResult(`${t(response.action === "skipped" ? "remember.skipped" : "remember.completed")}${response.memoryBodyIds.length === 0 ? "" : ` · ${response.memoryBodyIds.join(", ")}`}${response.summary === "" ? "" : ` · ${response.summary}`}`);
+					const response = await props.client.supervise(candidate);
+					setOutcome({
+						content: candidate,
+						action: response.action,
+						summary: response.summary,
+						unembedded: (response.unembedded ?? []).length > 0,
+						embeddingManaged: props.embeddingManaged
+					});
 					props.onMutate();
-					if (response.action !== "skipped") {
-						setContent("");
-						props.onComplete?.();
-					}
 				} catch (reason) {
-					setResult(t("remember.dispatchFailed", { error: (0, dsh_mnemon_client.message)(reason) }));
+					setOutcome({
+						content: candidate,
+						error: (0, dsh_mnemon_client.message)(reason)
+					});
 				} finally {
 					setSupervising(false);
 				}
 			};
 			const manualSave = async (event) => {
 				event.preventDefault();
-				if (content.trim() === "") return;
+				if (candidate === "" || busy) return;
 				setSaving(true);
-				setResult(null);
+				setOutcome(null);
 				try {
 					const response = await props.client.remember({
-						content,
+						content: candidate,
 						category,
 						importance,
 						tags: tags.split(",").map((value) => value.trim()).filter(Boolean),
@@ -3772,18 +4764,19 @@ window.__ModuleLoader__.load({
 						source: "user",
 						...memoryBodyId === "" ? {} : { memoryBodyId }
 					});
-					const action = typeof response.action === "string" ? response.action : "saved";
-					const summary = typeof response.summary === "string" ? response.summary : "";
-					setResult(action === "skipped" ? `${t("remember.skipped")}${summary === "" ? "" : ` · ${summary}`}` : `${t("remember.processed", { action })}${summary === "" ? "" : ` · ${summary}`}`);
-					if (action !== "skipped") {
-						setContent("");
-						setTags("");
-						setEntities("");
-						props.onMutate();
-						props.onComplete?.();
-					}
+					setOutcome({
+						content: candidate,
+						action: typeof response.action === "string" ? response.action : "stored",
+						summary: typeof response.summary === "string" ? response.summary : "",
+						unembedded: response.embedded === false,
+						embeddingManaged: props.embeddingManaged
+					});
+					props.onMutate();
 				} catch (reason) {
-					setResult(t("remember.saveFailed", { error: (0, dsh_mnemon_client.message)(reason) }));
+					setOutcome({
+						content: candidate,
+						error: (0, dsh_mnemon_client.message)(reason)
+					});
 				} finally {
 					setSaving(false);
 				}
@@ -3796,31 +4789,31 @@ window.__ModuleLoader__.load({
 					onSubmit: (event) => void supervise(event),
 					children: [
 						/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
-							className: css.supervisedHeading,
-							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", { children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("h3", { children: t("remember.delegateTitle") }) }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
-								className: !props.agentAvailable ? css.sessionMissing : css.sessionReady,
-								children: !props.agentAvailable ? t("remember.noTaskAgent") : t("remember.taskAgentReady")
-							})]
+							className: css.candidateHeading,
+							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("label", {
+								htmlFor: candidateId,
+								children: t("remember.candidate")
+							}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.TaskAgentTag, { available: props.agentAvailable })]
 						}),
-						/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("label", {
-							className: css.fieldWide,
-							children: [t("remember.candidate"), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("textarea", {
-								"aria-label": t("remember.candidateAria"),
-								value: content,
-								onChange: (event) => setContent(event.target.value),
-								maxLength: 8e3,
-								rows: 8,
-								placeholder: t("remember.placeholder")
-							})]
+						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("textarea", {
+							id: candidateId,
+							value: content,
+							onChange: (event) => setContent(event.target.value),
+							maxLength: 8e3,
+							rows: 8,
+							placeholder: t("remember.placeholder")
 						}),
 						!props.agentAvailable && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
 							className: css.sessionHint,
 							children: t("remember.taskAgentHint")
 						}),
-						result !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
-							className: css.modalInlineStatus,
-							role: "status",
-							children: result
+						outcome !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.WriteReceipt, {
+							action: outcome.action,
+							summary: outcome.summary,
+							error: outcome.error,
+							unembedded: outcome.unembedded,
+							embeddingManaged: outcome.embeddingManaged,
+							onView: props.onView
 						})
 					]
 				}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("details", {
@@ -3831,52 +4824,45 @@ window.__ModuleLoader__.load({
 						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 							className: css.formGrid,
 							children: [
-								/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("label", {
+								/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 									className: css.fieldWide,
-									children: [
-										t("remember.target"),
-										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("select", {
-											"aria-label": t("remember.target"),
-											value: memoryBodyId,
-											onChange: (event) => setMemoryBodyId(event.target.value),
-											children: props.memoryBodies.map((body) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("option", {
-												value: body.id,
-												children: [
-													body.name,
-													" · ",
-													body.provider.label,
-													body.active ? ` · ${t("common.active")}` : ""
-												]
-											}, body.id))
-										}),
-										selectedMemoryBody?.provider.capabilities.writeMode === "async-extracting" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("small", {
-											className: css.providerWriteHint,
-											children: t("remember.asyncProviderHint")
-										})
-									]
+									children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.SelectField, {
+										label: t("remember.target"),
+										value: memoryBodyId,
+										options: props.memoryBodies.map((body) => ({
+											value: body.id,
+											label: `${body.name} · ${body.provider.label}${body.active ? ` · ${t("common.active")}` : ""}`
+										})),
+										onChange: setMemoryBodyId
+									}), selectedMemoryBody?.provider.capabilities.writeMode === "async-extracting" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("small", {
+										className: css.providerWriteHint,
+										children: t("remember.asyncProviderHint")
+									})]
 								}),
-								/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("label", { children: [t("common.category"), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("select", {
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.SelectField, {
+									label: t("common.category"),
 									value: category,
-									onChange: (event) => setCategory(event.target.value),
-									children: CATEGORIES.map((value) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("option", {
+									options: CATEGORIES.map((value) => ({
 										value,
-										children: categoryLabel(t, value)
-									}, value))
-								})] }),
-								/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("label", { children: [t("common.importanceLabel"), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("select", {
-									value: importance,
-									onChange: (event) => setImportance(Number(event.target.value)),
-									children: [
+										label: categoryLabel(t, value)
+									})),
+									onChange: setCategory
+								}),
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.SelectField, {
+									label: t("common.importanceLabel"),
+									value: String(importance),
+									options: [
 										1,
 										2,
 										3,
 										4,
 										5
-									].map((value) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("option", {
-										value,
-										children: [value, " / 5"]
-									}, value))
-								})] }),
+									].map((value) => ({
+										value: String(value),
+										label: `${value} / 5`
+									})),
+									onChange: (value) => setImportance(Number(value))
+								}),
 								/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("label", {
 									className: css.fieldWide,
 									children: [t("remember.entities"), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
@@ -3899,7 +4885,7 @@ window.__ModuleLoader__.load({
 							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", { children: t("remember.advancedText") }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 								type: "submit",
 								className: css.secondaryButton,
-								disabled: saving || content.trim() === "" || memoryBodyId === "",
+								disabled: busy || candidate === "" || memoryBodyId === "" || answered,
 								children: saving ? t("remember.saving") : t("remember.advancedAction")
 							})]
 						})]
@@ -3909,22 +4895,22 @@ window.__ModuleLoader__.load({
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.SidebarModal, {
 				title: t("remember.title"),
 				description: t("remember.description"),
-				busy: supervising || saving,
+				busy,
 				onClose: props.onClose,
 				footer: props.writeEnabled ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 					className: css.modalFooterActions,
 					children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 						type: "button",
 						"data-dialog-close": true,
-						className: css.ghostButton,
-						disabled: supervising || saving,
+						className: css.secondaryButton,
+						disabled: busy,
 						onClick: props.onClose,
-						children: t("common.cancel")
+						children: t(outcome === null ? "common.cancel" : "common.close")
 					}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 						type: "submit",
 						form: rememberFormId,
 						className: css.primaryButton,
-						disabled: supervising || content.trim() === "" || !props.agentAvailable,
+						disabled: busy || candidate === "" || !props.agentAvailable || answered,
 						children: supervising ? t("remember.processing") : t("remember.action")
 					})]
 				}) : void 0,
@@ -3935,6 +4921,8 @@ window.__ModuleLoader__.load({
 				})
 			});
 		}
+		//#endregion
+		//#region src/client/list-page.tsx
 		function ListPage(props) {
 			const t = useT();
 			const pageSize = 12;
@@ -4001,27 +4989,28 @@ window.__ModuleLoader__.load({
 						className: css.listToolbar,
 						onSubmit: submit,
 						children: [
-							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
-								"aria-label": t("content.filterAria"),
+							/* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.SearchField, {
+								label: t("content.filterAria"),
 								value: query,
 								onChange: (event) => setQuery(event.target.value),
 								placeholder: t("content.filterPlaceholder")
 							}),
-							/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("select", {
-								"aria-label": t("content.categoryAria"),
+							/* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.SelectField, {
+								hideLabel: true,
+								label: t("content.categoryAria"),
 								value: category,
-								onChange: (event) => setCategory(event.target.value),
-								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("option", {
+								options: [{
 									value: "",
-									children: t("common.allCategories")
-								}), CATEGORIES.map((value) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("option", {
+									label: t("common.allCategories")
+								}, ...CATEGORIES.map((value) => ({
 									value,
-									children: categoryLabel(t, value)
-								}, value))]
+									label: categoryLabel(t, value)
+								}))],
+								onChange: setCategory
 							}),
 							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 								type: "submit",
-								className: css.primaryButton,
+								className: css.secondaryButton,
 								disabled: loading,
 								children: loading ? t("common.loading") : t("content.apply")
 							})
@@ -4072,8 +5061,1073 @@ window.__ModuleLoader__.load({
 				]
 			});
 		}
-		/** @deprecated Use nativeSpaceProvider. */
-		const nativeBodyProvider = nativeSpaceProvider;
+		//#endregion
+		//#region src/client/provider-settings.tsx
+		const EMPTY_PROVIDER_CATALOG = {
+			providers: [],
+			items: [],
+			generatedAt: ""
+		};
+		const RETAINED_PROVIDERS = "provider-services";
+		const retainedCatalog = (retained) => retained.get(RETAINED_PROVIDERS);
+		function stabilizeProviderCard(element) {
+			const view = element.ownerDocument.defaultView;
+			let scrollContainer;
+			for (let ancestor = element.parentElement; ancestor !== null; ancestor = ancestor.parentElement) {
+				const overflowY = view?.getComputedStyle(ancestor).overflowY ?? ancestor.style.overflowY;
+				if (scrollContainer !== void 0 && overflowY === "hidden" && ancestor.scrollTop !== 0) ancestor.scrollTop = 0;
+				if (scrollContainer === void 0 && (overflowY === "auto" || overflowY === "scroll") && ancestor.scrollHeight > ancestor.clientHeight) scrollContainer = ancestor;
+				if (ancestor.getAttribute("role") === "dialog") break;
+			}
+			if (scrollContainer === void 0) return;
+			const headerRect = (element.firstElementChild instanceof HTMLElement ? element.firstElementChild : element).getBoundingClientRect();
+			const containerRect = scrollContainer.getBoundingClientRect();
+			if (headerRect.top < containerRect.top) scrollContainer.scrollTop -= containerRect.top - headerRect.top;
+			else if (headerRect.bottom > containerRect.bottom) scrollContainer.scrollTop += headerRect.bottom - containerRect.bottom;
+		}
+		function serviceFields(provider) {
+			return provider.fields.filter((field) => field.scope === "service");
+		}
+		function globalLocationFields(provider) {
+			return serviceFields(provider).filter((field) => field.role === "global-location");
+		}
+		function serviceDefaults(provider) {
+			return Object.fromEntries(serviceFields(provider).flatMap((field) => field.defaultValue === void 0 ? [] : [[field.key, field.defaultValue]]));
+		}
+		function draftFor(provider, service) {
+			return { settings: {
+				...serviceDefaults(provider),
+				...service.settings,
+				...service.secretValues
+			} };
+		}
+		function configurationComplete(provider, draft, service) {
+			return serviceFields(provider).every((field) => {
+				if (!field.required) return true;
+				if (field.input === "secret" && service.configuredSecrets.includes(field.key)) return true;
+				const value = draft.settings[field.key];
+				return field.input === "boolean" ? typeof value === "boolean" : String(value ?? "").trim() !== "";
+			});
+		}
+		function ProviderServiceForm(props) {
+			const t = useT();
+			const css = dsh_mnemon_client.memorySettingsStyles;
+			const [draft, setDraft] = (0, react.useState)(() => draftFor(props.provider, props.service));
+			const [customLocations, setCustomLocations] = (0, react.useState)(() => new Set(globalLocationFields(props.provider).filter((field) => String(props.service.settings[field.key] ?? "").trim() !== "").map((field) => field.key)));
+			const [saving, setSaving] = (0, react.useState)(false);
+			const [failed, setFailed] = (0, react.useState)(null);
+			const [saved, setSaved] = (0, react.useState)(false);
+			const formRef = (0, react.useRef)(null);
+			const stabilizeAfterLocationLayout = (0, react.useRef)(false);
+			(0, react.useEffect)(() => {
+				setDraft(draftFor(props.provider, props.service));
+				setCustomLocations(new Set(globalLocationFields(props.provider).filter((field) => String(props.service.settings[field.key] ?? "").trim() !== "").map((field) => field.key)));
+			}, [props.provider, props.service]);
+			(0, react.useLayoutEffect)(() => {
+				if (!stabilizeAfterLocationLayout.current || formRef.current === null) return;
+				stabilizeAfterLocationLayout.current = false;
+				stabilizeProviderCard(formRef.current.closest("[data-provider]") ?? formRef.current);
+			}, [customLocations]);
+			const submit = async (event) => {
+				event.preventDefault();
+				const locationsComplete = props.activeScope === "workspace" || globalLocationFields(props.provider).every((field) => !customLocations.has(field.key) || String(draft.settings[field.key] ?? "").trim() !== "");
+				if (!configurationComplete(props.provider, draft, props.service) || !locationsComplete || saving || props.disabled) return;
+				setSaving(true);
+				setFailed(null);
+				setSaved(false);
+				const settings = { ...draft.settings };
+				for (const field of globalLocationFields(props.provider)) if (props.activeScope === "workspace" || !customLocations.has(field.key)) settings[field.key] = "";
+				try {
+					await props.onSave(props.provider, { settings });
+					setSaved(true);
+				} catch (reason) {
+					setFailed((0, dsh_mnemon_client.message)(reason));
+				} finally {
+					setSaving(false);
+				}
+			};
+			const update = (key, value) => {
+				setDraft((current) => ({
+					...current,
+					settings: {
+						...current.settings,
+						[key]: value
+					}
+				}));
+				setFailed(null);
+				setSaved(false);
+			};
+			const useCustomLocation = (field, custom) => {
+				stabilizeAfterLocationLayout.current = true;
+				setCustomLocations((current) => {
+					const next = new Set(current);
+					if (custom) next.add(field.key);
+					else next.delete(field.key);
+					return next;
+				});
+				setFailed(null);
+				setSaved(false);
+			};
+			const stabilizeLocationCard = () => {
+				if (formRef.current === null) return;
+				stabilizeProviderCard(formRef.current.closest("[data-provider]") ?? formRef.current);
+			};
+			const locations = globalLocationFields(props.provider);
+			const regularFields = serviceFields(props.provider).filter((field) => field.role !== "global-location");
+			const locationsComplete = props.activeScope === "workspace" || locations.every((field) => !customLocations.has(field.key) || String(draft.settings[field.key] ?? "").trim() !== "");
+			const formComplete = configurationComplete(props.provider, draft, props.service) && locationsComplete;
+			const field = (descriptor) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)(ProviderField, {
+				field: descriptor,
+				value: draft.settings[descriptor.key],
+				layout: "settings",
+				saved: props.service.configuredSecrets.includes(descriptor.key),
+				disabled: props.disabled || saving,
+				onChange: (value) => update(descriptor.key, value)
+			}, descriptor.key);
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("form", {
+				ref: formRef,
+				className: css.providerServiceForm,
+				onSubmit: (event) => void submit(event),
+				"data-provider": props.provider.id,
+				children: [
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
+						className: css.providerServicePrompt,
+						children: t(props.service.configured ? "config.providerServiceHint" : "config.providerEnableHint")
+					}),
+					locations.map((location) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.GlobalLocationSetting, {
+						className: css.providerServiceLocation,
+						name: `${props.provider.id}-${location.key}-location`,
+						ariaLabel: `${props.provider.label} ${t("config.providerGlobalLocation")}`,
+						label: t("config.providerGlobalLocation"),
+						hint: t(props.activeScope === "workspace" ? "config.providerGlobalLocationWorkspaceHint" : "config.providerGlobalLocationHint", { provider: props.provider.label }),
+						defaultLabel: t("config.providerDefaultLocation"),
+						customLabel: t("config.custom"),
+						custom: customLocations.has(location.key),
+						workspace: props.activeScope === "workspace",
+						disabled: props.disabled || saving,
+						onInteract: stabilizeLocationCard,
+						onChange: (custom) => useCustomLocation(location, custom),
+						children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+							className: css.providerLocationField,
+							children: field(location)
+						})
+					}, location.key)),
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+						className: css.providerSettingsGrid,
+						children: regularFields.map(field)
+					}),
+					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+						className: `${css.memoryConfigFooter} ${css.providerServiceFooter}`,
+						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+							className: css.configFeedback,
+							"aria-live": "polite",
+							children: [failed !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+								className: css.error,
+								children: t("config.providerSaveFailed", { error: failed })
+							}), saved && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+								className: css.packSuccess,
+								children: t("config.providerServiceSaved")
+							})]
+						}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+							type: "submit",
+							variant: "primary",
+							size: "sm",
+							disabled: props.disabled || saving || !formComplete,
+							children: saving ? t("config.saving") : t(props.service.configured ? "config.saveProviderService" : "config.enableProvider")
+						})]
+					})
+				]
+			});
+		}
+		function ProviderPanel(props) {
+			const t = useT();
+			const css = dsh_mnemon_client.memorySettingsStyles;
+			const [enabled, setEnabled] = (0, react.useState)(props.service.enabled);
+			const [expanded, setExpanded] = (0, react.useState)(props.service.enabled && !props.service.configured);
+			const [toggling, setToggling] = (0, react.useState)(false);
+			const [failed, setFailed] = (0, react.useState)(null);
+			const rowRef = (0, react.useRef)(null);
+			const stabilizeAfterLayout = (0, react.useRef)(false);
+			(0, react.useLayoutEffect)(() => {
+				if (!stabilizeAfterLayout.current || rowRef.current === null) return;
+				stabilizeAfterLayout.current = false;
+				stabilizeProviderCard(rowRef.current);
+			}, [enabled, expanded]);
+			(0, react.useEffect)(() => {
+				if (toggling) return;
+				setEnabled(props.service.enabled);
+				if (!props.service.enabled) setExpanded(false);
+			}, [props.service.enabled, toggling]);
+			const toggle = async (next) => {
+				setFailed(null);
+				stabilizeAfterLayout.current = true;
+				if (next && !props.service.configured) {
+					setEnabled(true);
+					setExpanded(true);
+					return;
+				}
+				if (!next && !props.service.enabled) {
+					setEnabled(false);
+					setExpanded(false);
+					return;
+				}
+				const restoreEnabled = enabled;
+				const restoreExpanded = expanded;
+				setEnabled(next);
+				if (!next && expanded) setExpanded(false);
+				setToggling(true);
+				try {
+					const updated = await props.onToggle(props.provider, next);
+					setEnabled(updated.enabled);
+					if (!next) setExpanded(false);
+				} catch (reason) {
+					setEnabled(restoreEnabled);
+					if (restoreExpanded) setExpanded(true);
+					setFailed((0, dsh_mnemon_client.message)(reason));
+				} finally {
+					setToggling(false);
+				}
+			};
+			const stateKey = enabled ? props.service.configured ? "config.providerEnabled" : "config.providerNeedsConfiguration" : props.service.configured ? "config.providerDisabledConfigured" : "config.providerDisabled";
+			const providerScope = props.provider.workspaceBinding === "provider-global" ? "global" : props.activeScope;
+			const controlDisabled = props.disabled || toggling;
+			const toggleExpanded = () => {
+				stabilizeAfterLayout.current = true;
+				setExpanded((value) => !value);
+			};
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+				ref: rowRef,
+				className: css.providerRow,
+				"data-provider": props.provider.id,
+				"data-enabled": enabled || void 0,
+				"data-expanded": expanded || void 0,
+				role: "group",
+				"aria-label": `${props.provider.label} ${t("config.providerServiceTitle")}`,
+				children: [
+					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+						className: css.providerRowHeader,
+						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("button", {
+							type: "button",
+							className: css.providerDisclosure,
+							"aria-expanded": expanded,
+							disabled: !enabled || controlDisabled,
+							onClick: toggleExpanded,
+							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
+								className: css.providerIdentity,
+								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(ProviderIcon, {
+									providerId: props.provider.id,
+									icon: props.provider.icon,
+									className: css.providerMark
+								}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("strong", { children: props.provider.label }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("small", { children: providerSummary(t, props.provider) })] })]
+							}), enabled && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconChevronDownOutlineRegular, {
+								className: css.providerChevron,
+								size: 14
+							})]
+						}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+							className: css.providerEnableControl,
+							children: [
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+									className: css.providerScopeTag,
+									"data-scope": providerScope,
+									children: t(`config.${providerScope}`)
+								}),
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+									className: css.providerState,
+									"data-enabled": enabled || void 0,
+									children: t(stateKey)
+								}),
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Switch, {
+									className: css.providerToggle,
+									checked: enabled,
+									label: t("config.providerToggleAria", { provider: props.provider.label }),
+									disabled: controlDisabled,
+									onChange: (next) => void toggle(next)
+								})
+							]
+						})]
+					}),
+					failed !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
+						className: css.providerToggleError,
+						role: "alert",
+						children: t("config.providerToggleFailed", { error: failed })
+					}),
+					enabled && expanded && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+						className: css.providerInlineBody,
+						children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(ProviderServiceForm, {
+							provider: props.provider,
+							service: props.service,
+							activeScope: props.activeScope,
+							disabled: controlDisabled,
+							onSave: props.onSave
+						})
+					})
+				]
+			});
+		}
+		/** The Providers that store Memory Spaces, one card each, with what their services need. */
+		function ProviderSettingsSection(props) {
+			const t = useT();
+			const css = dsh_mnemon_client.memorySettingsStyles;
+			const { client, retained } = props;
+			const initialCatalog = client === void 0 ? void 0 : retainedCatalog(retained);
+			const [catalog, setCatalog] = (0, react.useState)(() => initialCatalog ?? EMPTY_PROVIDER_CATALOG);
+			const [loading, setLoading] = (0, react.useState)(client !== void 0 && initialCatalog === void 0);
+			const [failed, setFailed] = (0, react.useState)(null);
+			const loadRequests = (0, dsh_mnemon_client.useRequestVersion)();
+			const load = (0, react.useCallback)(async (quiet = false) => {
+				if (client === void 0) return;
+				const request = loadRequests.begin();
+				if (!quiet) setLoading(true);
+				setFailed(null);
+				try {
+					const next = await client.providerServices();
+					if (!loadRequests.isCurrent(request)) return;
+					retained.set(RETAINED_PROVIDERS, next);
+					setCatalog(next);
+				} catch (reason) {
+					if (!loadRequests.isCurrent(request)) return;
+					setFailed((0, dsh_mnemon_client.message)(reason));
+				} finally {
+					if (!quiet && loadRequests.isCurrent(request)) setLoading(false);
+				}
+			}, [
+				client,
+				loadRequests,
+				retained
+			]);
+			const blocked = props.blocked !== void 0;
+			const pending = props.pending === true;
+			(0, react.useEffect)(() => {
+				if (blocked || pending) {
+					loadRequests.begin();
+					setLoading(pending);
+					setFailed(null);
+					return;
+				}
+				const cached = client === void 0 ? void 0 : retainedCatalog(retained);
+				setCatalog(cached ?? EMPTY_PROVIDER_CATALOG);
+				setLoading(client !== void 0 && cached === void 0);
+				load(cached !== void 0);
+			}, [
+				blocked,
+				client,
+				load,
+				loadRequests,
+				pending,
+				props.refreshKey,
+				retained
+			]);
+			const acceptService = (0, react.useCallback)((service) => {
+				setCatalog((current) => {
+					const items = current.items.some((item) => item.providerId === service.providerId) ? current.items.map((item) => item.providerId === service.providerId ? service : item) : [...current.items, service];
+					const next = {
+						...current,
+						items,
+						generatedAt: (/* @__PURE__ */ new Date()).toISOString()
+					};
+					if (client !== void 0) retained.set(RETAINED_PROVIDERS, next);
+					return next;
+				});
+			}, [client, retained]);
+			const save = async (provider, draft) => {
+				if (client === void 0) throw new Error(t("config.providerUnavailable"));
+				const settings = Object.fromEntries(Object.entries(draft.settings).filter(([key, value]) => serviceFields(provider).find((field) => field.key === key)?.input !== "secret" || String(value).trim() !== ""));
+				acceptService(await client.updateProviderService({
+					providerId: provider.id,
+					settings,
+					enabled: true
+				}));
+				props.onChanged?.();
+			};
+			const toggle = async (provider, enabled) => {
+				if (client === void 0) throw new Error(t("config.providerUnavailable"));
+				const updated = await client.updateProviderService({
+					providerId: provider.id,
+					settings: {},
+					enabled
+				});
+				acceptService(updated);
+				props.onChanged?.();
+				return updated;
+			};
+			const disabled = props.disabled || props.scopeChanging || client === void 0 || loading || catalog.generatedAt === "";
+			if (blocked) return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.Reveal, { children: props.blocked }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+				className: css.providerList,
+				children: props.leading
+			})] });
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
+				/* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.Reveal, { children: props.notice ?? null }),
+				props.scopeChanging && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
+					className: css.scopeChanging,
+					role: "status",
+					children: t("config.saveScopeBeforeProviders")
+				}),
+				props.workspaceLabel !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
+					className: css.providerTarget,
+					children: t("config.providerTargetWorkspace", { workspace: props.workspaceLabel })
+				}),
+				loading && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+					className: css.visuallyHidden,
+					role: "status",
+					children: t("config.loadingProviders")
+				}),
+				failed !== null && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+					className: css.providerLoadError,
+					children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+						className: css.error,
+						children: t("config.providerLoadFailed", { error: failed })
+					}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+						variant: "ghost",
+						size: "sm",
+						onClick: () => void load(),
+						children: t("config.retryProviders")
+					})]
+				}),
+				/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+					className: css.providerList,
+					"aria-busy": loading,
+					children: [props.leading, catalog.providers.map((provider) => {
+						const service = catalog.items.find((item) => item.providerId === provider.id) ?? {
+							providerId: provider.id,
+							enabled: false,
+							configured: false,
+							settings: {},
+							configuredSecrets: []
+						};
+						return /* @__PURE__ */ (0, react_jsx_runtime.jsx)(ProviderPanel, {
+							provider,
+							service,
+							disabled,
+							activeScope: props.activeScope,
+							onSave: save,
+							onToggle: toggle
+						}, provider.id);
+					})]
+				})
+			] });
+		}
+		//#endregion
+		//#region src/client/settings-client.ts
+		const clients = /* @__PURE__ */ new WeakMap();
+		function memorySpacesSettingsClient(operations) {
+			let client = clients.get(operations);
+			if (client === void 0) {
+				client = {
+					statusSummary: () => operations.read("status-summary"),
+					providerServices: () => operations.read("provider-services"),
+					updateProviderService: (request) => operations.write("provider-service-update", JSON.parse(JSON.stringify(request))),
+					embeddingStatus: () => operations.read("embedding-status"),
+					fillEmbeddings: (memoryBodyId) => operations.write("embedding-fill", { memoryBodyId })
+				};
+				clients.set(operations, client);
+			}
+			return client;
+		}
+		//#endregion
+		//#region src/client/settings.tsx
+		/** The package these settings belong to, as Memory Spaces' plugin declaration names it. */
+		const PACKAGE_NAME = "dsh-mnemon-source-memory-spaces";
+		/**
+		* Whether dsh-mnemon yields the settings it keeps for Memory Spaces to these.
+		* One that exports the priority it keeps them at promises both that they do
+		* not collide with these and that it lends these `host`. dsh-mnemon 0.5.31 and
+		* earlier draw them itself and lend nothing, so registering them there would
+		* show a second, unworkable copy.
+		*/
+		function yieldsComponentSettings(client) {
+			return typeof client.MNEMON_COMPONENT_FALLBACK_PRIORITY === "number";
+		}
+		/** Memory Spaces' own settings on its page under Plugins: its Providers and the embedding Mnemon Native reads. */
+		function installMemorySpacesSettings(ctx) {
+			const { locale } = ctx;
+			return (0, dsh_mnemon_client.installMemoryComponentUI)(ctx, {
+				packageName: PACKAGE_NAME,
+				settings: (props) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)(MemorySpacesSettings, {
+					...props,
+					...locale === void 0 ? {} : { locale }
+				})
+			});
+		}
+		function embeddingDraft(value) {
+			const embedding = value?.embedding;
+			return {
+				endpoint: embedding?.endpoint?.trim() || "http://localhost:11434",
+				model: embedding?.model?.trim() || "nomic-embed-text",
+				apiKey: "",
+				apiKeyEnv: embedding?.apiKeyEnv ?? "",
+				clearApiKey: false,
+				protocol: embedding?.protocol ?? "auto"
+			};
+		}
+		function validEmbeddingEndpoint(value) {
+			const endpoint = value.trim();
+			if (endpoint === "" || endpoint.length > 2048) return false;
+			try {
+				const parsed = new URL(endpoint);
+				return ["http:", "https:"].includes(parsed.protocol) && parsed.username === "" && parsed.password === "" && !endpoint.includes("?") && !endpoint.includes("#");
+			} catch {
+				return false;
+			}
+		}
+		function validEmbeddingModel(value) {
+			const model = value.trim();
+			return model.length > 0 && model.length <= 200 && !/[\u0000-\u001f\u007f]/u.test(model);
+		}
+		function validEmbeddingApiKey(value) {
+			const key = value.trim();
+			return key.length <= 2048 && !/[\u0000-\u001f\u007f]/u.test(key);
+		}
+		const validProtocol = (protocol) => MNEMON_EMBEDDING_PROTOCOLS.includes(protocol);
+		function embeddingProblem(draft, t) {
+			if (!validEmbeddingEndpoint(draft.endpoint)) return t("config.embeddingEndpointInvalid");
+			if (!validEmbeddingModel(draft.model)) return t("config.embeddingModelInvalid");
+			if (!validEmbeddingApiKey(draft.apiKey)) return t("config.embeddingApiKeyInvalid");
+			if (draft.apiKeyEnv.trim() && !EMBEDDING_ENVIRONMENT_NAME.test(draft.apiKeyEnv.trim())) return t("config.embeddingEnvInvalid");
+			if (draft.apiKey.trim() && draft.apiKeyEnv.trim()) return t("config.embeddingAuthChoice");
+			if (!validProtocol(draft.protocol)) return t("config.embeddingProtocolInvalid");
+			return null;
+		}
+		/** The stored value: a switched-off override keeps only the fields that are valid. */
+		function embeddingValue(enabled, draft, secure, legacyKey = "") {
+			const auth = secure ? {
+				apiKey: draft.apiKey.trim(),
+				apiKeyEnv: draft.apiKeyEnv.trim(),
+				...draft.clearApiKey ? { clearApiKey: true } : {}
+			} : { apiKey: legacyKey };
+			const endpoint = draft.endpoint.trim().replace(/\/+$/u, "");
+			if (enabled) return {
+				enabled: true,
+				endpoint,
+				model: draft.model.trim(),
+				protocol: draft.protocol,
+				...auth
+			};
+			return {
+				enabled: false,
+				...validEmbeddingEndpoint(draft.endpoint) ? { endpoint } : {},
+				...validEmbeddingModel(draft.model) ? { model: draft.model.trim() } : {},
+				...validProtocol(draft.protocol) ? { protocol: draft.protocol } : {},
+				...validEmbeddingApiKey(draft.apiKey) ? auth : {}
+			};
+		}
+		/**
+		* Memory Spaces' own settings: the Providers that store its spaces, Mnemon
+		* Native first with the embedding runtime only Native reads. They need what
+		* dsh-mnemon lends them; without it they show nothing. With DSH's language
+		* service they translate as dsh-mnemon drew them, through its language chain.
+		*/
+		function MemorySpacesSettings(props) {
+			if (props.host === void 0) return null;
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.MemorySourcePageFrame, {
+				locale: props.language,
+				children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(SettingsTranslation, {
+					locale: props.locale,
+					language: props.language,
+					children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(SpacesSettings, {
+						page: props,
+						host: props.host
+					})
+				})
+			});
+		}
+		const noLocaleChanges = () => () => {};
+		function SettingsTranslation(props) {
+			const { locale, language } = props;
+			const subscribe = (0, react.useCallback)((listener) => locale?.subscribe?.(listener) ?? noLocaleChanges(), [locale]);
+			const getChain = (0, react.useCallback)(() => {
+				const snapshot = locale?.getSnapshot?.();
+				return snapshot === void 0 ? "" : languageChain(snapshot).join("\n");
+			}, [locale]);
+			const chain = (0, react.useSyncExternalStore)(subscribe, getChain, getChain);
+			const translate = (0, react.useMemo)(() => locale === void 0 ? void 0 : settingsTranslate(locale, chain === "" ? void 0 : chain.split("\n"), language), [
+				locale,
+				chain,
+				language
+			]);
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsx)(SourceTranslation, {
+				value: translate,
+				children: props.children
+			});
+		}
+		const RETAINED_CLI = "status-summary";
+		function SpacesSettings({ page, host }) {
+			const t = useT();
+			const css = dsh_mnemon_client.memorySettingsStyles;
+			const { configuration, retained } = host;
+			const snapshot = (0, react.useSyncExternalStore)(configuration.subscribe, configuration.getSnapshot, configuration.getSnapshot);
+			const value = snapshot.value;
+			const client = (0, react.useMemo)(() => host.operations === void 0 ? void 0 : memorySpacesSettingsClient(host.operations), [host.operations]);
+			const saved = embeddingDraft(value);
+			const secure = value?.embedding?.apiKeyStorage !== void 0;
+			const legacy = value?.embedding?.apiKeyStorage === "legacy";
+			const connectionValue = (enabled, draft) => embeddingValue(enabled, draft, secure, value?.embedding?.apiKey);
+			const managedSaved = value?.embedding?.enabled === true;
+			const managed = (0, dsh_mnemon_client.useLive)(managedSaved, async (enabled) => {
+				await configuration.set("embedding", connectionValue(enabled, saved));
+			});
+			const form = (0, dsh_mnemon_client.useStaged)(saved, async (draft) => {
+				await configuration.set("embedding", connectionValue(managedSaved, draft));
+				form.edit({
+					apiKey: "",
+					clearApiKey: false
+				});
+			});
+			const [nativeCliFound, setNativeCliFound] = (0, react.useState)(() => retained.get(RETAINED_CLI)?.commandFound);
+			const [status, setStatus] = (0, react.useState)({ state: "idle" });
+			const [fill, setFill] = (0, react.useState)(void 0);
+			const statusRequest = (0, react.useRef)(0);
+			const on = page.component.enabled;
+			(0, react.useEffect)(() => {
+				if (client === void 0 || !on) {
+					setNativeCliFound(void 0);
+					retained.delete(RETAINED_CLI);
+					return;
+				}
+				let current = true;
+				client.statusSummary().then((summary) => {
+					if (!current) return;
+					setNativeCliFound(summary.commandFound);
+					retained.set(RETAINED_CLI, { commandFound: summary.commandFound });
+				}, () => {
+					if (current) {
+						setNativeCliFound(void 0);
+						retained.delete(RETAINED_CLI);
+					}
+				});
+				return () => {
+					current = false;
+				};
+			}, [
+				client,
+				on,
+				retained,
+				snapshot.revision
+			]);
+			(0, react.useEffect)(() => () => {
+				retained.delete(RETAINED_CLI);
+			}, [retained]);
+			(0, react.useEffect)(() => {
+				statusRequest.current += 1;
+				setStatus({ state: "idle" });
+				setFill(void 0);
+			}, [client, snapshot.revision]);
+			if (!on) return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
+				className: css.panelNote,
+				children: t("spaces.offNote")
+			});
+			const test = () => {
+				if (client === void 0) return;
+				const request = statusRequest.current + 1;
+				statusRequest.current = request;
+				setStatus((previous) => ({
+					state: "loading",
+					...previous.value === void 0 ? {} : { value: previous.value }
+				}));
+				client.embeddingStatus().then((value) => {
+					if (statusRequest.current === request) setStatus({
+						state: "ready",
+						value
+					});
+				}, (reason) => {
+					if (statusRequest.current === request) setStatus({
+						state: "error",
+						error: (0, dsh_mnemon_client.message)(reason)
+					});
+				});
+			};
+			const fillSpace = (space) => {
+				if (client === void 0 || fill?.state === "running") return;
+				const target = {
+					memoryBodyId: space.memoryBodyId,
+					name: space.name
+				};
+				setFill({
+					...target,
+					state: "running"
+				});
+				client.fillEmbeddings(space.memoryBodyId).then((result) => {
+					setFill({
+						...target,
+						state: "done",
+						result
+					});
+					test();
+				}, (reason) => {
+					setFill({
+						...target,
+						state: "failed",
+						error: (0, dsh_mnemon_client.message)(reason)
+					});
+					test();
+				});
+			};
+			const activeScope = value?.storageScope === "workspace" || value?.storageScope === "workspaces" ? "workspace" : "global";
+			const readOnly = value?.writeEnabled === false;
+			const disabled = !page.writable || snapshot.status === "loading" || !snapshot.writable;
+			const cliMissing = nativeCliFound === false;
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("section", {
+				className: css.panelSection,
+				"aria-labelledby": "mnemon-spaces-providers",
+				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+					className: css.panelHeading,
+					children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("h3", {
+						id: "mnemon-spaces-providers",
+						children: t("config.providersTitle")
+					}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", { children: t("config.providersDescription") })]
+				}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)(ProviderSettingsSection, {
+					client,
+					retained,
+					...activeScope !== "workspace" || page.workspace?.label === void 0 ? {} : { workspaceLabel: page.workspace.label },
+					activeScope,
+					refreshKey: snapshot.revision ?? 0,
+					disabled: disabled || readOnly,
+					scopeChanging: false,
+					onChanged: host.changed,
+					...readOnly ? { notice: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.Callout, {
+						tone: "warning",
+						className: css.groupCallout,
+						title: t("config.providersReadOnlyTitle"),
+						children: t("config.providersReadOnlyDetail")
+					}) } : {},
+					leading: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(NativeProviderCard, {
+						activeScope,
+						cliMissing,
+						t,
+						children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(EmbeddingEditor, {
+							secure,
+							credentialSaved: value?.embedding?.apiKeyStorage === "credentials",
+							managed: managed.value,
+							draft: form.draft,
+							disabled,
+							connectionAvailable: client !== void 0,
+							cliMissing,
+							changing: form.dirty,
+							status,
+							t,
+							onEdit: form.edit,
+							onTest: () => {
+								setFill(void 0);
+								test();
+							},
+							canFill: !disabled && !readOnly,
+							fill,
+							onFill: fillSpace,
+							onManaged: (on) => {
+								if (!on) form.discard();
+								managed.set(on);
+							},
+							actions: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.WriteFailure, {
+									error: managed.failed,
+									t
+								}),
+								legacy && !form.dirty && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+									variant: "outline",
+									size: "sm",
+									disabled: disabled || form.saving,
+									onClick: () => {
+										form.apply();
+									},
+									children: t("config.embeddingMigrateKey")
+								}),
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.PanelActions, {
+									dirty: form.dirty,
+									saving: form.saving,
+									invalid: embeddingProblem(form.draft, t),
+									failed: form.failed,
+									applied: form.applied,
+									disabled,
+									t,
+									onDiscard: form.discard,
+									onApply: () => {
+										form.apply();
+									}
+								})
+							] })
+						})
+					})
+				})]
+			});
+		}
+		/** Mnemon Native, listed first among the Providers; its body holds the settings only Native reads. */
+		function NativeProviderCard(props) {
+			const css = dsh_mnemon_client.memorySettingsStyles;
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("details", {
+				className: css.providerRow,
+				"data-provider": NATIVE_PROVIDER_ID,
+				"data-native": "",
+				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("summary", {
+					className: css.providerRowHeader,
+					children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
+						className: css.providerIdentity,
+						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(ProviderIcon, {
+							providerId: NATIVE_PROVIDER_ID,
+							icon: {
+								kind: "brand",
+								value: "mnemon"
+							},
+							className: css.providerMark
+						}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", { children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("strong", { children: props.t("config.nativeName") }), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("small", { children: props.t("config.nativeSummary") })] })]
+					}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("span", {
+						className: css.providerEnableControl,
+						children: [
+							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+								className: css.providerScopeTag,
+								"data-scope": props.activeScope,
+								children: props.t(`config.${props.activeScope}`)
+							}),
+							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+								className: css.providerState,
+								"data-enabled": props.cliMissing ? void 0 : "",
+								children: props.t(props.cliMissing ? "config.nativeCliMissing" : "config.officialNative")
+							}),
+							/* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconChevronDownOutlineRegular, {
+								className: css.providerChevron,
+								size: 14
+							})
+						]
+					})]
+				}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+					className: css.providerInlineBody,
+					children: props.children
+				})]
+			});
+		}
+		/** Selected-model usability and stored-vector coverage; the protocol appears only when the Host reports one. */
+		function embeddingStatusText(t, status) {
+			const coverage = {
+				embedded: status.embedded,
+				total: status.totalInsights,
+				coverage: status.coverage
+			};
+			return status.protocol === void 0 ? t(status.available ? "config.embeddingStatusAvailable" : "config.embeddingStatusUnavailable", {
+				model: status.model,
+				...coverage
+			}) : t(status.available ? "config.embeddingStatusAvailableWithProtocol" : "config.embeddingStatusUnavailableWithProtocol", {
+				model: status.model,
+				protocol: status.protocol,
+				...coverage
+			});
+		}
+		/** The embedding runtime: the switch applies at once; the connection fields, shown while DSH manages it, wait for Apply. */
+		function EmbeddingEditor(props) {
+			const { draft, t, status } = props;
+			const css = dsh_mnemon_client.memorySettingsStyles;
+			const feedback = props.cliMissing ? t("config.embeddingCliMissing") : props.changing ? t("config.embeddingSaveBeforeTest") : status.state === "loading" ? t("config.embeddingTesting") : status.state === "error" ? t("config.embeddingStatusFailed", { error: status.error ?? "" }) : status.state === "ready" && status.value !== void 0 ? embeddingStatusText(t, status.value) : !props.connectionAvailable ? t("config.embeddingTestUnavailable") : t("config.embeddingNotTested");
+			const text = (field, type, label, valid, placeholder) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("label", { children: [label, /* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
+				type,
+				"aria-label": label,
+				"aria-invalid": !valid,
+				value: draft[field],
+				disabled: props.disabled || (field === "apiKey" || field === "apiKeyEnv") && (!props.secure || draft.clearApiKey),
+				autoComplete: "off",
+				spellCheck: false,
+				autoCapitalize: "none",
+				autoCorrect: "off",
+				placeholder,
+				onChange: (event) => props.onEdit({ [field]: event.target.value })
+			})] });
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("section", {
+				className: css.editor,
+				"aria-labelledby": "mnemon-embedding-heading",
+				children: [
+					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+						className: css.editorHeading,
+						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("h3", {
+							id: "mnemon-embedding-heading",
+							children: t("config.embeddingTitle")
+						}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", { children: t("config.embeddingDescription") })]
+					}),
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.ToggleRow, {
+						id: "mnemon-embedding-managed",
+						label: t("config.embeddingManaged"),
+						hint: t("config.embeddingManagedHint"),
+						checked: props.managed,
+						disabled: props.disabled,
+						onChange: props.onManaged
+					}),
+					props.managed && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [
+						/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+							className: css.fieldGrid,
+							children: [
+								text("endpoint", "url", t("config.embeddingEndpoint"), validEmbeddingEndpoint(draft.endpoint), "http://localhost:11434"),
+								text("model", "text", t("config.embeddingModel"), validEmbeddingModel(draft.model), "nomic-embed-text"),
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.SelectField, {
+									label: t("config.embeddingProtocol"),
+									value: draft.protocol,
+									disabled: props.disabled,
+									options: [
+										{
+											value: "auto",
+											label: t("config.embeddingProtocolAuto")
+										},
+										{
+											value: "ollama",
+											label: t("config.embeddingProtocolOllama")
+										},
+										{
+											value: "openai",
+											label: t("config.embeddingProtocolOpenai")
+										}
+									],
+									onChange: (protocol) => props.onEdit({ protocol })
+								}),
+								text("apiKey", "password", t("config.embeddingApiKey"), validEmbeddingApiKey(draft.apiKey), t("config.embeddingKeyPlaceholder")),
+								props.secure && text("apiKeyEnv", "text", t("config.embeddingApiKeyEnv"), !draft.apiKeyEnv.trim() || EMBEDDING_ENVIRONMENT_NAME.test(draft.apiKeyEnv.trim()), "MY_EMBEDDING_API_KEY")
+							]
+						}),
+						props.secure ? /* @__PURE__ */ (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [props.credentialSaved && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
+							className: css.editorNote,
+							children: t("config.embeddingCredentialSaved")
+						}), /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("label", {
+							className: css.providerBoolean,
+							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
+								type: "checkbox",
+								checked: draft.clearApiKey,
+								disabled: props.disabled,
+								onChange: (event) => props.onEdit({
+									clearApiKey: event.target.checked,
+									apiKey: "",
+									apiKeyEnv: ""
+								})
+							}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", { children: t("config.embeddingClearKey") })]
+						})] }) : /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
+							className: css.editorNote,
+							children: t("config.embeddingUpgradeHost")
+						}),
+						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
+							className: css.editorNote,
+							children: t("config.embeddingSecurity")
+						})
+					] }),
+					props.actions,
+					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+						className: css.embeddingTest,
+						"aria-live": "polite",
+						children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+							className: status.state === "error" ? css.error : void 0,
+							role: status.state === "error" ? "alert" : void 0,
+							children: feedback
+						}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+							variant: "outline",
+							size: "sm",
+							disabled: props.disabled || !props.connectionAvailable || props.cliMissing || props.changing || status.state === "loading" || props.fill?.state === "running",
+							onClick: props.onTest,
+							children: t("config.embeddingTest")
+						})]
+					}),
+					!props.cliMissing && !props.changing && (status.state === "ready" || status.state === "loading") && (status.value?.spaces ?? []).length > 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(EmbeddingSpaces, {
+						spaces: status.value.spaces,
+						available: status.value.available,
+						canFill: props.canFill,
+						counting: status.state === "loading",
+						fill: props.fill,
+						onFill: props.onFill,
+						t
+					}),
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)(EmbeddingFillOutcome, {
+						fill: props.fill,
+						t
+					})
+				]
+			});
+		}
+		/**
+		* Each Mnemon Native space's vectors under the status line. Mnemon counts one Store at a
+		* time, so the total alone could read as every space's health while one lacked vectors (#392).
+		* A space that lacks them can have them filled in here while the embedding service answers.
+		*/
+		function EmbeddingSpaces(props) {
+			const { t, fill } = props;
+			const css = dsh_mnemon_client.memorySettingsStyles;
+			const missing = (space) => space.error === void 0 && space.embedded < space.totalInsights;
+			const fillable = props.available && props.canFill;
+			const running = fill?.state === "running" ? fill.memoryBodyId : void 0;
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+				className: css.embeddingSpaces,
+				children: [
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("small", {
+						id: "mnemon-embedding-spaces",
+						children: t("config.embeddingSpaces")
+					}),
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("ul", {
+						"aria-labelledby": "mnemon-embedding-spaces",
+						children: props.spaces.map((space) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("li", {
+							"data-missing": missing(space) ? "" : void 0,
+							"data-failed": space.error === void 0 ? void 0 : "",
+							children: [
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+									className: css.embeddingSpaceName,
+									title: space.name,
+									children: space.name
+								}),
+								!space.active && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+									className: css.embeddingSpaceState,
+									children: t("common.inactive")
+								}),
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+									className: css.embeddingSpaceCount,
+									children: space.error === void 0 ? t("config.embeddingSpaceCounts", {
+										embedded: space.embedded,
+										total: space.totalInsights,
+										coverage: space.coverage
+									}) : t("config.embeddingSpaceFailed", { error: space.error })
+								}),
+								fillable && missing(space) && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+									variant: "ghost",
+									size: "sm",
+									disabled: running !== void 0 || props.counting,
+									"aria-busy": running === space.memoryBodyId,
+									"aria-label": t(running === space.memoryBodyId ? "config.embeddingFillingLabel" : "config.embeddingFillLabel", { name: space.name }),
+									onClick: () => props.onFill(space),
+									children: running === space.memoryBodyId ? t("config.embeddingFilling") : t("config.embeddingFill")
+								})
+							]
+						}, space.memoryBodyId))
+					}),
+					props.spaces.some(missing) && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", { children: t(!props.canFill ? "config.embeddingMissing" : props.available ? "config.embeddingMissingFill" : "config.embeddingMissingOffline") }),
+					props.spaces.some((space) => space.error !== void 0) && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", { children: t("config.embeddingSpacesUnread") })
+				]
+			});
+		}
+		/** What the last fill did. It stays while the counts are read again, and reads as a failure when it wrote no vector. */
+		function EmbeddingFillOutcome(props) {
+			const { fill, t } = props;
+			const css = dsh_mnemon_client.memorySettingsStyles;
+			if (fill === void 0 || fill.state === "running") return null;
+			const failure = (text) => /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
+				className: `${css.embeddingFillOutcome} ${css.error}`,
+				role: "alert",
+				children: text
+			});
+			if (fill.state === "failed") return failure(t("config.embeddingFillFailed", {
+				name: fill.name,
+				error: fill.error
+			}));
+			const { filled, remaining, model, stopped } = fill.result;
+			const name = fill.name;
+			if (remaining > 0 && stopped === "refused" && filled === 0) return failure(t("config.embeddingFillRefused", {
+				name,
+				model
+			}));
+			const text = remaining === 0 ? filled > 0 ? t("config.embeddingFillDone", {
+				name,
+				filled
+			}) : void 0 : stopped === "refused" ? t("config.embeddingFillPartly", {
+				name,
+				filled,
+				remaining
+			}) : t("config.embeddingFillMore", {
+				name,
+				filled,
+				remaining
+			});
+			return text === void 0 ? null : /* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
+				className: css.embeddingFillOutcome,
+				role: "status",
+				children: text
+			});
+		}
 		//#endregion
 		//#region src/client/ui.tsx
 		/** The adapter never gets a transport or chooses another Source instance. */
@@ -4082,16 +6136,29 @@ window.__ModuleLoader__.load({
 			const input = (value) => JSON.parse(JSON.stringify(value));
 			return {
 				canAssist: client.canAssist,
-				status: () => client.read("status-summary"),
-				bodies: () => client.read("bodies"),
-				bodyDirectory: () => client.read("body-directory"),
-				graph: (memoryBodyIds) => client.read("graph", input({ memoryBodyIds })),
+				status: () => client.read("status-summary", null, { coalesce: true }),
+				bodies: () => client.read("bodies", null, { coalesce: true }),
+				bodyDirectory: () => client.read("body-directory", null, { coalesce: true }),
+				graph: (memoryBodyIds) => client.read("graph", input({ memoryBodyIds }), { coalesce: true }),
 				list: (request) => client.read("list", input(request ?? {})),
 				entities: (entity, limit) => client.read("entities", input({
 					entity,
 					limit
 				})),
-				search: (request) => client.read("search", input(request)),
+				entityMemories: (entity, offset, limit) => client.read("entity-memories", input({
+					entity,
+					offset,
+					limit
+				})),
+				entityRelated: (entity, limit, view) => client.read("entity-related", input({
+					entity,
+					limit,
+					view
+				})),
+				search: (request) => client.read("search", input({
+					...request,
+					inspect: true
+				})),
 				related: (id, memoryBodyId) => client.read("related", input({
 					id,
 					memoryBodyId
@@ -4111,6 +6178,7 @@ window.__ModuleLoader__.load({
 					...request
 				}), true),
 				deleteBody: (memoryBodyId) => client.mutate("body-delete", { memoryBodyId }, true),
+				rediscoverBodies: () => client.mutate("provider-rediscover", { trigger: "manual" }, true),
 				agentSearch: (request) => client.assist("agent-search", input(request), false),
 				supervise: (content, idempotencyKey) => client.assist("supervise", input({
 					content,
@@ -4148,10 +6216,22 @@ window.__ModuleLoader__.load({
 			const [rememberOpen, setRememberOpen] = (0, react.useState)(props.page === "remember");
 			const [strategyOpen, setStrategyOpen] = (0, react.useState)(false);
 			const [error, setError] = (0, react.useState)(null);
+			const headerRef = (0, react.useRef)(null);
+			const revealElement = (0, react.useCallback)((element) => {
+				props.onRevealElement?.(element, (headerRef.current?.getBoundingClientRect().height ?? 0) + 14);
+			}, [props.onRevealElement]);
 			const refresh = (0, react.useCallback)(() => {
 				setRevision((value) => value + 1);
 				props.onRefresh?.();
 			}, [props.onRefresh]);
+			const refreshKey = (0, react.useRef)(props.refreshKey);
+			const [reloads, setReloads] = (0, react.useState)(0);
+			(0, react.useEffect)(() => {
+				if (refreshKey.current === props.refreshKey) return;
+				refreshKey.current = props.refreshKey;
+				setRevision((value) => value + 1);
+				setReloads((value) => value + 1);
+			}, [props.refreshKey]);
 			(0, react.useEffect)(() => {
 				setPage(props.management !== void 0 && props.navigationInput === void 0 ? rememberedPages.get(props.management) ?? (props.page === "remember" ? "spaces" : props.page) : props.page === "remember" ? "spaces" : props.page);
 				setRememberOpen(props.page === "remember");
@@ -4161,6 +6241,9 @@ window.__ModuleLoader__.load({
 			(0, react.useEffect)(() => {
 				if (props.management !== void 0) rememberedPages.set(props.management, page);
 			}, [props.management, page]);
+			(0, react.useLayoutEffect)(() => {
+				props.onResetScroll?.();
+			}, [page, props.onResetScroll]);
 			(0, react.useEffect)(() => {
 				let active = true;
 				setError(null);
@@ -4199,10 +6282,11 @@ window.__ModuleLoader__.load({
 				}),
 				/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("section", {
 					className: sidebarCss.memoryWorkspace,
+					ref: headerRef,
 					children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)(dsh_mnemon_client.PageHeader, {
 						title: t("nav.spaces"),
 						description: t("overview.description"),
-						meta: writable ? t("common.agentSupervised") : activationEnabled ? t("common.activationOnly") : t("common.readOnly"),
+						...writable ? {} : { meta: activationEnabled ? t("common.activationOnly") : t("common.readOnly") },
 						action: /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 							className: css.memoryHeaderActions,
 							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
@@ -4236,9 +6320,11 @@ window.__ModuleLoader__.load({
 					})]
 				}),
 				page === "spaces" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(OverviewPage, {
+					active: props.active ?? true,
 					client,
 					metadataClient: client,
 					revision,
+					reloadKey: reloads,
 					activationEnabled,
 					writeEnabled: writable,
 					agentAvailable,
@@ -4258,7 +6344,8 @@ window.__ModuleLoader__.load({
 					status,
 					seed,
 					writeEnabled: writable,
-					onForget: forget
+					onForget: forget,
+					onRevealElement: revealElement
 				}),
 				page === "entities" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(EntitiesPage, {
 					client,
@@ -4281,9 +6368,13 @@ window.__ModuleLoader__.load({
 					memoryBodies: bodies,
 					writeEnabled: writable,
 					seed,
+					embeddingManaged: status?.embeddingManaged,
 					onMutate: refresh,
 					onClose: () => setRememberOpen(false),
-					onComplete: () => setRememberOpen(false)
+					onView: () => {
+						setRememberOpen(false);
+						setPage("content");
+					}
 				}),
 				strategyOpen && preferences !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(PersistenceStrategyDialog, {
 					client,
@@ -4357,15 +6448,19 @@ window.__ModuleLoader__.load({
 		}
 		const inject = ["slots", "locale"];
 		function apply(ctx) {
-			installMemorySpacesUI(ctx, ctx.locale?.bind("mnemon") ?? dsh_mnemon_client.translateEn);
+			installMemorySpacesUI(ctx, ctx.locale.bind("mnemon"));
+			if (yieldsComponentSettings(dsh_mnemon_client)) installMemorySpacesSettings(ctx);
 		}
 		//#endregion
 		exports.EntitiesPage = EntitiesPage;
 		exports.ExplorePage = ExplorePage;
 		exports.ListPage = ListPage;
+		exports.MemorySpacesSettings = MemorySpacesSettings;
 		exports.MemorySpacesSourcePage = MemorySpacesSourcePage;
+		exports.NATIVE_PROVIDER_ID = NATIVE_PROVIDER_ID;
 		exports.OverviewPage = OverviewPage;
 		exports.PersistenceStrategyDialog = PersistenceStrategyDialog;
+		exports.ProviderIcon = ProviderIcon;
 		exports.RememberPage = RememberPage;
 		exports.apply = apply;
 		exports.inject = inject;

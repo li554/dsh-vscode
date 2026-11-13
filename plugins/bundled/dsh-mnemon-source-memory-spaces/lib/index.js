@@ -1,12 +1,12 @@
-import { findMnemonCommand, isMnemonExecutable, mnemonNpmLauncher, nodeLauncherEnvironment } from "./native-cli.js";
-import { CATEGORIES as CATEGORIES$1, EDGE_TYPES, INTENTS as INTENTS$1, MNEMON_EMBEDDING_PROTOCOLS, SOURCES as SOURCES$1 } from "./contracts.js";
-import { a as MemoryProviderCatalog, i as EMPTY_MEMORY_PROVIDER_CATALOG, n as PrivateMemorySpaceProviderHost, r as MemoryProviderAdapterRegistry, t as createMemorySpaceProviderPlugin } from "./plugin-DlsNeZbQ.js";
-import { t as runProcess } from "./process-BvrgxPNP.js";
+import { findMnemonCommand, isMnemonExecutable, resolveMnemonInvocation } from "./native-cli.js";
+import { CATEGORIES, EDGE_TYPES, EMBEDDING_CREDENTIAL_REFERENCE, EMBEDDING_ENVIRONMENT_NAME, INTENTS, MEMORY_PLACEMENT_CAPABILITIES, MEMORY_PROVIDER_REGISTRY_FILE, MEMORY_SPACES_DIRECTORY, MEMORY_SPACE_DATABASE_FILE, MEMORY_SPACE_DESCRIPTION_MAX_LENGTH, MEMORY_SPACE_ID_PATTERN, MEMORY_SPACE_REGISTRY_FILE, MNEMON_ACTIVE_STORE_FILE, MNEMON_EMBEDDING_PROTOCOLS, NATIVE_PROVIDER_ID, SOURCES, isNativeProvider, normalizeEntityKey } from "./contracts.js";
+import { a as MemoryProviderCatalog, i as EMPTY_MEMORY_PROVIDER_CATALOG, n as PrivateMemorySpaceProviderHost, r as MemoryProviderAdapterRegistry, t as createMemorySpaceProviderPlugin } from "./plugin-m1PeU1IE.js";
+import { i as runProcess, r as ProcessError } from "./adapter-D-BnWkko.js";
 import { r as defineMemorySpaceProvider } from "./definitions-DfmOqJjR.js";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { basename, dirname, isAbsolute, join, resolve } from "node:path";
-import z from "schemastery";
+import { basename, dirname, isAbsolute, join } from "node:path";
+import z from "@deepseek-ai/schemastery";
 import { createMemoryMutationReceipt, defineMemoryPlugin, defineMemorySource, installMemory, memoryConfigurationDigest, memoryInputInteger, memoryInputRecord, memoryInputStringArray, memoryInputText, truncateMemoryText, withMemoryStorageLock } from "dsh-mnemon/extension-sdk";
 import { createHash, randomUUID } from "node:crypto";
 import { COMPOSABLE_MEMORY_API_VERSION } from "dsh-mnemon/contracts";
@@ -43,10 +43,14 @@ function modelSpaceCatalog(catalog) {
 function modelStatus(status) {
 	const active = status.memoryBodies.filter((body) => body.active && body.providerEnabled !== false);
 	const unhealthy = active.filter((body) => !body.healthy);
+	const summed = active.filter((body) => body.healthy && body.stats !== void 0);
 	const relevantProviders = status.providerServices?.filter((provider) => provider.enabled || provider.configured || provider.memoryBodyCount > 0 || provider.status === "unhealthy") ?? [];
 	const providers = relevantProviders.slice(0, 16);
+	const providerReady = status.commandFound === true || (status.providerServices ?? []).some((provider) => provider.enabled && provider.configured);
+	const notice = status.memoryBodies.length > 0 ? void 0 : providerReady ? "No Memory Space exists yet, so durable memory has nowhere to go and a full MEMORY.md archives to a local file. Create and activate a Memory Space to keep durable memory." : "No Memory Space exists, and none can be created until a memory Provider is ready, so durable memory has nowhere to go and a full MEMORY.md archives to a local file. Install the Mnemon CLI for Mnemon Native, or connect another Provider on the dsh-mnemon page under Plugins, then create and activate a Memory Space.";
 	return {
 		healthy: status.healthy && unhealthy.length === 0,
+		...notice === void 0 ? {} : { notice },
 		...status.error === void 0 ? {} : { error: boundedToolText(status.error, 1e3) },
 		...status.version === void 0 ? {} : { version: boundedToolText(status.version, 120) },
 		commandFound: status.commandFound,
@@ -70,6 +74,8 @@ function modelStatus(status) {
 		})),
 		omittedProviderCount: Math.max(0, relevantProviders.length - providers.length),
 		...status.stats === void 0 ? {} : { aggregate: {
+			scope: "Sums over the active, healthy Memory Spaces whose Provider reports statistics (spaces); the others add nothing. totalInsights counts live memories, and deletedInsights the forgotten ones a Provider keeps, as Mnemon Native does.",
+			spaces: summed.length,
 			totalInsights: status.stats.totalInsights,
 			deletedInsights: status.stats.deletedInsights,
 			edgeCount: status.stats.edgeCount,
@@ -98,10 +104,40 @@ function modelJson(value, maximum) {
 //#region src/memory-spaces.ts
 const NATIVE_REGISTRY_VERSION = 1;
 const PROVIDER_REGISTRY_VERSION = 4;
-const ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/;
 const PROVIDER_ID_PATTERN = /^[a-z][a-z0-9-]{0,127}$/u;
+const DISCONNECTS_VERSION = 1;
+/** Settings whose value can name a namespace: a bank, workspace, user, tag, URI or folder. */
+const IDENTITY_INPUTS = /* @__PURE__ */ new Set([
+	"text",
+	"url",
+	"path"
+]);
 function storedProviderId(value) {
 	return typeof value === "string" && PROVIDER_ID_PATTERN.test(value);
+}
+/** Disconnected namespaces as a file holds them: sound entries only, newest last. */
+function storedDisconnects(value) {
+	if (!Array.isArray(value)) return [];
+	return value.flatMap((item) => {
+		if (typeof item !== "object" || item === null || Array.isArray(item)) return [];
+		const fields = item;
+		const externalId = typeof fields.externalId === "string" && fields.externalId.trim() !== "" && fields.externalId.trim().length <= 2e3 ? fields.externalId.trim() : void 0;
+		const connection = storedProviderConnection(fields.connection);
+		const entry = {
+			...externalId === void 0 ? {} : { externalId },
+			...Object.keys(connection).length === 0 ? {} : { connection }
+		};
+		return Object.keys(entry).length === 0 ? [] : [entry];
+	}).slice(-1e3);
+}
+/** JSON with every object's keys in order, so two equal connections compare equal. */
+function canonicalJson(value) {
+	if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+	if (value !== null && typeof value === "object") {
+		const fields = value;
+		return `{${Object.keys(fields).filter((key) => fields[key] !== void 0).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(fields[key])}`).join(",")}}`;
+	}
+	return JSON.stringify(value) ?? "null";
 }
 function storedProviderConnection(value) {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) return {};
@@ -154,10 +190,10 @@ function providerProjectionMetadata(providerCatalog, providerId, candidate) {
 	const nearestName = PROVIDER_METADATA_KEYS.map((key) => compactProviderMetadataValue(candidate.connection[key])).find((value) => value !== void 0);
 	const fallbackId = compactProviderMetadataValue(externalId) ?? externalId;
 	const name = (mappedName || nearestName || `${descriptor.label} ${fallbackId}`).slice(0, 100);
-	const description = (String(candidate.description ?? "").trim() || `${descriptor.label} memory namespace mapped from ${externalId}.`).slice(0, 1e3);
+	const description = (String(candidate.description ?? "").trim() || `${descriptor.label} memory namespace mapped from ${externalId}.`).slice(0, MEMORY_SPACE_DESCRIPTION_MAX_LENGTH);
 	return {
 		name: requiredText(name, "name", 100),
-		description: optionalText$1(description, "description", 1e3)
+		description: optionalText$1(description, "description", MEMORY_SPACE_DESCRIPTION_MAX_LENGTH)
 	};
 }
 function providerDisplayLocation(descriptor, connection) {
@@ -195,7 +231,7 @@ function normalizePlacementDecision(value, providerId, providerCatalog = EMPTY_M
 }
 function validateMemorySpaceId(value) {
 	const normalized = value.trim();
-	if (!ID_PATTERN.test(normalized)) throw new Error("memoryBodyId must match [a-zA-Z0-9][a-zA-Z0-9_-]*");
+	if (!MEMORY_SPACE_ID_PATTERN.test(normalized)) throw new Error("memoryBodyId must match [a-zA-Z0-9][a-zA-Z0-9_-]*");
 	return normalized;
 }
 /**
@@ -213,6 +249,8 @@ var MemorySpaceRegistry = class MemorySpaceRegistry {
 	directory;
 	registryPath;
 	providerRegistryPath;
+	/** The namespaces a person disconnected, which asking a Provider again leaves out (#373). */
+	disconnectsPath;
 	refreshing = false;
 	state;
 	constructor(runner, persistent = true, now = () => /* @__PURE__ */ new Date(), providerCatalog = EMPTY_MEMORY_PROVIDER_CATALOG, sharedState) {
@@ -223,11 +261,13 @@ var MemorySpaceRegistry = class MemorySpaceRegistry {
 		this.state = sharedState ?? {
 			spaces: [],
 			services: {},
-			serviceEnabled: {}
+			serviceEnabled: {},
+			disconnected: {}
 		};
-		this.directory = join(runner.effectiveDataDir(), "data");
-		this.registryPath = join(this.directory, ".dsh-memory-bodies.json");
-		this.providerRegistryPath = join(runner.effectiveDataDir(), "state", "memory-providers.json");
+		this.directory = join(runner.effectiveDataDir(), MEMORY_SPACES_DIRECTORY);
+		this.registryPath = join(this.directory, MEMORY_SPACE_REGISTRY_FILE);
+		this.providerRegistryPath = join(runner.effectiveDataDir(), "state", MEMORY_PROVIDER_REGISTRY_FILE);
+		this.disconnectsPath = join(runner.effectiveDataDir(), "state", "memory-provider-disconnects.json");
 		if (sharedState === void 0) this.reload();
 	}
 	get spaces() {
@@ -248,12 +288,18 @@ var MemorySpaceRegistry = class MemorySpaceRegistry {
 	set serviceEnabled(value) {
 		this.state.serviceEnabled = value;
 	}
+	get disconnected() {
+		return this.state.disconnected;
+	}
+	set disconnected(value) {
+		this.state.disconnected = value;
+	}
 	/** One generation-local descriptor view over the same persistent authority. */
 	withProviderCatalog(providerCatalog) {
 		return new MemorySpaceRegistry(this.runner, this.persistent, this.now, providerCatalog, this.state);
 	}
 	isNative(providerId) {
-		return this.providerTypeId(providerId) === "mnemon-native";
+		return this.providerTypeId(providerId) === NATIVE_PROVIDER_ID;
 	}
 	providerTypeId(providerId) {
 		const descriptor = this.providerCatalog.descriptor(providerId);
@@ -272,17 +318,6 @@ var MemorySpaceRegistry = class MemorySpaceRegistry {
 		const body = this.list().find((entry) => entry.id === normalized);
 		if (body === void 0) throw new Error(`unknown memory space: ${normalized}`);
 		return body;
-	}
-	openVikingConnection(id) {
-		const connection = this.providerConnection(id, "openviking");
-		return {
-			endpoint: String(connection.endpoint ?? ""),
-			targetUri: String(connection.targetUri ?? ""),
-			apiKey: String(connection.apiKey ?? ""),
-			account: String(connection.account ?? ""),
-			user: String(connection.user ?? ""),
-			actorPeerId: String(connection.actorPeerId ?? "")
-		};
 	}
 	providerConnection(id, expectedProviderId) {
 		this.refreshIfChanged();
@@ -308,9 +343,18 @@ var MemorySpaceRegistry = class MemorySpaceRegistry {
 	providerServiceEnabled(providerId) {
 		return this.isNative(providerId) ? this.runner.commandFound : this.providerServiceConfigured(providerId) && this.serviceEnabled[providerId] === true;
 	}
+	/**
+	* The provider used when none is named: Mnemon Native while its CLI is
+	* available, which keeps the long-standing default, otherwise the first
+	* other provider, in catalog order, that can take writes now.
+	*/
+	defaultProviderId() {
+		const ready = this.providerCatalog.providers.filter((provider) => this.providerServiceEnabled(provider.id));
+		return (ready.find((provider) => this.isNative(provider.id)) ?? ready[0])?.id;
+	}
 	providerServices(options = {}) {
 		this.refreshIfChanged();
-		const providers = this.providerCatalog.providers.filter((provider) => (provider.typeId ?? provider.id) !== "mnemon-native");
+		const providers = this.providerCatalog.providers.filter((provider) => !isNativeProvider(provider));
 		const items = providers.map((provider) => {
 			const connection = this.services[provider.id];
 			const publicConnection = this.providerCatalog.publicScoped(provider.id, "service", connection ?? {});
@@ -350,6 +394,8 @@ var MemorySpaceRegistry = class MemorySpaceRegistry {
 		let normalizedService = this.providerCatalog.normalizeService(providerId, service);
 		const seen = /* @__PURE__ */ new Set();
 		const existing = this.spaces.filter((body) => body.providerId === providerId);
+		const existingByExternalId = /* @__PURE__ */ new Map();
+		for (const body of existing) if (!existingByExternalId.has(body.externalId)) existingByExternalId.set(body.externalId, body);
 		const reservedIds = new Set(this.spaces.filter((body) => body.providerId !== providerId).map((body) => body.id));
 		const timestamp = this.now().toISOString();
 		const projections = discovered.map((candidate) => {
@@ -361,7 +407,7 @@ var MemorySpaceRegistry = class MemorySpaceRegistry {
 				...normalizedService,
 				...connection
 			});
-			const previous = existing.find((body) => body.externalId === externalId);
+			const previous = existingByExternalId.get(externalId);
 			let id = previous?.id ?? validateMemorySpaceId(`${providerId}-${createHash("sha256").update(externalId).digest("hex").slice(0, 24)}`);
 			let suffix = 1;
 			while (reservedIds.has(id)) {
@@ -397,7 +443,180 @@ var MemorySpaceRegistry = class MemorySpaceRegistry {
 		this.serviceEnabled[providerId] = true;
 		this.spaces = [...this.spaces.filter((body) => body.providerId !== providerId), ...projections];
 		this.save();
+		this.forgetDisconnected(providerId, this.reportedNamespaces(providerId, normalizedService, discovered));
 		return this.providerServices().items.find((item) => item.providerId === providerId);
+	}
+	/**
+	* Mount the namespaces a Provider reports that this directory has never held, as asking a
+	* Provider again finds them (#373). A space already mounted is left exactly as it is, and so is
+	* a namespace a person disconnected. A new space starts inactive: recall reads it only once a
+	* person turns it on. A space counts as a reported namespace when it has its externalId, or the
+	* settings that name it (see `holds`): a space made by hand for the same bank, or one whose
+	* externalId the Provider now writes differently. A Provider switched off, or saved with other
+	* settings since `service` was read, gets nothing: that save decides. Nothing is written when
+	* nothing is new.
+	*/
+	mountDiscovered(providerId, service, discovered) {
+		this.refreshIfChanged();
+		if (this.isNative(providerId)) throw new Error("Mnemon Native Stores are discovered from disk");
+		const current = this.services[providerId];
+		if (current === void 0 || !this.providerServiceEnabled(providerId) || canonicalJson(current) !== canonicalJson(this.providerCatalog.normalizeService(providerId, service))) return {
+			added: [],
+			disconnected: 0
+		};
+		const held = this.spaces.filter((body) => body.providerId === providerId).map((body) => ({
+			...body.externalId === void 0 ? {} : { externalId: body.externalId },
+			...body.connection === void 0 ? {} : { connection: body.connection }
+		}));
+		const disconnected = this.disconnected[providerId] ?? [];
+		const reservedIds = new Set(this.spaces.map((body) => body.id));
+		const timestamp = this.now().toISOString();
+		const added = [];
+		let stillDisconnected = 0;
+		for (const reported of this.reportedNamespaces(providerId, current, discovered)) {
+			if (held.some((body) => this.holds(providerId, current, body, reported)) || added.some((body) => body.externalId === reported.externalId)) continue;
+			if (disconnected.some((entry) => this.holds(providerId, current, entry, reported))) {
+				stillDisconnected += 1;
+				continue;
+			}
+			const { externalId, connection, candidate } = reported;
+			let id = validateMemorySpaceId(`${providerId}-${createHash("sha256").update(externalId).digest("hex").slice(0, 24)}`);
+			let suffix = 1;
+			while (reservedIds.has(id)) {
+				id = validateMemorySpaceId(`${providerId}-${createHash("sha256").update(`${externalId}:${suffix}`).digest("hex").slice(0, 24)}`);
+				suffix += 1;
+			}
+			const metadata = providerProjectionMetadata(this.providerCatalog, providerId, candidate);
+			added.push({
+				id,
+				externalId,
+				name: metadata.name,
+				description: metadata.description,
+				metadataSource: "provider",
+				active: false,
+				providerId,
+				connection,
+				createdAt: timestamp,
+				updatedAt: timestamp
+			});
+			reservedIds.add(id);
+		}
+		if (added.length > 0) {
+			this.spaces = [...this.spaces, ...added];
+			this.save();
+		}
+		return {
+			added: added.map((body) => this.view(body)),
+			disconnected: stillDisconnected
+		};
+	}
+	/** The namespaces in one Provider answer this directory could hold; the others are left out. */
+	reportedNamespaces(providerId, service, discovered) {
+		const reported = discovered.flatMap((candidate) => {
+			try {
+				const externalId = requiredText(candidate.externalId, "provider externalId", 2e3);
+				const connection = this.providerCatalog.normalizeMemory(providerId, candidate.connection);
+				this.providerCatalog.normalize(providerId, {
+					...service,
+					...connection
+				});
+				const identity = this.namespaceIdentity(providerId, connection);
+				const whole = identity === void 0 ? this.wholeConnection(providerId, service, connection) : void 0;
+				return [{
+					candidate,
+					externalId,
+					connection,
+					...identity === void 0 ? {} : { identity },
+					...whole === void 0 ? {} : { whole },
+					distinct: false
+				}];
+			} catch {
+				return [];
+			}
+		});
+		const signature = (namespace) => namespace.identity !== void 0 ? `identity:${canonicalJson(namespace.identity)}` : namespace.whole === void 0 ? void 0 : `connection:${namespace.whole}`;
+		const counts = /* @__PURE__ */ new Map();
+		for (const namespace of reported) {
+			const key = signature(namespace);
+			if (key !== void 0) counts.set(key, (counts.get(key) ?? 0) + 1);
+		}
+		for (const namespace of reported) {
+			const key = signature(namespace);
+			namespace.distinct = key !== void 0 && counts.get(key) === 1;
+		}
+		return reported;
+	}
+	/**
+	* What names a namespace in a space's own settings: each text, address or path set for it. A
+	* wildcard (`*`) names nothing, and neither does a choice, a switch, a number such as a recall
+	* budget or a trust floor, or a secret.
+	*/
+	namespaceIdentity(providerId, connection) {
+		if (connection === void 0) return void 0;
+		const identity = {};
+		for (const field of this.providerCatalog.memoryFields(providerId)) {
+			if (!IDENTITY_INPUTS.has(field.input)) continue;
+			const value = connection[field.key];
+			if (typeof value !== "string") continue;
+			const text = value.trim();
+			if (text === "" || text === "*") continue;
+			identity[field.key] = text;
+		}
+		return Object.keys(identity).length === 0 ? void 0 : identity;
+	}
+	/** A whole connection, defaults filled in; one whose own part is empty compares by externalId alone. */
+	wholeConnection(providerId, service, memory) {
+		if (memory === void 0 || Object.keys(memory).length === 0) return void 0;
+		try {
+			return canonicalJson(this.providerCatalog.normalize(providerId, {
+				...service,
+				...memory
+			}));
+		} catch {
+			return;
+		}
+	}
+	/**
+	* Whether `held`, a mounted space or a namespace a person disconnected, already reads the
+	* namespace a Provider reported: the same externalId, or every setting that names the namespace,
+	* whatever else differs; a `*` held reads every value. A hand-made Hindsight space for bank
+	* `team` with another recall budget reads bank `team`; a Honcho space for one peer of workspace
+	* `w1` reads workspace `w1`. Asking again only adds what nothing here reads yet.
+	*/
+	holds(providerId, service, held, reported) {
+		if (held.externalId !== void 0 && held.externalId === reported.externalId) return true;
+		if (!reported.distinct || held.connection === void 0) return false;
+		if (reported.identity !== void 0) {
+			const connection = held.connection;
+			return Object.entries(reported.identity).every(([key, value]) => {
+				const setting = connection[key];
+				return typeof setting === "string" && (setting.trim() === value || setting.trim() === "*");
+			});
+		}
+		return reported.whole !== void 0 && this.wholeConnection(providerId, service, held.connection) === reported.whole;
+	}
+	/** Remember a namespace a person disconnected, so asking its Provider again leaves it out. */
+	rememberDisconnected(providerId, body) {
+		const connection = body.connection === void 0 ? {} : this.providerCatalog.publicScoped(providerId, "memory", body.connection).settings;
+		const entry = {
+			...body.externalId === void 0 ? {} : { externalId: body.externalId },
+			...Object.keys(connection).length === 0 ? {} : { connection }
+		};
+		if (Object.keys(entry).length === 0) return;
+		const key = canonicalJson(entry);
+		this.disconnected[providerId] = [...(this.disconnected[providerId] ?? []).filter((item) => canonicalJson(item) !== key), entry].slice(-1e3);
+		this.saveDisconnects();
+	}
+	/** Forget the disconnected namespaces a save of the Provider's settings mounted again. */
+	forgetDisconnected(providerId, reported) {
+		const remembered = this.disconnected[providerId];
+		if (remembered === void 0) return;
+		const service = this.services[providerId] ?? {};
+		const remaining = remembered.filter((entry) => !reported.some((namespace) => this.holds(providerId, service, entry, namespace)));
+		if (remaining.length === remembered.length) return;
+		if (remaining.length === 0) delete this.disconnected[providerId];
+		else this.disconnected[providerId] = remaining;
+		this.saveDisconnects();
 	}
 	placementCandidates(request) {
 		return this.providerCatalog.providers.map((descriptor) => {
@@ -427,10 +646,11 @@ var MemorySpaceRegistry = class MemorySpaceRegistry {
 	}
 	async create(request, signal, placement) {
 		const name = requiredText(request.name, "name", 100);
-		const description = requiredText(request.description, "description", 1e3);
+		const description = requiredText(request.description, "description", MEMORY_SPACE_DESCRIPTION_MAX_LENGTH);
 		if (request.placement !== void 0 && placement === void 0) throw new Error("automatic provider placement must be resolved before creating a Memory Space");
 		if (placement !== void 0 && request.providerId !== void 0 && request.providerId !== placement.providerId) throw new Error("resolved provider placement conflicts with providerId");
-		const providerId = placement?.providerId ?? request.providerId ?? "mnemon-native";
+		const providerId = placement?.providerId ?? request.providerId ?? this.defaultProviderId();
+		if (providerId === void 0) throw new Error("No memory provider is ready: install the Mnemon CLI to use Mnemon Native, or connect another provider on the dsh-mnemon page under Plugins");
 		if (!this.providerCatalog.has(providerId)) throw new Error(`unsupported memory provider: ${String(providerId)}`);
 		const normalizedPlacement = placement === void 0 ? void 0 : normalizePlacementDecision(placement, providerId, this.providerCatalog);
 		if (placement !== void 0 && normalizedPlacement === void 0) throw new Error("resolved provider placement is invalid");
@@ -447,7 +667,7 @@ var MemorySpaceRegistry = class MemorySpaceRegistry {
 				this.services[providerId] = this.providerCatalog.normalizeService(providerId, split.service, this.services[providerId] ?? {});
 				this.serviceEnabled[providerId] = true;
 			}
-			if (!this.providerServiceEnabled(providerId)) throw new Error(`${this.providerCatalog.descriptor(providerId).label} service is not enabled; enable it in Settings first`);
+			if (!this.providerServiceEnabled(providerId)) throw new Error(`${this.providerCatalog.descriptor(providerId).label} service is not enabled; enable it on the dsh-mnemon page under Plugins first`);
 			connection = this.providerCatalog.normalizeMemory(providerId, split.memory);
 			this.providerCatalog.normalize(providerId, {
 				...this.services[providerId],
@@ -502,7 +722,7 @@ var MemorySpaceRegistry = class MemorySpaceRegistry {
 				this.services[current.providerId] = this.providerCatalog.normalizeService(current.providerId, split.service, this.services[current.providerId] ?? {}, clearSecrets);
 				this.serviceEnabled[current.providerId] = true;
 			}
-			if (!this.providerServiceEnabled(current.providerId)) throw new Error(`${this.providerCatalog.descriptor(current.providerId).label} service is not enabled; enable it in Settings first`);
+			if (!this.providerServiceEnabled(current.providerId)) throw new Error(`${this.providerCatalog.descriptor(current.providerId).label} service is not enabled; enable it on the dsh-mnemon page under Plugins first`);
 			connection = this.providerCatalog.normalizeMemory(current.providerId, split.memory, previousConnection);
 			this.providerCatalog.normalize(current.providerId, {
 				...this.services[current.providerId],
@@ -513,7 +733,7 @@ var MemorySpaceRegistry = class MemorySpaceRegistry {
 		const body = {
 			...currentBody,
 			...request.name === void 0 ? {} : { name: requiredText(request.name, "name", 100) },
-			...request.description === void 0 ? {} : { description: optionalText$1(request.description, "description", 1e3) },
+			...request.description === void 0 ? {} : { description: optionalText$1(request.description, "description", MEMORY_SPACE_DESCRIPTION_MAX_LENGTH) },
 			...request.active === void 0 ? {} : { active: request.active },
 			...nativeProvider || request.name === void 0 && request.description === void 0 ? {} : { metadataSource: "manual" },
 			...connection === void 0 ? {} : { connection },
@@ -552,8 +772,10 @@ var MemorySpaceRegistry = class MemorySpaceRegistry {
 	async remove(id, signal) {
 		const body = this.get(id);
 		if (!this.isNative(body.provider.id)) {
+			const stored = this.spaces.find((entry) => entry.id === body.id);
 			this.spaces = this.spaces.filter((entry) => entry.id !== body.id);
 			this.save();
+			if (stored !== void 0) this.rememberDisconnected(body.provider.id, stored);
 			return body;
 		}
 		const nativeStoreIds = this.nativeStoreIds();
@@ -617,6 +839,7 @@ var MemorySpaceRegistry = class MemorySpaceRegistry {
 			this.spaces = [];
 			this.services = {};
 			this.serviceEnabled = {};
+			this.disconnected = {};
 			this.loadAndReconcile();
 			this.state.diskRevision = this.diskRevision();
 		} finally {
@@ -625,7 +848,11 @@ var MemorySpaceRegistry = class MemorySpaceRegistry {
 	}
 	diskRevision() {
 		if (!this.persistent) return "ephemeral";
-		return [this.registryPath, this.providerRegistryPath].map((path) => {
+		return [
+			this.registryPath,
+			this.providerRegistryPath,
+			this.disconnectsPath
+		].map((path) => {
 			try {
 				const stat = statSync(path, { bigint: true });
 				return `${stat.ino}:${stat.mtimeNs}:${stat.size}`;
@@ -646,14 +873,14 @@ var MemorySpaceRegistry = class MemorySpaceRegistry {
 			const parsed = JSON.parse(readFileSync(this.registryPath, "utf8"));
 			if ((parsed.version === NATIVE_REGISTRY_VERSION || parsed.version === 2) && Array.isArray(parsed.bodies)) {
 				migratedProviderRegistry = parsed.version === 2;
-				this.spaces = parsed.bodies.filter((body) => ID_PATTERN.test(body.id)).map((body) => {
+				this.spaces = parsed.bodies.filter((body) => MEMORY_SPACE_ID_PATTERN.test(body.id)).map((body) => {
 					const syntheticDefault = body.id === "default" && body.name === "默认记忆体" && body.description === "从现有 Mnemon Store 自动接入。";
 					migratedSyntheticDefault ||= syntheticDefault;
-					const providerId = "providerId" in body && storedProviderId(body.providerId) ? body.providerId : "mnemon-native";
+					const providerId = "providerId" in body && storedProviderId(body.providerId) ? body.providerId : NATIVE_PROVIDER_ID;
 					if (!this.providerCatalog.has(providerId)) return {
 						id: body.id,
 						name: requiredText(body.name || body.id, "name", 100),
-						description: optionalText$1(body.description, "description", 1e3),
+						description: optionalText$1(body.description, "description", MEMORY_SPACE_DESCRIPTION_MAX_LENGTH),
 						active: body.active === true,
 						providerId,
 						connection: storedProviderConnection("connection" in body ? body.connection : void 0),
@@ -675,7 +902,7 @@ var MemorySpaceRegistry = class MemorySpaceRegistry {
 					return {
 						id: body.id,
 						name: requiredText(syntheticDefault ? body.id : body.name || body.id, "name", 100),
-						description: optionalText$1(syntheticDefault ? "Existing Mnemon Store discovered on disk." : body.description, "description", 1e3),
+						description: optionalText$1(syntheticDefault ? "Existing Mnemon Store discovered on disk." : body.description, "description", MEMORY_SPACE_DESCRIPTION_MAX_LENGTH),
 						active: body.active === true,
 						providerId,
 						...placement === void 0 ? {} : { placement },
@@ -699,12 +926,12 @@ var MemorySpaceRegistry = class MemorySpaceRegistry {
 			if ((parsed.version === 1 || parsed.version === 2 || parsed.version === 3 || parsed.version === PROVIDER_REGISTRY_VERSION) && Array.isArray(parsed.bodies)) {
 				migratedProviderRegistry ||= parsed.version !== PROVIDER_REGISTRY_VERSION;
 				const existingIds = new Set(this.spaces.map((body) => body.id));
-				this.spaces.push(...parsed.bodies.filter((body) => storedProviderId(body.providerId) && (!this.providerCatalog.has(body.providerId) || !this.isNative(body.providerId)) && ID_PATTERN.test(body.id) && !existingIds.has(body.id)).map((body) => {
+				this.spaces.push(...parsed.bodies.filter((body) => storedProviderId(body.providerId) && (!this.providerCatalog.has(body.providerId) || !this.isNative(body.providerId)) && MEMORY_SPACE_ID_PATTERN.test(body.id) && !existingIds.has(body.id)).map((body) => {
 					const providerId = body.providerId;
 					if (!this.providerCatalog.has(providerId)) return {
 						id: body.id,
 						name: requiredText(body.name || body.id, "name", 100),
-						description: optionalText$1(body.description, "description", 1e3),
+						description: optionalText$1(body.description, "description", MEMORY_SPACE_DESCRIPTION_MAX_LENGTH),
 						active: body.active === true,
 						providerId,
 						...typeof body.externalId !== "string" || body.externalId.trim() === "" ? {} : { externalId: body.externalId.trim() },
@@ -731,7 +958,7 @@ var MemorySpaceRegistry = class MemorySpaceRegistry {
 					return {
 						id: body.id,
 						name: requiredText(body.name || body.id, "name", 100),
-						description: optionalText$1(body.description, "description", 1e3),
+						description: optionalText$1(body.description, "description", MEMORY_SPACE_DESCRIPTION_MAX_LENGTH),
 						active: body.active === true,
 						providerId,
 						...typeof body.externalId !== "string" || body.externalId.trim() === "" ? {} : { externalId: body.externalId.trim() },
@@ -742,6 +969,13 @@ var MemorySpaceRegistry = class MemorySpaceRegistry {
 						updatedAt: body.updatedAt
 					};
 				}));
+			}
+		} catch {}
+		if (this.persistent && existsSync(this.disconnectsPath)) try {
+			const parsed = JSON.parse(readFileSync(this.disconnectsPath, "utf8"));
+			if (parsed.version === DISCONNECTS_VERSION && typeof parsed.providers === "object" && parsed.providers !== null) for (const [providerId, entries] of Object.entries(parsed.providers)) {
+				const remembered = storedDisconnects(entries);
+				if (storedProviderId(providerId) && remembered.length > 0) this.disconnected[providerId] = remembered;
 			}
 		} catch {}
 		const retainedBodies = this.spaces.filter((body) => !this.providerCatalog.has(body.providerId) || this.isNative(body.providerId) || this.providerServiceEnabled(body.providerId));
@@ -757,25 +991,27 @@ var MemorySpaceRegistry = class MemorySpaceRegistry {
 		const timestamp = this.now().toISOString();
 		const legacyActive = this.runner.effectiveStore();
 		let changed = false;
+		const knownIds = new Set(this.spaces.map((body) => body.id));
 		for (const entry of readdirSync(this.directory, { withFileTypes: true })) {
-			if (!entry.isDirectory() || !ID_PATTERN.test(entry.name) || !existsSync(join(this.directory, entry.name, "mnemon.db"))) continue;
-			if (this.spaces.some((body) => body.id === entry.name)) continue;
+			if (!entry.isDirectory() || !MEMORY_SPACE_ID_PATTERN.test(entry.name) || !existsSync(join(this.directory, entry.name, "mnemon.db"))) continue;
+			if (knownIds.has(entry.name)) continue;
 			this.spaces.push({
 				id: entry.name,
 				name: entry.name,
 				description: "Existing Mnemon Store discovered on disk.",
 				active: this.spaces.length === 0 || entry.name === legacyActive,
-				providerId: "mnemon-native",
+				providerId: NATIVE_PROVIDER_ID,
 				createdAt: timestamp,
 				updatedAt: timestamp
 			});
+			knownIds.add(entry.name);
 			changed = true;
 		}
 		if (changed) this.save();
 	}
 	nativeStoreIds() {
 		if (!existsSync(this.directory)) return [];
-		return readdirSync(this.directory, { withFileTypes: true }).filter((entry) => entry.isDirectory() && ID_PATTERN.test(entry.name)).map((entry) => entry.name).sort();
+		return readdirSync(this.directory, { withFileTypes: true }).filter((entry) => entry.isDirectory() && MEMORY_SPACE_ID_PATTERN.test(entry.name)).map((entry) => entry.name).sort();
 	}
 	nextTimestamp(previous, candidate = this.now().toISOString()) {
 		if (previous === void 0) return candidate;
@@ -790,7 +1026,7 @@ var MemorySpaceRegistry = class MemorySpaceRegistry {
 		const connection = nativeProvider ? {} : this.connectionFor(body);
 		const effectivePublicConnection = this.providerCatalog.public(body.providerId, connection);
 		const publicConnection = nativeProvider ? effectivePublicConnection : this.providerCatalog.publicScoped(body.providerId, "memory", body.connection ?? {});
-		const location = nativeProvider ? join(this.directory, body.id, "mnemon.db") : providerDisplayLocation(descriptor, connection);
+		const location = nativeProvider ? join(this.directory, body.id, MEMORY_SPACE_DATABASE_FILE) : providerDisplayLocation(descriptor, connection);
 		const provider = {
 			id: descriptor.id,
 			...descriptor.typeId === void 0 || descriptor.typeId === descriptor.id ? {} : { typeId: descriptor.typeId },
@@ -843,6 +1079,22 @@ var MemorySpaceRegistry = class MemorySpaceRegistry {
 		});
 		this.state.diskRevision = this.diskRevision();
 	}
+	saveDisconnects() {
+		if (!this.persistent) return;
+		const providers = Object.fromEntries(Object.entries(this.disconnected).filter(([, entries]) => entries !== void 0 && entries.length > 0));
+		if (Object.keys(providers).length === 0) rmSync(this.disconnectsPath, { force: true });
+		else {
+			mkdirSync(dirname(this.disconnectsPath), {
+				recursive: true,
+				mode: 448
+			});
+			this.writeRegistry(this.disconnectsPath, {
+				version: DISCONNECTS_VERSION,
+				providers
+			});
+		}
+		this.state.diskRevision = this.diskRevision();
+	}
 	writeRegistry(path, file) {
 		const temporary = join(dirname(path), `.${basename(path)}.${process.pid}.tmp`);
 		writeFileSync(temporary, `${JSON.stringify(file, null, 2)}\n`, {
@@ -852,6 +1104,160 @@ var MemorySpaceRegistry = class MemorySpaceRegistry {
 		renameSync(temporary, path);
 	}
 };
+//#endregion
+//#region src/embedding-credentials.ts
+/** The Host never exports this value to the browser or serializes it into configuration. */
+async function embeddingApiKey(config, read, environment = process.env) {
+	if (config.apiKeyEnv) {
+		const key = environment[config.apiKeyEnv]?.trim();
+		if (!key) throw new Error("Embedding API key environment variable is unset or empty: " + config.apiKeyEnv);
+		return checkedKey(key);
+	}
+	if (!config.apiKeyRef) return config.apiKey;
+	if (!EMBEDDING_CREDENTIAL_REFERENCE.test(config.apiKeyRef)) throw new Error("Invalid embedding credential reference");
+	if (read === void 0) throw new Error("Embedding credential storage is unavailable; use apiKeyEnv or enable the DSH credentials service");
+	let record;
+	try {
+		record = await read(config.apiKeyRef);
+	} catch {
+		throw new Error("Cannot read the saved embedding credential; check the DSH credentials service");
+	}
+	const grant = record;
+	if (grant?.kind !== "grant" || grant.payload?.version !== 1 || typeof grant.payload.apiKey !== "string") throw new Error("Saved embedding credential is missing or invalid; save a new key");
+	if (grant.payload.endpoint !== config.endpoint) throw new Error("Saved embedding credential belongs to another endpoint; save a new key for this endpoint");
+	return checkedKey(grant.payload.apiKey);
+}
+function checkedKey(key) {
+	if (!key || key.length > 2048 || /[\u0000-\u001f\u007f]/u.test(key)) throw new Error("Embedding API key must contain 1..2048 characters without control characters");
+	return key;
+}
+//#endregion
+//#region src/runner.ts
+var MnemonCliError = class extends Error {
+	reason;
+	constructor(message, reason) {
+		super(message);
+		this.reason = reason;
+		this.name = "MnemonCliError";
+	}
+};
+const EMBEDDING_ENVIRONMENT_KEYS = /* @__PURE__ */ new Set([
+	"MNEMON_EMBED_ENDPOINT",
+	"MNEMON_EMBED_MODEL",
+	"MNEMON_EMBED_API_KEY",
+	"MNEMON_EMBED_PROTOCOL"
+]);
+/**
+* Explain a CLI call that produced no result. Only a failed launch means the
+* executable is missing or unusable, so only that case carries the install
+* hint; a timeout, a cancellation or an oversized output names its own cause.
+*/
+function processFailureMessage(error, args) {
+	const detail = error instanceof Error ? error.message : String(error);
+	const reason = error instanceof ProcessError ? error.reason : "launch";
+	const command = args.find((arg) => !arg.startsWith("-"));
+	if (reason === "output-limit") return `mnemon ${command ?? "command"} stopped: ${detail.replace(/^mnemon /u, "")}`;
+	if (reason === "timeout" && command !== void 0) return detail.replace(/^mnemon /u, `mnemon ${command} `);
+	if (reason !== "launch") return detail;
+	return `${detail}. ${process.platform === "win32" ? "Install Mnemon with npm install -g @mnemon-dev/mnemon or pnpm add -g @mnemon-dev/mnemon, or use the official Windows release. Ensure DSH can see PATH or PNPM_HOME, or set MNEMON_CLI_PATH or mnemon.cliPath to its absolute path." : "Install Mnemon and ensure \"mnemon\" is on PATH, or set MNEMON_CLI_PATH or mnemon.cliPath."}`;
+}
+/** Preserve the Host environment while making saved embedding overrides authoritative. */
+async function processEnvironment(config, read) {
+	if (!config.embedding.enabled) return void 0;
+	return {
+		...Object.fromEntries(Object.entries(process.env).filter(([key]) => !EMBEDDING_ENVIRONMENT_KEYS.has(key.toUpperCase()))),
+		MNEMON_EMBED_ENDPOINT: config.embedding.endpoint,
+		MNEMON_EMBED_MODEL: config.embedding.model,
+		MNEMON_EMBED_API_KEY: await embeddingApiKey(config.embedding, read),
+		...config.embedding.protocol === "auto" ? {} : { MNEMON_EMBED_PROTOCOL: config.embedding.protocol }
+	};
+}
+function createRunner(config, processRunner = runProcess, readCredential) {
+	const currentCommand = () => findMnemonCommand(config) ?? config.cliPath ?? "mnemon";
+	const globalArgs = (store) => {
+		const args = ["--data-dir", effectiveDataDir()];
+		if (store !== void 0) args.push("--store", store);
+		else if (config.store !== void 0) args.push("--store", config.store);
+		return args;
+	};
+	const effectiveDataDir = () => config.dataDir;
+	const persistedStore = () => {
+		const active = join(effectiveDataDir(), MNEMON_ACTIVE_STORE_FILE);
+		if (existsSync(active)) try {
+			const value = readFileSync(active, "utf8").trim();
+			if (MEMORY_SPACE_ID_PATTERN.test(value)) return value;
+		} catch {}
+		return "default";
+	};
+	const launch = async (args, options = {}) => {
+		if (options.signal?.aborted === true) throw new MnemonCliError(`mnemon command aborted: ${String(options.signal.reason ?? "cancelled")}`, "aborted");
+		if (options.database !== void 0 && !existsSync(options.database)) throw new MnemonCliError(`mnemon ${args.find((arg) => !arg.startsWith("-")) ?? "command"}: no database at ${options.database}`, "no-database");
+		const argv = options.globalFlags === false ? [...args] : [...globalArgs(options.store), ...args];
+		const environment = await processEnvironment(config, readCredential);
+		const safeError = (message) => environment?.MNEMON_EMBED_API_KEY ? message.replaceAll(environment.MNEMON_EMBED_API_KEY, "[redacted]") : message;
+		const processOptions = {
+			timeoutMs: options.timeoutMs ?? config.timeoutMs,
+			...environment === void 0 ? {} : { env: environment },
+			...options.signal === void 0 ? {} : { signal: options.signal },
+			...options.maxOutputBytes === void 0 ? {} : { maxOutputBytes: options.maxOutputBytes }
+		};
+		let result;
+		try {
+			const invocation = resolveMnemonInvocation(currentCommand(), argv, environment);
+			result = await processRunner(invocation.command, invocation.args, {
+				...processOptions,
+				...invocation.env === void 0 ? {} : { env: invocation.env }
+			});
+		} catch (error) {
+			throw new MnemonCliError(safeError(processFailureMessage(error, args)), error instanceof ProcessError ? error.reason : "launch");
+		}
+		if (result.exitCode !== 0) {
+			const detail = safeError(result.stderr.trim() || result.stdout.trim() || "no output");
+			throw new MnemonCliError(`mnemon ${args.join(" ")} exited ${String(result.exitCode)}: ${detail}`);
+		}
+		return result.stdout;
+	};
+	const execute = (args, options = {}) => {
+		return withMemoryStorageLock(effectiveDataDir(), () => launch(args, options));
+	};
+	return {
+		get command() {
+			return currentCommand();
+		},
+		get commandFound() {
+			const found = findMnemonCommand(config);
+			return found !== void 0 && isMnemonExecutable(found);
+		},
+		async runJson(args, options) {
+			const stdout = await execute(args, options);
+			try {
+				return JSON.parse(stdout);
+			} catch {
+				throw new MnemonCliError(`mnemon ${args.join(" ")} returned invalid JSON`);
+			}
+		},
+		runText: execute,
+		runTextBatch(commands) {
+			return withMemoryStorageLock(effectiveDataDir(), async () => {
+				const outputs = [];
+				for (const command of commands) outputs.push(await launch(command.args, command.options));
+				return outputs;
+			});
+		},
+		effectiveDataDir() {
+			return effectiveDataDir();
+		},
+		persistedStore() {
+			return persistedStore();
+		},
+		effectiveStore() {
+			if (config.store !== void 0) return config.store;
+			const fromEnvironment = process.env.MNEMON_STORE?.trim();
+			if (fromEnvironment !== void 0 && fromEnvironment !== "") return fromEnvironment;
+			return persistedStore();
+		}
+	};
+}
 //#endregion
 //#region src/provider-placement.ts
 const CAPABILITY_LABELS = {
@@ -996,6 +1402,88 @@ function lexicalRequiredMatchCount(tokens) {
 	return Math.max(2, Math.ceil(tokens.length / 4));
 }
 //#endregion
+//#region src/entity-index.ts
+/**
+* The most memories one space's derived index asks list() for. Mnemon Native
+* lists a whole store; a Provider that stops earlier reports what it listed.
+*/
+const ENTITY_INDEX_LIST_LIMIT = 1e5;
+/** The rail lists at most this many entities; the rest stay reachable by name. */
+const ENTITY_RAIL_LIMIT = 5e3;
+function buildSpaceEntityIndex(memories, memoryCount, complete) {
+	const kept = [];
+	const byKey = /* @__PURE__ */ new Map();
+	const spellings = /* @__PURE__ */ new Map();
+	for (const memory of memories) {
+		const seen = /* @__PURE__ */ new Set();
+		let position;
+		for (const raw of memory.entities ?? []) {
+			if (typeof raw !== "string") continue;
+			const key = normalizeEntityKey(raw);
+			if (key === "" || seen.has(key)) continue;
+			seen.add(key);
+			if (position === void 0) {
+				position = kept.length;
+				kept.push(memory);
+			}
+			const positions = byKey.get(key);
+			if (positions === void 0) byKey.set(key, [position]);
+			else positions.push(position);
+			const name = raw.normalize("NFKC").trim();
+			const names = spellings.get(key);
+			if (names === void 0) spellings.set(key, /* @__PURE__ */ new Map([[name, 1]]));
+			else names.set(name, (names.get(name) ?? 0) + 1);
+		}
+	}
+	return {
+		memories: kept,
+		byKey,
+		spellings,
+		memoryCount,
+		complete
+	};
+}
+/** The spelling most memories use; the first one seen wins a tie. */
+function preferredSpelling(names) {
+	let preferred = "";
+	let most = 0;
+	for (const [name, count] of names) if (count > most) {
+		preferred = name;
+		most = count;
+	}
+	return preferred;
+}
+/** Merge per-space indexes into one entity list, most frequent first. */
+function mergeEntityCounts(indexes) {
+	const counts = /* @__PURE__ */ new Map();
+	const spellings = /* @__PURE__ */ new Map();
+	for (const index of indexes) for (const [key, positions] of index.byKey) {
+		counts.set(key, (counts.get(key) ?? 0) + positions.length);
+		let totals = spellings.get(key);
+		if (totals === void 0) spellings.set(key, totals = /* @__PURE__ */ new Map());
+		for (const [name, count] of index.spellings.get(key) ?? []) totals.set(name, (totals.get(name) ?? 0) + count);
+	}
+	const names = /* @__PURE__ */ new Map();
+	for (const [key, totals] of spellings) names.set(key, preferredSpelling(totals));
+	return {
+		items: [...counts].map(([key, count]) => ({
+			entity: names.get(key),
+			count
+		})).sort((left, right) => right.count - left.count || left.entity.localeCompare(right.entity)),
+		names
+	};
+}
+/** Importance first, then the newest; the order Mnemon Native lists a store in. */
+function compareEntityMemories(left, right) {
+	return (right.importance ?? 0) - (left.importance ?? 0) || (right.createdAt ?? "").localeCompare(left.createdAt ?? "") || (left.memoryBodyName ?? "").localeCompare(right.memoryBodyName ?? "") || left.id.localeCompare(right.id);
+}
+/** Every memory across the indexes that carries the entity key. */
+function memoriesWithEntity(indexes, key) {
+	const memories = [];
+	for (const index of indexes) for (const position of index.byKey.get(key) ?? []) memories.push(index.memories[position]);
+	return memories.sort(compareEntityMemories);
+}
+//#endregion
 //#region src/recall-quality/policies.ts
 function expandedLimit(context) {
 	return Math.min(50, Math.max(context.requestedLimit, Math.ceil(context.requestedLimit * context.config.candidateMultiplier)));
@@ -1012,6 +1500,11 @@ function scoreDecision(candidate, context, lowScoreAction, nonPositiveAction) {
 		tier: "unknown",
 		reason: "invalid-score"
 	};
+	if (candidate.scoreSemantics?.kind === "provider-native") return {
+		action: "keep",
+		tier: "ranked",
+		reason: "native-score"
+	};
 	if (candidate.scoreSemantics?.kind !== "normalized-relevance") return {
 		action: "keep",
 		tier: "unknown",
@@ -1025,8 +1518,8 @@ function scoreDecision(candidate, context, lowScoreAction, nonPositiveAction) {
 	};
 	if (score > 1) return {
 		action: "keep",
-		tier: "unknown",
-		reason: "unscaled-score"
+		tier: "ranked",
+		reason: "out-of-range-score"
 	};
 	if (score < context.config.lowScoreThreshold) return {
 		action: lowScoreAction,
@@ -1056,9 +1549,12 @@ const STRICT_RECALL_QUALITY_POLICY = {
 	evaluate: (candidate, context) => scoreDecision(candidate, context, "drop", "drop"),
 	select(candidates, context) {
 		const kept = candidates.filter((candidate) => candidate.decision.action === "keep");
+		let medium = 0;
+		let ranked = 0;
+		const scored = kept.filter(({ decision }) => decision.tier === "medium" ? medium++ < context.config.maxMediumResults : decision.tier === "ranked" && ranked++ < context.config.maxRankedResults);
 		return [
 			...kept.filter((candidate) => candidate.decision.tier === "high"),
-			...kept.filter((candidate) => candidate.decision.tier === "medium").slice(0, context.config.maxMediumResults),
+			...scored,
 			...kept.filter((candidate) => candidate.decision.tier === "unknown").slice(0, context.config.maxUnknownResults)
 		].slice(0, context.requestedLimit);
 	}
@@ -1087,6 +1583,7 @@ const ACTIONS = /* @__PURE__ */ new Set(["keep", "drop"]);
 const TIERS = /* @__PURE__ */ new Set([
 	"high",
 	"medium",
+	"ranked",
 	"low",
 	"unknown"
 ]);
@@ -1096,6 +1593,8 @@ const REASONS = /* @__PURE__ */ new Set([
 	"low-score",
 	"non-positive-score",
 	"invalid-score",
+	"native-score",
+	"out-of-range-score",
 	"unscaled-score",
 	"unscored"
 ]);
@@ -1205,6 +1704,58 @@ function text(value) {
 function number(value) {
 	return typeof value === "number" && Number.isFinite(value) ? value : void 0;
 }
+/**
+* How long a selection reuses the Provider health its index was checked with.
+* The rail always checks again; a write through this Source drops both at once.
+*/
+const ENTITY_SELECTION_STATUS_REUSE_MS = 1e4;
+/** How long an index that statistics cannot check is reused; a write through this Source still drops it. */
+const ENTITY_INDEX_UNCHECKED_REUSE_MS = 1e4;
+/** How long one Provider may take to list its namespaces when they are asked for again. */
+const MEMORY_SPACES_REDISCOVERY_PROVIDER_TIMEOUT_MS = 3e4;
+/**
+* Rediscovery per data directory, shared by every generation in this process: the pass now
+* running, which a second request joins, and the last one, which the Memory Spaces page shows.
+*/
+const rediscoveries = /* @__PURE__ */ new Map();
+/** Settle with `work`, or reject once `signal` aborts, whichever comes first. */
+function untilAborted(work, signal) {
+	if (signal.aborted) {
+		work.catch(() => {});
+		return Promise.reject(signal.reason);
+	}
+	return new Promise((resolve, reject) => {
+		const abort = () => reject(signal.reason);
+		signal.addEventListener("abort", abort, { once: true });
+		work.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
+	});
+}
+function entityName(entity) {
+	const name = entity.trim();
+	if (name.length > 200) throw new Error("entity is too long (max 200 characters)");
+	return name;
+}
+function memoryKey(memoryBodyId, id) {
+	return `${memoryBodyId}\u0000${id}`;
+}
+/**
+* What must stay the same for a space's entity index to stay valid: its
+* Provider statistics (Mnemon counts every write in its operation log) and the
+* Source's own record of the space. Without statistics it cannot be checked.
+*/
+function entityIndexFingerprint(body, status) {
+	const stats = status.stats;
+	if (stats === void 0) return void 0;
+	return JSON.stringify([
+		body.provider.id,
+		body.updatedAt,
+		stats.totalInsights,
+		stats.deletedInsights,
+		stats.edgeCount,
+		stats.oplogCount,
+		stats.dbSizeBytes
+	]);
+}
 function readSource(body, mode, status, itemCount, options = {}) {
 	return {
 		memoryBodyId: body.id,
@@ -1286,11 +1837,6 @@ function insightColor(category) {
 	if (category === "context") return "#f39c12";
 	return "#6574d9";
 }
-function boundedInteger(value, fallback, min, max) {
-	if (value === void 0) return fallback;
-	if (!Number.isInteger(value) || value < min || value > max) throw new Error(`value must be an integer within ${min}..${max}`);
-	return value;
-}
 function required(value, label, max) {
 	const normalized = value.trim();
 	if (normalized === "") throw new Error(`${label} is required`);
@@ -1370,29 +1916,79 @@ function mutationResultCompletion(result) {
 function mutationResultCommitted(result) {
 	return mutationResultCompletion(result) === "committed";
 }
+/** One `mnemon embed --status` answer, strictly validated. */
+function embeddingCounts(value, requireModelProbe = false) {
+	const output = record(value);
+	const available = requireModelProbe ? output?.embedding_available : output?.embedding_available ?? output?.ollama_available;
+	const model = text(output?.model)?.trim();
+	const protocol = text(output?.protocol)?.trim();
+	const totalInsights = number(output?.total_insights);
+	const embedded = number(output?.embedded);
+	const coverage = text(output?.coverage)?.trim();
+	if (typeof available !== "boolean" || model === void 0 || model === "" || model.length > 200 || /[\u0000-\u001f\u007f]/u.test(model) || !Number.isInteger(totalInsights) || totalInsights < 0 || !Number.isInteger(embedded) || embedded < 0 || embedded > totalInsights || coverage === void 0 || !/^(?:100|\d{1,2})%$/u.test(coverage)) throw new Error("mnemon embed --status returned an invalid response");
+	return {
+		available,
+		model,
+		totalInsights,
+		embedded,
+		coverage,
+		...protocol !== void 0 && protocol.length <= 32 && !/[\u0000-\u001f\u007f]/u.test(protocol) ? { protocol } : {}
+	};
+}
+/** How long one fill of a space's vectors may run, and the longest step of it that holds the storage lock (#392). */
+const EMBED_FILL_BUDGET_MS = 6e4;
+const EMBED_FILL_STEP_MS = 1e4;
+/** A whole percent, as Mnemon writes it, that reads 100% only when every memory has its vector. */
+function coveragePercent(embedded, total) {
+	return total === 0 ? "0%" : `${Math.floor(embedded * 100 / total)}%`;
+}
+/** Mnemon's reason for a failed call, without the usage it prints after its `Error:` line. */
+function cliReason(error) {
+	const detail = error instanceof Error ? error.message : String(error);
+	return /\bError: ([^\n]+)/u.exec(detail)?.[1]?.trim() ?? detail.split("\n")[0].trim();
+}
+/** Whether a CLI call failed for this cause. */
+function cliFailure(error, reason) {
+	return error instanceof MnemonCliError && error.reason === reason;
+}
 var MemorySpacesService = class {
 	runner;
 	config;
 	recallQualityPolicyRegistry;
 	providerCatalog;
 	memorySpaces;
-	/** @deprecated Use memorySpaces. Both names share the same registry authority. */
-	memoryBodies;
 	providers;
 	recallQualityPolicy;
 	spacesInFlight;
+	/** One entity index per active entity space, valid while its fingerprint holds. */
+	entityIndexCache = /* @__PURE__ */ new Map();
+	/** settledAt stays undefined while the read runs, which every caller shares. */
+	entityStatusCache = /* @__PURE__ */ new Map();
+	/** The related read each page view is waiting for; a newer selection cancels the older one. */
+	entityRelatedViews = /* @__PURE__ */ new Map();
 	providersDisposed = false;
+	/** The CLI version a full status last read, and the binary it read it from. */
+	cliVersion;
+	/** The CLI binary as the file system has it; another value after an update replaces it. */
+	cliBinary() {
+		try {
+			const stat = statSync(this.runner.command);
+			return `${this.runner.command}\0${stat.mtimeMs}\0${stat.size}`;
+		} catch {
+			return;
+		}
+	}
 	providerTypeId(providerId) {
 		const catalog = this.providerCatalog;
 		if (!catalog.has(providerId)) return providerId;
 		const descriptor = catalog.descriptor(providerId);
 		return descriptor.typeId ?? descriptor.id;
 	}
-	isNativeProvider(providerId) {
-		return this.providerTypeId(providerId) === "mnemon-native";
+	isNativeProviderId(providerId) {
+		return this.providerTypeId(providerId) === NATIVE_PROVIDER_ID;
 	}
 	isNativeSpace(body) {
-		return (body.provider.typeId ?? body.provider.id) === "mnemon-native";
+		return isNativeProvider(body.provider);
 	}
 	constructor(runner, config, memorySpaces, recallQualityPolicyRegistry = recallQualityPolicies, providerAdapterRegistry = new MemoryProviderAdapterRegistry(), providerCatalog = EMPTY_MEMORY_PROVIDER_CATALOG) {
 		this.runner = runner;
@@ -1400,7 +1996,6 @@ var MemorySpacesService = class {
 		this.recallQualityPolicyRegistry = recallQualityPolicyRegistry;
 		this.providerCatalog = providerCatalog;
 		this.memorySpaces = memorySpaces === void 0 ? new MemorySpaceRegistry(runner, true, () => /* @__PURE__ */ new Date(), providerCatalog) : providerCatalog === EMPTY_MEMORY_PROVIDER_CATALOG ? memorySpaces : memorySpaces.withProviderCatalog(providerCatalog);
-		this.memoryBodies = this.memorySpaces;
 		this.recallQualityPolicy = recallQualityPolicyRegistry.resolve(config.recallQuality.policy);
 		this.providers = providerAdapterRegistry.create({
 			memorySpaces: this.memorySpaces,
@@ -1440,7 +2035,7 @@ var MemorySpacesService = class {
 			let status;
 			if (!(body.providerEnabled !== false)) status = {
 				healthy: false,
-				error: `${body.provider.label} is disabled in Settings`
+				error: `${body.provider.label} is disabled on the dsh-mnemon page under Plugins`
 			};
 			else try {
 				status = await this.providerFor(body).status(body, signal);
@@ -1483,18 +2078,26 @@ var MemorySpacesService = class {
 			items,
 			providers: this.providerCatalog.providers.map((provider) => ({
 				...provider,
-				serviceConfigured: (provider.typeId ?? provider.id) === "mnemon-native" || enabled.has(provider.id)
+				serviceConfigured: isNativeProvider(provider) ? this.runner.commandFound : enabled.has(provider.id)
 			})),
 			persistenceStrategy: {
 				mode: this.config.persistenceStrategy.mode,
-				providerId: this.config.persistenceStrategy.providerId,
+				providerId: this.persistenceProviderId() ?? this.config.persistenceStrategy.providerId,
 				prompt: this.config.persistenceStrategy.prompt,
 				rules: { ...this.config.persistenceStrategy.rules }
 			},
 			total: items.length,
 			activeCount: items.filter((body) => body.active && body.providerEnabled !== false).length,
 			directory: this.memorySpaces.directory,
-			generatedAt: (/* @__PURE__ */ new Date()).toISOString()
+			generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+			rediscovery: this.rediscoveryState()
+		};
+	}
+	rediscoveryState() {
+		const entry = rediscoveries.get(this.memorySpaces.providerRegistryPath);
+		return {
+			running: entry?.running !== void 0,
+			...entry?.last === void 0 ? {} : { last: entry.last }
 		};
 	}
 	/** Stable, secret-free checkpoint for the projected Memory Space authority. */
@@ -1506,7 +2109,8 @@ var MemorySpacesService = class {
 		const all = this.memorySpaces.list();
 		const serviceItems = this.memorySpaces.providerServices().items;
 		const enabled = new Set(serviceItems.filter((service) => service.enabled).map((service) => service.providerId));
-		const active = all.filter((body) => body.active && (this.isNativeSpace(body) || enabled.has(body.provider.id))).sort((left, right) => left.id.localeCompare(right.id));
+		const commandFound = this.runner.commandFound;
+		const active = all.filter((body) => body.active && (this.isNativeSpace(body) ? commandFound : enabled.has(body.provider.id))).sort((left, right) => left.id.localeCompare(right.id));
 		const spaces = [...all].sort((left, right) => left.id.localeCompare(right.id)).map((body) => ({
 			id: body.id,
 			name: body.name,
@@ -1521,18 +2125,22 @@ var MemorySpacesService = class {
 			enabled: service.enabled,
 			configured: service.configured
 		})).sort((left, right) => left.providerId.localeCompare(right.providerId));
+		const revision = createHash("sha256").update(JSON.stringify({
+			bodies: spaces,
+			services,
+			...commandFound ? {} : { nativeUnavailable: true }
+		})).digest("hex");
 		return {
 			all,
 			active,
-			revision: createHash("sha256").update(JSON.stringify({
-				bodies: spaces,
-				services
-			})).digest("hex")
+			providerReady: this.memorySpaces.defaultProviderId() !== void 0,
+			revision
 		};
 	}
 	/** Return a usable system snapshot without waiting for any Provider I/O. */
 	statusSummary() {
 		const catalog = this.spaceDirectory();
+		const version = this.cliVersion !== void 0 && this.cliBinary() === this.cliVersion.binary ? this.cliVersion.version : void 0;
 		const dshActiveStores = catalog.items.filter((body) => body.active && body.providerEnabled !== false).map((body) => body.id);
 		const providerServices = this.memorySpaces.providerServices().items.map((service) => {
 			const descriptor = this.providerCatalog.descriptor(service.providerId);
@@ -1561,34 +2169,156 @@ var MemorySpacesService = class {
 			timeoutMs: this.config.timeoutMs,
 			defaultRecallLimit: this.config.defaultRecallLimit,
 			recallQuality: this.config.recallQuality,
+			embeddingManaged: this.config.embedding.enabled,
 			memoryBodyDirectory: catalog.directory,
 			memoryBodies: catalog.items,
-			providerServices
+			providerServices,
+			...version === void 0 ? {} : { version }
 		};
 	}
-	/** Probe the effective Mnemon embedding runtime and its default Store coverage. */
+	/**
+	* Probe Mnemon's embedding runtime, and count the vectors of every Mnemon Native space:
+	* `mnemon embed --status` counts only one Store, so a full count for it could read as the
+	* health of every space while another one lacked vectors (#392).
+	*/
 	async embeddingStatus(signal) {
-		const output = record(await this.runner.runJson(["embed", "--status"], signal === void 0 ? {} : { signal }));
-		const available = output?.embedding_available ?? output?.ollama_available;
-		const model = text(output?.model)?.trim();
-		const protocol = text(output?.protocol)?.trim();
-		const totalInsights = number(output?.total_insights);
-		const embedded = number(output?.embedded);
-		const coverage = text(output?.coverage)?.trim();
-		if (typeof available !== "boolean" || model === void 0 || model === "" || model.length > 200 || /[\u0000-\u001f\u007f]/u.test(model) || !Number.isInteger(totalInsights) || totalInsights < 0 || !Number.isInteger(embedded) || embedded < 0 || embedded > totalInsights || coverage === void 0 || !/^(?:100|\d{1,2})%$/u.test(coverage)) throw new Error("mnemon embed --status returned an invalid response");
+		const version = (await this.runner.runText(["--version"], {
+			globalFlags: false,
+			...signal === void 0 ? {} : { signal }
+		})).trim();
+		const parts = /^(?:mnemon version\s+)?v?(\d+)\.(\d+)\.(\d+)(?:\+[0-9A-Za-z.-]+)?$/u.exec(version)?.slice(1).map(Number);
+		if (parts === void 0 || !parts.every(Number.isSafeInteger) || !(parts[0] > 0 || parts[1] > 2 || parts[1] === 2 && parts[2] >= 13)) throw new Error("Embedding model checks require Mnemon CLI 0.2.13 or newer. Update the configured CLI and test again.");
+		const native = this.memorySpaces.list().filter((body) => this.isNativeSpace(body) && existsSync(body.dbPath));
+		let runtime;
+		const spaces = [];
+		for (const body of native) {
+			const space = {
+				memoryBodyId: body.id,
+				name: body.name,
+				active: body.active
+			};
+			try {
+				const counts = embeddingCounts(await this.runner.runJson(["embed", "--status"], {
+					store: body.id,
+					database: body.dbPath,
+					...signal === void 0 ? {} : { signal }
+				}), true);
+				runtime ??= counts;
+				spaces.push({
+					...space,
+					totalInsights: counts.totalInsights,
+					embedded: counts.embedded,
+					coverage: coveragePercent(counts.embedded, counts.totalInsights)
+				});
+			} catch (error) {
+				if (signal?.aborted === true) throw error;
+				if (cliFailure(error, "no-database")) continue;
+				spaces.push({
+					...space,
+					totalInsights: 0,
+					embedded: 0,
+					coverage: "0%",
+					error: cliReason(error)
+				});
+			}
+		}
+		runtime ??= await this.embeddingRuntime(signal);
+		const counted = spaces.filter((space) => space.error === void 0);
+		const totalInsights = counted.reduce((sum, space) => sum + space.totalInsights, 0);
+		const embedded = counted.reduce((sum, space) => sum + space.embedded, 0);
 		return {
-			available,
-			model,
+			...runtime,
 			totalInsights,
 			embedded,
-			coverage,
-			...protocol !== void 0 && protocol.length <= 32 && !/[\u0000-\u001f\u007f]/u.test(protocol) ? { protocol } : {}
+			coverage: coveragePercent(embedded, totalInsights),
+			spaces
+		};
+	}
+	/** Mnemon's embedding runtime, asked in a scratch data directory: no space could be counted, and Mnemon creates the Store it opens. */
+	async embeddingRuntime(signal) {
+		const directory = mkdtempSync(join(tmpdir(), "dsh-mnemon-embedding-"));
+		try {
+			return embeddingCounts(await this.runner.runJson([
+				"--data-dir",
+				directory,
+				"embed",
+				"--status"
+			], {
+				globalFlags: false,
+				...signal === void 0 ? {} : { signal }
+			}), true);
+		} catch (error) {
+			throw new Error(cliReason(error), { cause: error });
+		} finally {
+			rmSync(directory, {
+				recursive: true,
+				force: true
+			});
+		}
+	}
+	/**
+	* Fill in the vectors a Mnemon Native space lacks, through the Host's own data directory and
+	* embedding settings, which a terminal `mnemon embed --all` may not share (#392). Mnemon fills at
+	* most 100 a call and keeps the vectors it wrote when a call is stopped, so the fill goes in steps
+	* no longer than one CLI call, letting other memory work take the storage lock between them,
+	* until none is missing, a step writes none, or a minute is up.
+	*/
+	async embedMissing(memoryBodyId, signal) {
+		this.assertWritable();
+		const body = this.memorySpaces.get(validateMemorySpaceId(memoryBodyId));
+		if (!this.isNativeSpace(body)) throw new Error(`${body.provider.label} keeps no Mnemon vectors to fill in`);
+		const options = {
+			store: body.id,
+			database: body.dbPath,
+			...signal === void 0 ? {} : { signal }
+		};
+		const failed = (error) => new Error(cliFailure(error, "no-database") ? `Memory Space ${body.name} has no database` : cliReason(error), { cause: error });
+		const count = async () => {
+			try {
+				return embeddingCounts(await this.runner.runJson(["embed", "--status"], options));
+			} catch (error) {
+				throw failed(error);
+			}
+		};
+		const step = Math.min(this.config.timeoutMs, EMBED_FILL_STEP_MS);
+		const deadline = Date.now() + EMBED_FILL_BUDGET_MS;
+		const first = await count();
+		let last = first;
+		let stopped;
+		while (last.embedded < last.totalInsights) {
+			if (Date.now() + step > deadline) {
+				stopped = "time";
+				break;
+			}
+			try {
+				await this.runner.runText(["embed", "--all"], {
+					...options,
+					timeoutMs: step
+				});
+			} catch (error) {
+				if (!cliFailure(error, "timeout")) throw failed(error);
+			}
+			const next = await count();
+			const progressed = next.embedded > last.embedded;
+			last = next;
+			if (!progressed) {
+				stopped = "refused";
+				break;
+			}
+		}
+		const remaining = last.totalInsights - last.embedded;
+		return {
+			memoryBodyId: body.id,
+			filled: Math.max(0, last.embedded - first.embedded),
+			remaining,
+			model: last.model,
+			...remaining > 0 && stopped !== void 0 ? { stopped } : {}
 		};
 	}
 	async status(signal) {
-		const hasNativeSpace = this.memorySpaces.list().some((body) => this.isNativeSpace(body));
+		const nativeInUse = this.runner.commandFound || this.memorySpaces.list().some((body) => this.isNativeSpace(body));
 		let versionError;
-		const [catalog, rawVersion] = await Promise.all([this.spaces(signal), hasNativeSpace ? this.runner.runText(["--version"], signal === void 0 ? { globalFlags: false } : {
+		const [catalog, rawVersion] = await Promise.all([this.spaces(signal), nativeInUse ? this.runner.runText(["--version"], signal === void 0 ? { globalFlags: false } : {
 			signal,
 			globalFlags: false
 		}).catch((error) => {
@@ -1625,12 +2355,18 @@ var MemorySpacesService = class {
 			timeoutMs: this.config.timeoutMs,
 			defaultRecallLimit: this.config.defaultRecallLimit,
 			recallQuality: this.config.recallQuality,
+			embeddingManaged: this.config.embedding.enabled,
 			memoryBodyDirectory: catalog.directory,
 			memoryBodies: catalog.items,
 			providerServices
 		};
+		const version = rawVersion === void 0 ? void 0 : rawVersion.trim().replace(/^mnemon version\s+/i, "");
+		const binary = version === void 0 ? void 0 : this.cliBinary();
+		this.cliVersion = version === void 0 || binary === void 0 ? void 0 : {
+			binary,
+			version
+		};
 		try {
-			if (versionError !== void 0) throw versionError;
 			const healthySpaces = active.filter((body) => body.healthy && body.stats !== void 0);
 			const topEntities = /* @__PURE__ */ new Map();
 			const byCategory = {};
@@ -1651,13 +2387,13 @@ var MemorySpacesService = class {
 				})).sort((left, right) => right.count - left.count),
 				...active.length === 1 ? { dbPath: active[0].dbPath } : {}
 			};
-			const failed = active.filter((body) => !body.healthy);
+			const errors = [...versionError === void 0 ? [] : [versionError instanceof Error ? versionError.message : String(versionError)], ...active.filter((body) => !body.healthy).map((body) => `${body.name}: ${body.error ?? "unavailable"}`)];
 			return {
 				healthy: true,
 				...base,
-				...rawVersion === void 0 ? {} : { version: rawVersion.trim().replace(/^mnemon version\s+/i, "") },
+				...version === void 0 ? {} : { version },
 				stats,
-				...failed.length === 0 ? {} : { error: failed.map((body) => `${body.name}: ${body.error ?? "unavailable"}`).join("; ") }
+				...errors.length === 0 ? {} : { error: errors.join("; ") }
 			};
 		} catch (error) {
 			return {
@@ -1671,10 +2407,11 @@ var MemorySpacesService = class {
 		const body = this.memorySpaces.list().find((candidate) => candidate.id === id);
 		if (body === void 0) throw new Error(`unknown memory space: ${id}`);
 		if (!this.isNativeSpace(body)) {
-			if (!this.memorySpaces.providerServiceEnabled(body.provider.id)) throw new Error(`${body.provider.label} is disabled in Settings`);
+			if (!this.memorySpaces.providerServiceEnabled(body.provider.id)) throw new Error(`${body.provider.label} is disabled on the dsh-mnemon page under Plugins`);
 		}
 		const provider = this.providerFor(body);
 		provider.invalidateStatus?.(body.id);
+		this.invalidateEntityIndex(body.id);
 		const status = await provider.status(body, signal);
 		return {
 			...body,
@@ -1683,9 +2420,10 @@ var MemorySpacesService = class {
 			...status
 		};
 	}
-	async search(request, signal) {
+	/** exclude: memoryKey()s to leave out before the quality policy selects. */
+	async search(request, signal, options = {}) {
 		const query = required(request.query, "query", 2e3);
-		const limit = boundedInteger(request.limit, this.config.defaultRecallLimit, 1, 50);
+		const limit = memoryInputInteger(request.limit, this.config.defaultRecallLimit, 1, 50);
 		const qualityContext = {
 			requestedLimit: limit,
 			config: this.config.recallQuality
@@ -1696,9 +2434,9 @@ var MemorySpacesService = class {
 			"keyword",
 			"basic"
 		], "mode") ?? "smart";
-		const category = allowed(request.category, CATEGORIES$1, "category");
-		const source = allowed(request.source, SOURCES$1, "source");
-		const intent = allowed(request.intent, INTENTS$1, "intent");
+		const category = allowed(request.category, CATEGORIES, "category");
+		const source = allowed(request.source, SOURCES, "source");
+		const intent = allowed(request.intent, INTENTS, "intent");
 		const spaces = this.readSpaces(request.memoryBodyIds);
 		const normalizedRequest = {
 			query,
@@ -1706,7 +2444,8 @@ var MemorySpacesService = class {
 			limit: preparedPolicy.candidateLimit,
 			...category === void 0 ? {} : { category },
 			...source === void 0 ? {} : { source },
-			...intent === void 0 ? {} : { intent }
+			...intent === void 0 ? {} : { intent },
+			...request.inspect === true ? { inspect: true } : {}
 		};
 		let batches = await Promise.all(spaces.map(async (body) => {
 			if (!body.provider.capabilities.search) return {
@@ -1742,7 +2481,8 @@ var MemorySpacesService = class {
 			const hints = [];
 			for (const [bodyOrder, { body, result }] of selectedBatches.entries()) {
 				const scoreSemantics = this.providerFor(body).scoreSemantics;
-				candidates.push(...result.results.map((entry, index) => ({
+				const entries = options.exclude === void 0 ? result.results : result.results.filter((entry) => !options.exclude.has(memoryKey(body.id, entry.id)));
+				candidates.push(...entries.map((entry, index) => ({
 					insight: this.annotate(entry, body),
 					memoryBodyId: body.id,
 					providerId: body.provider.id,
@@ -1754,7 +2494,8 @@ var MemorySpacesService = class {
 			}
 			const heterogeneous = new Set(spaces.map((body) => body.provider.id)).size > 1;
 			if (heterogeneous) for (const candidate of candidates) candidate.insight.federatedScore = 1 / (60 + candidate.providerRank);
-			candidates.sort((left, right) => heterogeneous ? (right.insight.federatedScore ?? 0) - (left.insight.federatedScore ?? 0) || left.bodyOrder - right.bodyOrder : (right.insight.score ?? 0) - (left.insight.score ?? 0));
+			const useProviderOrder = heterogeneous || candidates.some((candidate) => candidate.scoreSemantics?.kind === "provider-native");
+			candidates.sort((left, right) => useProviderOrder ? left.providerRank - right.providerRank || left.bodyOrder - right.bodyOrder : (right.insight.score ?? 0) - (left.insight.score ?? 0));
 			return {
 				hints,
 				quality: applyRecallQualityPolicy(preparedPolicy, candidates, qualityContext)
@@ -1769,7 +2510,8 @@ var MemorySpacesService = class {
 					const recovered = await this.providerFor(batch.body).search(batch.body, {
 						query: recoveryPlan.query,
 						mode: "keyword",
-						limit: Math.min(limit, preparedPolicy.candidateLimit)
+						limit: Math.min(limit, preparedPolicy.candidateLimit),
+						...request.inspect === true ? { inspect: true } : {}
 					}, signal);
 					const admitted = recovered.results.some((insight) => recoveryMatchCount(insight.content, recoveryPlan) >= recoveryPlan.requiredMatches);
 					const results = mergeRecoveryResults(batch.result.results, recovered.results, recoveryPlan, preparedPolicy.candidateLimit);
@@ -1788,22 +2530,38 @@ var MemorySpacesService = class {
 		}
 		const { hints, quality } = evaluation;
 		const selected = recoveryPlan === void 0 ? quality.selected : prioritizeRecoveryEvidence(quality.selected, recoveryPlan);
-		const qualityStats = (memoryBodyId) => {
-			const evaluated = quality.evaluated.filter((candidate) => candidate.candidate.memoryBodyId === memoryBodyId);
-			const selected = quality.selected.filter((candidate) => candidate.candidate.memoryBodyId === memoryBodyId);
-			return {
-				policyId: quality.policyId,
-				...quality.fallbackFrom === void 0 ? {} : { fallbackFrom: quality.fallbackFrom },
-				fetched: evaluated.length,
-				retained: evaluated.filter((candidate) => candidate.decision.action === "keep").length,
-				selected: selected.length,
-				droppedLowScore: evaluated.filter((candidate) => candidate.decision.action === "drop" && candidate.decision.reason === "low-score").length,
-				droppedNonPositiveScore: evaluated.filter((candidate) => candidate.decision.action === "drop" && candidate.decision.reason === "non-positive-score").length,
-				droppedInvalidScore: evaluated.filter((candidate) => candidate.decision.action === "drop" && candidate.decision.reason === "invalid-score").length,
-				unscored: evaluated.filter((candidate) => candidate.decision.reason === "unscored").length,
-				unscaled: evaluated.filter((candidate) => candidate.decision.reason === "unscaled-score").length
-			};
-		};
+		const qualityStats = /* @__PURE__ */ new Map();
+		for (const { body } of batches) qualityStats.set(body.id, {
+			policyId: quality.policyId,
+			...quality.fallbackFrom === void 0 ? {} : { fallbackFrom: quality.fallbackFrom },
+			fetched: 0,
+			retained: 0,
+			selected: 0,
+			droppedLowScore: 0,
+			droppedNonPositiveScore: 0,
+			droppedInvalidScore: 0,
+			unscored: 0,
+			unscaled: 0
+		});
+		for (const { candidate, decision } of quality.evaluated) {
+			const stats = qualityStats.get(candidate.memoryBodyId);
+			if (stats === void 0) continue;
+			stats.fetched += 1;
+			if (decision.action === "keep") stats.retained += 1;
+			if (decision.action === "drop") {
+				if (decision.reason === "low-score") stats.droppedLowScore += 1;
+				if (decision.reason === "non-positive-score") stats.droppedNonPositiveScore += 1;
+				if (decision.reason === "invalid-score") stats.droppedInvalidScore += 1;
+			}
+			if (decision.reason === "unscored") stats.unscored += 1;
+			if (decision.reason === "unscaled-score") stats.unscaled += 1;
+			if (decision.tier === "ranked") stats.ranked = (stats.ranked ?? 0) + 1;
+			if (decision.reason === "out-of-range-score") stats.outOfRange = (stats.outOfRange ?? 0) + 1;
+		}
+		for (const { candidate } of quality.selected) {
+			const stats = qualityStats.get(candidate.memoryBodyId);
+			if (stats !== void 0) stats.selected += 1;
+		}
 		return {
 			query,
 			mode,
@@ -1813,7 +2571,7 @@ var MemorySpacesService = class {
 				...decision.normalizedScore === void 0 ? {} : { normalizedScore: decision.normalizedScore }
 			})),
 			sources: batches.map((batch) => {
-				const stats = qualityStats(batch.body.id);
+				const stats = qualityStats.get(batch.body.id);
 				if (batch.source.status === "unavailable" || batch.source.status === "unsupported") return {
 					...batch.source,
 					quality: stats
@@ -1938,8 +2696,8 @@ var MemorySpacesService = class {
 		const rawQuery = request.query?.trim() ?? "";
 		const query = rawQuery.toLocaleLowerCase();
 		if (rawQuery.length > 500) throw new Error("query is too long (max 500 characters)");
-		const category = allowed(request.category, CATEGORIES$1, "category");
-		const limit = boundedInteger(request.limit, 200, 1, 1e3);
+		const category = allowed(request.category, CATEGORIES, "category");
+		const limit = memoryInputInteger(request.limit, 200, 1, 1e3);
 		const spaces = this.readSpaces(request.memoryBodyIds);
 		const batches = await Promise.all(spaces.map(async (body) => {
 			const mode = body.provider.capabilities.browse ? "enumerable" : body.provider.capabilities.search ? "query-only" : "unsupported";
@@ -1986,40 +2744,208 @@ var MemorySpacesService = class {
 			sources: batches.map((batch) => batch.source)
 		};
 	}
+	/**
+	* The entities of the active spaces, each counted once per memory that
+	* carries it. With an entity, also the first page of those memories.
+	*/
 	async entities(entity, limit, signal) {
-		const active = (await this.spaces(signal)).items.filter((body) => body.active);
-		const capable = active.filter((body) => body.provider.capabilities.entities);
-		const entityCounts = /* @__PURE__ */ new Map();
-		for (const body of capable) for (const item of body.stats?.topEntities ?? []) entityCounts.set(item.entity, (entityCounts.get(item.entity) ?? 0) + item.count);
-		const items = [...entityCounts].map(([name, count]) => ({
-			entity: name,
-			count
-		})).sort((left, right) => right.count - left.count);
-		const sources = active.map((body) => {
-			if (!body.provider.capabilities.entities) return readSource(body, "unsupported", "unsupported", 0, { hint: "This provider does not expose an entity index." });
-			if (!body.healthy) return readSource(body, "entities", "unavailable", 0, { hint: body.error ?? "Provider unavailable." });
-			const count = body.stats?.topEntities.length ?? 0;
-			return readSource(body, "entities", count === 0 ? "empty" : "ready", count);
-		});
-		const selected = entity?.trim() ?? "";
-		if (selected === "") return {
-			items,
+		const selected = entity === void 0 ? "" : entityName(entity);
+		const read = await this.readEntityIndexes(signal, 0);
+		const { items } = mergeEntityCounts(read.indexes);
+		const view = {
+			items: items.slice(0, ENTITY_RAIL_LIMIT),
 			insights: [],
-			sources
+			sources: read.sources,
+			total: items.length,
+			complete: read.complete
 		};
-		if (selected.length > 200) throw new Error("entity is too long (max 200 characters)");
-		const readableIds = capable.filter((body) => body.healthy).map((body) => body.id);
+		if (selected === "") return view;
+		const page = this.entityPage(read, selected, 0, memoryInputInteger(limit, 20, 1, 50));
 		return {
-			items,
-			selected,
-			insights: readableIds.length === 0 ? [] : (await this.search({
+			...view,
+			selected: page.entity,
+			insights: page.items
+		};
+	}
+	/** One page of the memories that carry an entity, by importance and then recency. */
+	async entityMemories(entity, offset, limit, signal) {
+		const selected = entityName(entity);
+		if (selected === "") throw new Error("entity is required");
+		const read = await this.readEntityIndexes(signal, ENTITY_SELECTION_STATUS_REUSE_MS);
+		return this.entityPage(read, selected, memoryInputInteger(offset, 0, 0, 1e6), memoryInputInteger(limit, 50, 1, 200));
+	}
+	/**
+	* What recall relates to an entity, without the memories that carry it.
+	* Those are left out before the quality policy selects, so they cannot use up
+	* its places and leave the related list empty.
+	*/
+	async entityRelated(entity, limit, signal, view) {
+		const selected = entityName(entity);
+		if (selected === "") throw new Error("entity is required");
+		const superseding = view === void 0 ? void 0 : new AbortController();
+		if (view !== void 0) {
+			this.entityRelatedViews.get(view)?.abort(/* @__PURE__ */ new Error("superseded by a newer entity selection"));
+			this.entityRelatedViews.set(view, superseding);
+		}
+		const combined = superseding === void 0 ? signal : signal === void 0 ? superseding.signal : AbortSignal.any([signal, superseding.signal]);
+		try {
+			const read = await this.readEntityIndexes(combined, ENTITY_SELECTION_STATUS_REUSE_MS);
+			const key = normalizeEntityKey(selected);
+			const carrying = /* @__PURE__ */ new Set();
+			for (const [bodyId, index] of read.byBody) for (const position of index.byKey.get(key) ?? []) carrying.add(memoryKey(bodyId, index.memories[position].id));
+			const display = mergeEntityCounts(read.indexes).names.get(key) ?? selected;
+			const readableIds = read.readable.map((body) => body.id);
+			if (readableIds.length === 0) return {
+				entity: display,
+				items: [],
+				sources: []
+			};
+			const result = await this.search({
 				query: selected,
 				intent: "ENTITY",
-				limit: boundedInteger(limit, 20, 1, 50),
-				memoryBodyIds: readableIds
-			}, signal)).results,
-			sources
+				limit: memoryInputInteger(limit, 20, 1, 50),
+				memoryBodyIds: readableIds,
+				inspect: true
+			}, combined, { exclude: carrying });
+			combined?.throwIfAborted();
+			return {
+				entity: display,
+				items: result.results,
+				sources: result.sources
+			};
+		} finally {
+			if (view !== void 0 && this.entityRelatedViews.get(view) === superseding) this.entityRelatedViews.delete(view);
+		}
+	}
+	entityPage(read, selected, offset, limit) {
+		const key = normalizeEntityKey(selected);
+		const memories = memoriesWithEntity(read.indexes, key);
+		return {
+			entity: mergeEntityCounts(read.indexes).names.get(key) ?? selected,
+			total: memories.length,
+			offset,
+			items: memories.slice(offset, offset + limit),
+			complete: read.complete,
+			sources: read.sources
 		};
+	}
+	/**
+	* One entity index per active space that has an entity index, read
+	* concurrently. A space keeps its index while its Provider statistics and
+	* metadata stay the same; a write through this Source drops it.
+	*/
+	async readEntityIndexes(signal, statusMaxAgeMs) {
+		signal?.throwIfAborted();
+		const active = this.memorySpaces.active();
+		const capable = new Set(active.filter((body) => body.provider.capabilities.entities).map((body) => body.id));
+		for (const id of this.entityIndexCache.keys()) if (!capable.has(id)) this.entityIndexCache.delete(id);
+		const reads = await Promise.all(active.map(async (body) => {
+			if (!body.provider.capabilities.entities) return {
+				body,
+				recall: false,
+				source: readSource(body, "unsupported", "unsupported", 0, { hint: "This provider does not expose an entity index." })
+			};
+			const status = await this.entitySpaceStatus(body, statusMaxAgeMs);
+			if (!status.healthy) return {
+				body,
+				recall: false,
+				source: readSource(body, "entities", "unavailable", 0, { hint: status.error ?? "Provider unavailable." })
+			};
+			const recall = body.provider.capabilities.search;
+			if (this.providerFor(body).entityIndex === void 0 && !body.provider.capabilities.browse) return {
+				body,
+				recall,
+				source: readSource(body, "query-only", "query-required", 0, { hint: "This provider can only be queried; its memories appear among related memories." })
+			};
+			try {
+				const index = await this.entityIndexFor(body, status);
+				const options = {
+					memoryCount: index.memoryCount,
+					complete: index.complete,
+					...index.complete ? {} : { hint: "The Provider indexed only part of this space." }
+				};
+				return {
+					body,
+					index,
+					recall,
+					source: readSource(body, "entities", index.byKey.size === 0 ? "empty" : "ready", index.byKey.size, options)
+				};
+			} catch (error) {
+				return {
+					body,
+					recall: false,
+					source: readSource(body, "entities", "unavailable", 0, { hint: error instanceof Error ? error.message : String(error) })
+				};
+			}
+		}));
+		signal?.throwIfAborted();
+		const byBody = /* @__PURE__ */ new Map();
+		for (const read of reads) if (read.index !== void 0) byBody.set(read.body.id, read.index);
+		const indexes = [...byBody.values()];
+		return {
+			byBody,
+			indexes,
+			readable: reads.filter((read) => read.recall).map((read) => read.body),
+			sources: reads.map((read) => read.source),
+			complete: indexes.every((index) => index.complete)
+		};
+	}
+	/** Provider health for the entity reads: a read in flight is shared, a finished one reused for less than maxAgeMs. */
+	entitySpaceStatus(body, maxAgeMs) {
+		const recent = this.entityStatusCache.get(body.id);
+		if (recent !== void 0 && (recent.settledAt === void 0 || Date.now() - recent.settledAt < maxAgeMs)) return recent.status;
+		const entry = {
+			settledAt: void 0,
+			status: Promise.resolve(void 0)
+		};
+		entry.status = this.providerFor(body).status(body).catch((error) => ({
+			healthy: false,
+			error: error instanceof Error ? error.message : String(error)
+		})).then((status) => {
+			entry.settledAt = Date.now();
+			return status;
+		});
+		this.entityStatusCache.set(body.id, entry);
+		return entry.status;
+	}
+	entityIndexFor(body, status) {
+		const fingerprint = entityIndexFingerprint(body, status);
+		const cached = this.entityIndexCache.get(body.id);
+		if (cached !== void 0 && cached.fingerprint === fingerprint) {
+			if (fingerprint !== void 0 || cached.settledAt === void 0 || Date.now() - cached.settledAt < ENTITY_INDEX_UNCHECKED_REUSE_MS) return cached.index;
+		}
+		const entry = {
+			fingerprint,
+			settledAt: void 0,
+			index: Promise.resolve(void 0)
+		};
+		entry.index = this.buildEntityIndex(body).then((index) => {
+			entry.settledAt = Date.now();
+			return index;
+		}, (error) => {
+			if (this.entityIndexCache.get(body.id) === entry) this.entityIndexCache.delete(body.id);
+			throw error;
+		});
+		this.entityIndexCache.set(body.id, entry);
+		return entry.index;
+	}
+	async buildEntityIndex(body) {
+		const provider = this.providerFor(body);
+		if (provider.entityIndex !== void 0) {
+			const owned = await provider.entityIndex(body);
+			return buildSpaceEntityIndex(owned.memories.map((memory) => this.entityMemory(memory, body)), owned.memories.length, owned.complete);
+		}
+		const listed = await provider.list(body, { limit: ENTITY_INDEX_LIST_LIMIT });
+		return buildSpaceEntityIndex(listed.map((memory) => this.entityMemory(memory, body)), listed.length, listed.length < ENTITY_INDEX_LIST_LIMIT);
+	}
+	/** A listed memory, not a query result: no relevance fields. */
+	entityMemory(memory, body) {
+		const { score: _score, normalizedScore: _normalized, relevanceTier: _tier, federatedScore: _federated, confidence: _confidence, intent: _intent, matchedVia: _matchedVia, depth: _depth, edgeType: _edgeType, ...listed } = memory;
+		return this.annotate(listed, body);
+	}
+	invalidateEntityIndex(memoryBodyId) {
+		this.entityIndexCache.delete(memoryBodyId);
+		this.entityStatusCache.delete(memoryBodyId);
 	}
 	async remember(request, signal) {
 		this.assertWritable();
@@ -2035,13 +2961,21 @@ var MemorySpacesService = class {
 	*/
 	async rememberMany(requests, signal) {
 		this.assertWritable();
-		const prepared = requests.map((request) => this.prepareRemember(request));
+		const destinations = /* @__PURE__ */ new Map();
+		const prepared = requests.map((request) => this.prepareRemember(request, destinations));
 		const results = new Array(prepared.length);
 		const groups = /* @__PURE__ */ new Map();
-		for (const [index, entry] of prepared.entries()) groups.set(entry.body.id, [...groups.get(entry.body.id) ?? [], {
-			...entry,
-			index
-		}]);
+		for (const [index, entry] of prepared.entries()) {
+			const group = groups.get(entry.body.id);
+			if (group === void 0) groups.set(entry.body.id, [{
+				...entry,
+				index
+			}]);
+			else group.push({
+				...entry,
+				index
+			});
+		}
 		for (const group of groups.values()) {
 			const body = group[0].body;
 			const provider = this.providerFor(body);
@@ -2057,8 +2991,9 @@ var MemorySpacesService = class {
 					providerChanged ||= mutationResultCommitted(result);
 				}
 			}
+			const batched = new Set(batch);
 			for (const entry of group) {
-				if (batch.includes(entry)) continue;
+				if (batched.has(entry)) continue;
 				const result = await provider.remember(body, entry.request, signal);
 				results[entry.index] = this.annotateResult(result, body);
 				providerChanged ||= mutationResultCommitted(result);
@@ -2067,12 +3002,30 @@ var MemorySpacesService = class {
 		}
 		return results;
 	}
+	/**
+	* The memories held under an exact id among the given spaces that can be
+	* read now, asked of the Providers that can look ids up.
+	*/
+	async locate(id, memoryBodyIds, signal) {
+		const exact = required(id, "id", 2e3);
+		const readable = new Map(this.memorySpaces.active().filter((body) => this.isNativeSpace(body) || this.memorySpaces.providerServiceEnabled(body.provider.id)).map((body) => [body.id, body]));
+		const found = [];
+		for (const memoryBodyId of new Set(memoryBodyIds)) {
+			const body = readable.get(memoryBodyId);
+			if (body === void 0) continue;
+			const provider = this.providerFor(body);
+			if (provider.get === void 0) continue;
+			const insight = await provider.get(body, exact, signal);
+			if (insight !== void 0 && insight.id === exact) found.push(this.annotate(insight, body));
+		}
+		return found;
+	}
 	async related(id, depth = 2, edge, signal, memoryBodyId) {
 		const body = this.readSpace(memoryBodyId);
 		const selectedEdge = allowed(edge, EDGE_TYPES, "edge");
 		const provider = this.providerFor(body);
 		if (provider.related === void 0 || !body.provider.capabilities.related) throw new Error(`${body.provider.label} does not support related-memory traversal`);
-		return (await provider.related(body, required(id, "id", 2e3), boundedInteger(depth, 2, 1, 5), selectedEdge, signal)).map((entry) => this.annotate(entry, body));
+		return (await provider.related(body, required(id, "id", 2e3), memoryInputInteger(depth, 2, 1, 5), selectedEdge, signal)).map((entry) => this.annotate(entry, body));
 	}
 	async link(sourceId, targetId, type = "semantic", weight = .5, reason, signal, memoryBodyId) {
 		this.assertWritable();
@@ -2114,11 +3067,12 @@ var MemorySpacesService = class {
 	}) {
 		const strategy = this.config.persistenceStrategy;
 		if (strategy.mode === "manual") {
-			const connection = strategy.providerConnections[strategy.providerId];
+			const providerId = this.persistenceProviderId();
+			const connection = providerId === void 0 ? void 0 : strategy.providerConnections[providerId];
 			return this.createSpace({
 				...body,
-				providerId: strategy.providerId,
-				...this.isNativeProvider(strategy.providerId) || connection === void 0 ? {} : { connection }
+				...providerId === void 0 ? {} : { providerId },
+				...providerId === void 0 || this.isNativeProviderId(providerId) || connection === void 0 ? {} : { connection }
 			}, signal);
 		}
 		const request = {
@@ -2138,15 +3092,103 @@ var MemorySpacesService = class {
 		}, delegation);
 		return this.createSpace(request, signal, decision);
 	}
+	/** A chosen provider stays fixed; the built-in default follows whichever provider is ready. */
+	persistenceProviderId() {
+		const strategy = this.config.persistenceStrategy;
+		return strategy.providerDefaulted === true ? this.memorySpaces.defaultProviderId() : strategy.providerId;
+	}
 	async updateProviderService(providerId, settings, clearSecrets = [], enabled = true, signal) {
 		this.assertWritable();
-		if (this.isNativeProvider(providerId)) throw new Error("Mnemon Native service settings are managed by the native configuration");
+		if (this.isNativeProviderId(providerId)) throw new Error("Mnemon Native service settings are managed by the native configuration");
 		if (!enabled) return this.memorySpaces.updateProviderService(providerId, settings, clearSecrets, false);
 		const connection = this.memorySpaces.resolveProviderService(providerId, settings, clearSecrets);
 		const provider = this.providers.get(providerId);
 		if (provider?.discover === void 0) throw new Error(`${this.providerCatalog.descriptor(providerId).label} does not support Memory Space discovery`);
 		const discovered = await provider.discover(connection, signal);
 		return this.memorySpaces.syncProviderService(providerId, connection, discovered);
+	}
+	/**
+	* Ask every enabled Provider service again for its namespaces, as saving its settings does, and
+	* mount the ones this directory has never held, inactive (#373). Nothing mounted changes and a
+	* namespace a person disconnected stays disconnected. Providers are asked side by side, each
+	* for at most 30 seconds; one that cannot answer keeps its spaces and says why. A pass already
+	* running for this directory, at start-up or from the page, is joined rather than run twice; a
+	* request that joined one its starter then stopped asks again, unless it was stopped itself.
+	*/
+	async rediscoverProviders(trigger, signal, providerTimeoutMs = MEMORY_SPACES_REDISCOVERY_PROVIDER_TIMEOUT_MS) {
+		this.assertWritable();
+		const key = this.memorySpaces.providerRegistryPath;
+		const entry = rediscoveries.get(key) ?? {};
+		rediscoveries.set(key, entry);
+		const joined = entry.running;
+		if (joined !== void 0) try {
+			return await (signal === void 0 ? joined : untilAborted(joined, signal));
+		} catch {
+			signal?.throwIfAborted();
+			const next = entry.running;
+			if (next !== void 0 && next !== joined) return await (signal === void 0 ? next : untilAborted(next, signal));
+		}
+		const running = this.runRediscovery(trigger, signal, providerTimeoutMs);
+		entry.running = running;
+		try {
+			const outcome = await running;
+			entry.last = outcome;
+			return outcome;
+		} finally {
+			if (entry.running === running) delete entry.running;
+		}
+	}
+	async runRediscovery(trigger, signal, providerTimeoutMs) {
+		const services = this.memorySpaces.providerServices().items.filter((item) => item.enabled && !this.isNativeProviderId(item.providerId));
+		const results = await Promise.all(services.map(async (item) => {
+			const provider = this.providers.get(item.providerId);
+			if (provider?.discover === void 0) return void 0;
+			const label = this.providerCatalog.descriptor(item.providerId).label;
+			const timeout = AbortSignal.timeout(providerTimeoutMs);
+			const bounded = signal === void 0 ? timeout : AbortSignal.any([signal, timeout]);
+			try {
+				const connection = this.memorySpaces.resolveProviderService(item.providerId, {});
+				const discovered = await untilAborted(provider.discover(connection, bounded), bounded);
+				signal?.throwIfAborted();
+				const mounted = this.memorySpaces.mountDiscovered(item.providerId, connection, discovered);
+				return {
+					providerId: item.providerId,
+					label,
+					found: discovered.length,
+					added: mounted.added.map((body) => ({
+						id: body.id,
+						name: body.name
+					})),
+					disconnected: mounted.disconnected
+				};
+			} catch (error) {
+				signal?.throwIfAborted();
+				const failure = {
+					providerId: item.providerId,
+					label,
+					found: 0,
+					added: [],
+					disconnected: 0
+				};
+				if (timeout.aborted) {
+					const limit = providerTimeoutMs < 1e3 ? `${providerTimeoutMs} ms` : `${Math.round(providerTimeoutMs / 1e3)} seconds`;
+					return {
+						...failure,
+						timedOut: true,
+						error: `did not answer within ${limit}`
+					};
+				}
+				return {
+					...failure,
+					error: error instanceof Error ? error.message : String(error)
+				};
+			}
+		}));
+		return {
+			at: (/* @__PURE__ */ new Date()).toISOString(),
+			trigger,
+			results: results.filter((result) => result !== void 0)
+		};
 	}
 	updateSpace(id, request) {
 		this.assertWritable();
@@ -2258,12 +3300,16 @@ var MemorySpacesService = class {
 		return provider;
 	}
 	readSpaces(ids) {
-		const active = this.memorySpaces.active();
-		if (ids === void 0 || ids.length === 0) return active;
-		return [...new Set(ids.map((id) => id.trim()).filter((id) => id !== ""))].map((id) => {
-			const body = this.memorySpaces.get(id);
+		if (ids === void 0 || ids.length === 0) return this.memorySpaces.active();
+		const requested = [...new Set(ids.map((id) => id.trim()).filter((id) => id !== ""))];
+		const available = /* @__PURE__ */ new Map();
+		for (const body of this.memorySpaces.list()) if (!available.has(body.id)) available.set(body.id, body);
+		return requested.map((id) => {
+			const normalized = validateMemorySpaceId(id);
+			const body = available.get(normalized);
+			if (body === void 0) throw new Error(`unknown memory space: ${normalized}`);
 			if (!body.active) throw new Error(`memory space is not active for reading: ${id}`);
-			if (!this.isNativeSpace(body) && !this.memorySpaces.providerServiceEnabled(body.provider.id)) throw new Error(`${body.provider.label} is disabled in Settings`);
+			if (!this.isNativeSpace(body) && !this.memorySpaces.providerServiceEnabled(body.provider.id)) throw new Error(`${body.provider.label} is disabled on the dsh-mnemon page under Plugins`);
 			return body;
 		});
 	}
@@ -2271,7 +3317,7 @@ var MemorySpacesService = class {
 		if (id !== void 0 && id.trim() !== "") {
 			const body = this.memorySpaces.get(id);
 			if (!body.active) throw new Error(`memory space is not active for reading: ${body.id}`);
-			if (!this.isNativeSpace(body) && !this.memorySpaces.providerServiceEnabled(body.provider.id)) throw new Error(`${body.provider.label} is disabled in Settings`);
+			if (!this.isNativeSpace(body) && !this.memorySpaces.providerServiceEnabled(body.provider.id)) throw new Error(`${body.provider.label} is disabled on the dsh-mnemon page under Plugins`);
 			return body;
 		}
 		const active = this.memorySpaces.active();
@@ -2281,26 +3327,28 @@ var MemorySpacesService = class {
 	writeSpace(id) {
 		if (id !== void 0 && id.trim() !== "") {
 			const body = this.memorySpaces.get(id);
-			if (!this.isNativeSpace(body) && !this.memorySpaces.providerServiceEnabled(body.provider.id)) throw new Error(`${body.provider.label} is disabled in Settings`);
+			if (!this.isNativeSpace(body) && !this.memorySpaces.providerServiceEnabled(body.provider.id)) throw new Error(`${body.provider.label} is disabled on the dsh-mnemon page under Plugins`);
 			return body;
 		}
 		const active = this.memorySpaces.active();
 		if (active.length !== 1) throw new Error("memoryBodyId is required when the number of active memory spaces is not exactly one");
 		return active[0];
 	}
-	prepareRemember(request) {
-		const body = this.writeSpace(request.memoryBodyId);
+	prepareRemember(request, destinations) {
+		const key = request.memoryBodyId?.trim() ?? "";
+		const body = destinations?.get(key) ?? this.writeSpace(request.memoryBodyId);
+		destinations?.set(key, body);
 		const content = required(request.content, "content", 8192);
-		const importance = boundedInteger(request.importance, 3, 1, 5);
-		const category = allowed(request.category, CATEGORIES$1, "category") ?? "general";
-		const source = allowed(request.source, SOURCES$1, "source") ?? "user";
+		const importance = request.importance === void 0 ? void 0 : memoryInputInteger(request.importance, 3, 1, 5);
+		const category = allowed(request.category, CATEGORIES, "category") ?? "general";
+		const source = allowed(request.source, SOURCES, "source") ?? "user";
 		const tags = commaList(request.tags, "tags", 20)?.split(",");
 		const entities = commaList(request.entities, "entities", 50)?.split(",");
 		return {
 			body,
 			request: {
 				content,
-				importance,
+				...importance === void 0 ? {} : { importance },
 				category,
 				source,
 				memoryBodyId: body.id,
@@ -2330,6 +3378,7 @@ var MemorySpacesService = class {
 		};
 	}
 	activateAfterWrite(body, providerChanged) {
+		this.invalidateEntityIndex(body.id);
 		if (!providerChanged) return;
 		if (!body.active) this.memorySpaces.setActive(body.id, true);
 		else this.memorySpaces.touch(body.id);
@@ -2337,172 +3386,7 @@ var MemorySpacesService = class {
 	assertWritable() {
 		if (!this.config.writeEnabled) throw new Error("dsh-mnemon is configured read-only (writeEnabled: false)");
 	}
-	/** @deprecated Use spaces. */
-	bodies(...args) {
-		return this.spaces(...args);
-	}
-	/** @deprecated Use spaceDirectory. */
-	bodyDirectory(...args) {
-		return this.spaceDirectory(...args);
-	}
-	/** @deprecated Use reconnectSpace. */
-	reconnectBody(...args) {
-		return this.reconnectSpace(...args);
-	}
-	/** @deprecated Use prepareSpacePlacement. */
-	prepareBodyPlacement(...args) {
-		return this.prepareSpacePlacement(...args);
-	}
-	/** @deprecated Use createSpace. */
-	createBody(...args) {
-		return this.createSpace(...args);
-	}
-	/** @deprecated Use createSpaceForPersistence. */
-	createBodyForPersistence(...args) {
-		return this.createSpaceForPersistence(...args);
-	}
-	/** @deprecated Use updateSpace. */
-	updateBody(...args) {
-		return this.updateSpace(...args);
-	}
-	/** @deprecated Use updateSpaceMetadata. */
-	updateBodyMetadata(...args) {
-		return this.updateSpaceMetadata(...args);
-	}
-	/** @deprecated Use deleteSpace. */
-	deleteBody(...args) {
-		return this.deleteSpace(...args);
-	}
-	/** @deprecated Use mergeSpaces. */
-	mergeBodies(...args) {
-		return this.mergeSpaces(...args);
-	}
 };
-//#endregion
-//#region src/runner.ts
-function expandHome(path) {
-	return path === "~" ? homedir() : path.startsWith("~/") || path.startsWith("~\\") ? join(homedir(), path.slice(2)) : path;
-}
-var MnemonCliError = class extends Error {
-	exitCode;
-	stderr;
-	constructor(message, exitCode = null, stderr = "") {
-		super(message);
-		this.name = "MnemonCliError";
-		this.exitCode = exitCode;
-		this.stderr = stderr;
-	}
-};
-const EMBEDDING_ENVIRONMENT_KEYS = /* @__PURE__ */ new Set([
-	"MNEMON_EMBED_ENDPOINT",
-	"MNEMON_EMBED_MODEL",
-	"MNEMON_EMBED_API_KEY",
-	"MNEMON_EMBED_PROTOCOL"
-]);
-/** Preserve the Host environment while making saved embedding overrides authoritative. */
-function processEnvironment(config) {
-	if (!config.embedding.enabled) return void 0;
-	return {
-		...Object.fromEntries(Object.entries(process.env).filter(([key]) => !EMBEDDING_ENVIRONMENT_KEYS.has(key.toUpperCase()))),
-		MNEMON_EMBED_ENDPOINT: config.embedding.endpoint,
-		MNEMON_EMBED_MODEL: config.embedding.model,
-		MNEMON_EMBED_API_KEY: config.embedding.apiKey,
-		...config.embedding.protocol === "auto" ? {} : { MNEMON_EMBED_PROTOCOL: config.embedding.protocol }
-	};
-}
-function createRunner(config, processRunner = runProcess, workspaceRoot) {
-	const currentCommand = () => findMnemonCommand(config) ?? config.cliPath ?? "mnemon";
-	const globalArgs = (store) => {
-		const args = [];
-		if (config.storageScope !== "global" || config.dataDir !== void 0) args.push("--data-dir", effectiveDataDir());
-		if (store !== void 0) args.push("--store", store);
-		else if (config.store !== void 0) args.push("--store", config.store);
-		return args;
-	};
-	const effectiveDataDir = () => {
-		if (config.storageScope === "workspace") return resolve(workspaceRoot ?? process.cwd(), ".mnemon");
-		if (config.storageScope === "custom") return expandHome(config.dataDir);
-		return expandHome(process.env.MNEMON_DATA_DIR?.trim() || "~/.mnemon");
-	};
-	const persistedStore = () => {
-		const active = join(effectiveDataDir(), "active");
-		if (existsSync(active)) try {
-			const value = readFileSync(active, "utf8").trim();
-			if (/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(value)) return value;
-		} catch {}
-		return "default";
-	};
-	const launch = async (args, options = {}) => {
-		if (options.signal?.aborted === true) throw new MnemonCliError(`mnemon command aborted: ${String(options.signal.reason ?? "cancelled")}`);
-		const argv = options.globalFlags === false ? [...args] : [...globalArgs(options.store), ...args];
-		const environment = processEnvironment(config);
-		const processOptions = {
-			timeoutMs: config.timeoutMs,
-			...environment === void 0 ? {} : { env: environment },
-			...options.signal === void 0 ? {} : { signal: options.signal }
-		};
-		let result;
-		try {
-			const command = currentCommand();
-			const launcher = mnemonNpmLauncher(command);
-			result = await processRunner(launcher === void 0 ? command : process.execPath, launcher === void 0 ? argv : [launcher, ...argv], launcher === void 0 ? processOptions : {
-				...processOptions,
-				env: nodeLauncherEnvironment(processOptions.env)
-			});
-		} catch (error) {
-			throw new MnemonCliError(`${error instanceof Error ? error.message : String(error)}. ${process.platform === "win32" ? "Install the official Mnemon Windows release, ensure mnemon.exe is on PATH or under %LOCALAPPDATA%\\Programs\\mnemon, or set MNEMON_CLI_PATH or mnemon.cliPath to its absolute path." : "Install Mnemon and ensure \"mnemon\" is on PATH, or set MNEMON_CLI_PATH or mnemon.cliPath."}`);
-		}
-		if (result.exitCode !== 0) {
-			const detail = result.stderr.trim() || result.stdout.trim() || "no output";
-			throw new MnemonCliError(`mnemon ${args.join(" ")} exited ${String(result.exitCode)}: ${detail}`, result.exitCode, result.stderr);
-		}
-		return result.stdout;
-	};
-	const execute = (args, options = {}) => {
-		return withMemoryStorageLock(effectiveDataDir(), () => launch(args, options));
-	};
-	return {
-		get command() {
-			return currentCommand();
-		},
-		get commandFound() {
-			const found = findMnemonCommand(config);
-			return found !== void 0 && isMnemonExecutable(found);
-		},
-		config,
-		async runJson(args, options) {
-			const stdout = await execute(args, options);
-			try {
-				return JSON.parse(stdout);
-			} catch {
-				throw new MnemonCliError(`mnemon ${args.join(" ")} returned invalid JSON`);
-			}
-		},
-		runText: execute,
-		runTextBatch(commands) {
-			return withMemoryStorageLock(effectiveDataDir(), async () => {
-				const outputs = [];
-				for (const command of commands) outputs.push(await launch(command.args, command.options));
-				return outputs;
-			});
-		},
-		withExclusive(operation) {
-			return withMemoryStorageLock(effectiveDataDir(), operation);
-		},
-		effectiveDataDir() {
-			return effectiveDataDir();
-		},
-		persistedStore() {
-			return persistedStore();
-		},
-		effectiveStore() {
-			if (config.store !== void 0) return config.store;
-			const fromEnvironment = process.env.MNEMON_STORE?.trim();
-			if (fromEnvironment !== void 0 && fromEnvironment !== "") return fromEnvironment;
-			return persistedStore();
-		}
-	};
-}
 //#endregion
 //#region src/config.ts
 const MemorySpacesConfig = z.object({
@@ -2520,14 +3404,7 @@ function optionalText(value) {
 	return value?.trim() || void 0;
 }
 const MEMORY_PROVIDER_ID = /^[a-z][a-z0-9-]{0,127}$/u;
-const MEMORY_PLACEMENT_CAPABILITY_SET = /* @__PURE__ */ new Set([
-	"graph",
-	"entities",
-	"related",
-	"exact-write",
-	"link",
-	"forget"
-]);
+const MEMORY_PLACEMENT_CAPABILITY_SET = new Set(MEMORY_PLACEMENT_CAPABILITIES);
 const MEMORY_PLACEMENT_PREFERENCE_SET = /* @__PURE__ */ new Set([
 	"balanced",
 	"local-first",
@@ -2541,7 +3418,7 @@ function resolvePersistenceStrategy(value) {
 	const prompt = value?.prompt?.trim() ?? "";
 	if (prompt.length > 4e3) throw new Error("dsh-mnemon: persistence strategy prompt is too long (max 4000 characters)");
 	const configuredProviderIds = value?.rules?.allowedProviderIds;
-	const allowedProviderIds = [...new Set(configuredProviderIds === void 0 || configuredProviderIds.length === 0 && mode === "manual" ? ["mnemon-native"] : configuredProviderIds)];
+	const allowedProviderIds = [...new Set(configuredProviderIds === void 0 || configuredProviderIds.length === 0 && mode === "manual" ? [NATIVE_PROVIDER_ID] : configuredProviderIds)];
 	if (allowedProviderIds.length === 0) throw new Error("dsh-mnemon: persistence strategy requires at least one allowed provider");
 	for (const id of allowedProviderIds) if (!MEMORY_PROVIDER_ID.test(id)) throw new Error(`dsh-mnemon: invalid persistence strategy provider: ${String(id)}`);
 	const dataBoundary = value?.rules?.dataBoundary ?? "allow-remote";
@@ -2561,6 +3438,7 @@ function resolvePersistenceStrategy(value) {
 	return {
 		mode,
 		providerId,
+		...value?.providerId === void 0 ? { providerDefaulted: true } : {},
 		prompt,
 		rules: {
 			allowedProviderIds,
@@ -2586,6 +3464,10 @@ function resolveEmbedding(value) {
 	if (model.length > 200 || /[\u0000-\u001f\u007f]/u.test(model)) throw new Error("dsh-mnemon: embedding model must contain 1..200 characters without control characters");
 	const apiKey = optionalText(value?.apiKey) ?? "";
 	if (apiKey.length > 2048 || /[\u0000-\u001f\u007f]/u.test(apiKey)) throw new Error("dsh-mnemon: embedding API key must contain 0..2048 characters without control characters");
+	const apiKeyEnv = optionalText(value?.apiKeyEnv);
+	const apiKeyRef = optionalText(value?.apiKeyRef);
+	if (value?.apiKeyEnv !== void 0 && (typeof value.apiKeyEnv !== "string" || apiKeyEnv !== void 0 && !EMBEDDING_ENVIRONMENT_NAME.test(apiKeyEnv))) throw new Error("dsh-mnemon: embedding apiKeyEnv must name a Host environment variable");
+	if (value?.apiKeyRef !== void 0 && (typeof value.apiKeyRef !== "string" || apiKeyRef !== void 0 && !EMBEDDING_CREDENTIAL_REFERENCE.test(apiKeyRef))) throw new Error("dsh-mnemon: embedding apiKeyRef must reference a Mnemon embedding credential");
 	const protocol = value?.protocol ?? "auto";
 	if (!MNEMON_EMBEDDING_PROTOCOLS.includes(protocol)) throw new Error(`dsh-mnemon: unsupported embedding protocol: ${String(protocol)}`);
 	return {
@@ -2593,7 +3475,9 @@ function resolveEmbedding(value) {
 		endpoint: normalizedEndpoint,
 		model,
 		apiKey,
-		protocol
+		protocol,
+		...apiKeyEnv === void 0 ? {} : { apiKeyEnv },
+		...apiKeyRef === void 0 ? {} : { apiKeyRef }
 	};
 }
 function resolveRecallQuality(value) {
@@ -2603,12 +3487,14 @@ function resolveRecallQuality(value) {
 	const highScoreThreshold = value?.highScoreThreshold ?? .6;
 	const candidateMultiplier = value?.candidateMultiplier ?? 3;
 	const maxMediumResults = value?.maxMediumResults ?? 4;
+	const maxRankedResults = value?.maxRankedResults ?? 4;
 	const maxUnknownResults = value?.maxUnknownResults ?? 2;
 	if (!Number.isFinite(lowScoreThreshold) || lowScoreThreshold < 0 || lowScoreThreshold > 1) throw new Error("dsh-mnemon: recall low score threshold must be within 0..1");
 	if (!Number.isFinite(highScoreThreshold) || highScoreThreshold < 0 || highScoreThreshold > 1) throw new Error("dsh-mnemon: recall high score threshold must be within 0..1");
 	if (lowScoreThreshold >= highScoreThreshold) throw new Error("dsh-mnemon: recall low score threshold must be less than the high score threshold");
 	if (!Number.isInteger(candidateMultiplier) || candidateMultiplier < 1 || candidateMultiplier > 5) throw new Error("dsh-mnemon: recall candidate multiplier must be an integer within 1..5");
 	if (!Number.isInteger(maxMediumResults) || maxMediumResults < 0 || maxMediumResults > 50) throw new Error("dsh-mnemon: recall max medium results must be an integer within 0..50");
+	if (!Number.isInteger(maxRankedResults) || maxRankedResults < 0 || maxRankedResults > 50) throw new Error("dsh-mnemon: recall max ranked results must be an integer within 0..50");
 	if (!Number.isInteger(maxUnknownResults) || maxUnknownResults < 0 || maxUnknownResults > 50) throw new Error("dsh-mnemon: recall max unknown results must be an integer within 0..50");
 	return {
 		policy,
@@ -2616,6 +3502,7 @@ function resolveRecallQuality(value) {
 		highScoreThreshold,
 		candidateMultiplier,
 		maxMediumResults,
+		maxRankedResults,
 		maxUnknownResults
 	};
 }
@@ -2626,7 +3513,7 @@ function resolveMemorySpacesConfig(value = {}, sourceInstanceKey = "standalone")
 	const dataDir = requested === void 0 ? join(homedir(), ".mnemon", "sources", encodeURIComponent(sourceInstanceKey)) : requested === "~" ? homedir() : requested.startsWith("~/") ? join(homedir(), requested.slice(2)) : requested;
 	if (!isAbsolute(dataDir)) throw new Error("Memory Spaces dataDir must be absolute or start with ~/");
 	const store = optionalText(config.store);
-	if (store !== void 0 && !/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/u.test(store)) throw new Error("Memory Spaces store has an invalid identifier");
+	if (store !== void 0 && !MEMORY_SPACE_ID_PATTERN.test(store)) throw new Error("Memory Spaces store has an invalid identifier");
 	const cliPath = optionalText(config.cliPath);
 	return {
 		storageScope: "custom",
@@ -2643,31 +3530,10 @@ function resolveMemorySpacesConfig(value = {}, sourceInstanceKey = "standalone")
 }
 //#endregion
 //#region src/source.ts
-const CATEGORIES = /* @__PURE__ */ new Set([
-	"preference",
-	"decision",
-	"fact",
-	"insight",
-	"context",
-	"general"
-]);
-const SOURCES = /* @__PURE__ */ new Set([
-	"user",
-	"agent",
-	"external"
-]);
-const INTENTS = /* @__PURE__ */ new Set([
-	"WHY",
-	"WHEN",
-	"ENTITY",
-	"GENERAL"
-]);
-const EDGES = /* @__PURE__ */ new Set([
-	"temporal",
-	"semantic",
-	"causal",
-	"entity"
-]);
+const CATEGORY_SET = new Set(CATEGORIES);
+const SOURCE_SET = new Set(SOURCES);
+const INTENT_SET = new Set(INTENTS);
+const EDGE_SET = new Set(EDGE_TYPES);
 function grantIds(grant) {
 	return memoryInputStringArray(memoryInputRecord(grant.value, "Memory Spaces ReadGrant").memoryBodyIds, "memoryBodyIds", 1e4) ?? [];
 }
@@ -2708,7 +3574,7 @@ function createSpaceRequest(value) {
 	};
 	return {
 		name: memoryInputText(input.name, "name", 100),
-		description: memoryInputText(input.description, "description", 1e3),
+		description: memoryInputText(input.description, "description", MEMORY_SPACE_DESCRIPTION_MAX_LENGTH),
 		...typeof input.active !== "boolean" ? {} : { active: input.active },
 		...providerId === void 0 ? {} : { providerId },
 		...connection === void 0 ? {} : { connection },
@@ -2723,7 +3589,7 @@ function updateSpaceRequest(value) {
 		memoryBodyId: memoryInputText(input.memoryBodyId, "memoryBodyId", 300),
 		request: {
 			...memoryInputText(input.name, "name", 100, false) === void 0 ? {} : { name: memoryInputText(input.name, "name", 100, false) },
-			...memoryInputText(input.description, "description", 1e3, false) === void 0 ? {} : { description: memoryInputText(input.description, "description", 1e3, false) },
+			...memoryInputText(input.description, "description", 1e3, false) === void 0 ? {} : { description: memoryInputText(input.description, "description", MEMORY_SPACE_DESCRIPTION_MAX_LENGTH, false) },
 			...typeof input.active !== "boolean" ? {} : { active: input.active },
 			...connection === void 0 ? {} : { connection },
 			...memoryInputStringArray(input.clearSecrets, "clearSecrets", 100) === void 0 ? {} : { clearSecrets: memoryInputStringArray(input.clearSecrets, "clearSecrets", 100) }
@@ -2745,6 +3611,28 @@ function placementDecision(value) {
 		...memoryInputText(input.runId, "placement decision runId", 500, false) === void 0 ? {} : { runId: memoryInputText(input.runId, "placement decision runId", 500, false) },
 		...memoryInputText(input.subagentProvider, "placement decision subagentProvider", 500, false) === void 0 ? {} : { subagentProvider: memoryInputText(input.subagentProvider, "placement decision subagentProvider", 500, false) }
 	};
+}
+/**
+* Why this turn's View cannot forget from a Memory Space it does not read (#390). The View is
+* pinned for the turn, so switching a space on reaches a forget from the next turn only, and
+* whether a space is on stays the user's choice.
+*/
+function outsideView(service, memoryBodyId) {
+	const catalog = service.spaceDirectory();
+	const body = catalog.items.find((candidate) => candidate.id === memoryBodyId);
+	if (body === void 0) return `Memory Space ${JSON.stringify(memoryBodyId)} does not exist`;
+	const space = `Memory Space ${JSON.stringify(memoryBodyId)} (${body.name})`;
+	if (!body.active) return `${space} is switched off, so this turn's View does not read it and cannot forget from it. Whether it is on is the user's choice, on the Memory Spaces page; once it is on, a forget there works from the next turn`;
+	if (body.providerEnabled === false) return `${space} uses ${body.provider.label}, which is turned off on the dsh-mnemon page under Plugins`;
+	const provider = catalog.providers.find((candidate) => candidate.id === body.provider.id);
+	if (provider?.serviceConfigured === false) return `${space} uses ${body.provider.label}, which is not available here${isNativeProvider(provider) ? ": the Mnemon CLI is not installed" : ""}`;
+	return `${space} was switched on after this turn began, so this turn's View does not read it yet; a forget there works from the next turn`;
+}
+/** The switched-off spaces a forget cannot reach this turn, named only when there are some (#390). */
+function switchedOffSpaces(service) {
+	const off = service.spaceDirectory().items.filter((body) => !body.active);
+	if (off.length === 0) return "";
+	return `. Switched-off spaces (${off.slice(0, 5).map((body) => JSON.stringify(body.name)).join(", ")}${off.length > 5 ? ` and ${off.length - 5} more` : ""}) are outside this View; one the user switches on is read from the next turn`;
 }
 function managementResult(service, value) {
 	return {
@@ -2769,6 +3657,8 @@ async function manageMemorySpaces(service, request) {
 			...memoryInputStringArray(input.memoryBodyIds, "memoryBodyIds", 1e4) === void 0 ? {} : { memoryBodyIds: memoryInputStringArray(input.memoryBodyIds, "memoryBodyIds", 1e4) }
 		}, request.signal));
 		case "entities": return managementResult(service, await service.entities(memoryInputText(input.entity, "entity", 500, false), input.limit === void 0 ? void 0 : memoryInputInteger(input.limit, 100, 1, 1e4), request.signal));
+		case "entity-memories": return managementResult(service, await service.entityMemories(memoryInputText(input.entity, "entity", 500), input.offset === void 0 ? void 0 : memoryInputInteger(input.offset, 0, 0, 1e6), input.limit === void 0 ? void 0 : memoryInputInteger(input.limit, 50, 1, 200), request.signal));
+		case "entity-related": return managementResult(service, await service.entityRelated(memoryInputText(input.entity, "entity", 500), input.limit === void 0 ? void 0 : memoryInputInteger(input.limit, 20, 1, 50), request.signal, memoryInputText(input.view, "view", 200, false)));
 		case "search": return managementResult(service, await service.search({
 			query: memoryInputText(input.query, "query", 2e3),
 			...memoryInputText(input.mode, "mode", 20, false) === void 0 ? {} : { mode: memoryInputText(input.mode, "mode", 20, false) },
@@ -2776,7 +3666,8 @@ async function manageMemorySpaces(service, request) {
 			...memoryInputText(input.category, "category", 30, false) === void 0 ? {} : { category: memoryInputText(input.category, "category", 30, false) },
 			...memoryInputText(input.source, "source", 30, false) === void 0 ? {} : { source: memoryInputText(input.source, "source", 30, false) },
 			...memoryInputText(input.intent, "intent", 30, false) === void 0 ? {} : { intent: memoryInputText(input.intent, "intent", 30, false) },
-			...memoryInputStringArray(input.memoryBodyIds, "memoryBodyIds", 1e4) === void 0 ? {} : { memoryBodyIds: memoryInputStringArray(input.memoryBodyIds, "memoryBodyIds", 1e4) }
+			...memoryInputStringArray(input.memoryBodyIds, "memoryBodyIds", 1e4) === void 0 ? {} : { memoryBodyIds: memoryInputStringArray(input.memoryBodyIds, "memoryBodyIds", 1e4) },
+			...input.inspect === true ? { inspect: true } : {}
 		}, request.signal));
 		case "related": return managementResult(service, await service.related(memoryInputText(input.id, "id", 2e3), memoryInputInteger(input.depth, 2, 1, 5), memoryInputText(input.edge, "edge", 30, false), request.signal, memoryInputText(input.memoryBodyId, "memoryBodyId", 300, false)));
 		case "body-reconnect": return managementResult(service, await service.reconnectSpace(memoryInputText(input.memoryBodyId, "memoryBodyId", 300), request.signal));
@@ -2799,6 +3690,7 @@ async function manageMemorySpaces(service, request) {
 	}
 	if (!request.confirmed) throw new Error("Memory Spaces management mutation requires explicit confirmation");
 	switch (request.operation) {
+		case "embedding-fill": return managementResult(service, await service.embedMissing(memoryInputText(input.memoryBodyId, "memoryBodyId", 300), request.signal));
 		case "provider-service-update": {
 			const providerId = memoryInputText(input.providerId, "providerId", 128);
 			await service.updateProviderService(providerId, scalarRecord(input.settings, "settings") ?? {}, memoryInputStringArray(input.clearSecrets, "clearSecrets", 100) ?? [], input.enabled === void 0 ? true : input.enabled === true, request.signal);
@@ -2850,11 +3742,12 @@ async function manageMemorySpaces(service, request) {
 		case "reload":
 			service.memorySpaces.reload();
 			return managementResult(service, { reloaded: true });
+		case "provider-rediscover": return managementResult(service, await service.rediscoverProviders(input.trigger === "startup" ? "startup" : "manual", request.signal));
 		case "body-delete": return managementResult(service, await service.deleteSpace(memoryInputText(input.memoryBodyId, "memoryBodyId", 300), request.signal));
 		default: throw new Error(`unsupported Memory Spaces management mutation operation: ${request.operation}`);
 	}
 }
-function createMemorySpacesSource(providerSnapshot, config = {}) {
+function createMemorySpacesSource(providerSnapshot, config = {}, readCredential) {
 	const capturedConfig = structuredClone(config);
 	return defineMemorySource({
 		manifest: {
@@ -3032,7 +3925,7 @@ function createMemorySpacesSource(providerSnapshot, config = {}) {
 				...context.configuration,
 				...capturedConfig
 			}, context.sourceInstanceKey);
-			const service = new MemorySpacesService(createRunner(resolved), resolved, void 0, void 0, providerSnapshot.adapterRegistry(), new MemoryProviderCatalog(providerSnapshot.descriptors()));
+			const service = new MemorySpacesService(createRunner(resolved, void 0, readCredential), resolved, void 0, void 0, providerSnapshot.adapterRegistry(), new MemoryProviderCatalog(providerSnapshot.descriptors()));
 			const canRemember = providerSnapshot.entries.some((entry) => entry.definition.manifest.capabilities.remember);
 			const prepared = /* @__PURE__ */ new WeakMap();
 			const sourceState = (scope) => {
@@ -3042,12 +3935,45 @@ function createMemorySpacesSource(providerSnapshot, config = {}) {
 			};
 			const admittedByView = /* @__PURE__ */ new Map();
 			const createdByView = /* @__PURE__ */ new Map();
+			const writeBodies = (viewId, grant) => {
+				if (grant.sourceInstanceKey !== context.sourceInstanceKey || grant.schema !== "dsh-mnemon.memory-spaces/v1") throw new Error("Memory Spaces write scope grant does not belong to this Source");
+				const known = memoryInputStringArray(memoryInputRecord(grant.value, "Memory Spaces scope").knownMemoryBodyIds, "knownMemoryBodyIds", 1e4) ?? grantIds(grant);
+				return [.../* @__PURE__ */ new Set([...known, ...createdByView.get(viewId) ?? []])];
+			};
 			const admit = (viewId, entries) => {
 				const current = admittedByView.get(viewId) ?? /* @__PURE__ */ new Map();
 				for (const entry of entries) if (entry.memoryBodyId !== void 0) current.set(entry.memoryBodyId + "/" + entry.id, entry.memoryBodyId);
 				admittedByView.delete(viewId);
 				admittedByView.set(viewId, current);
 				while (admittedByView.size > 128) admittedByView.delete(admittedByView.keys().next().value);
+			};
+			/**
+			* The Memory Space an exact id belongs to, for an action or traversal that
+			* names a memory by id. Evidence this View returned decides first, as
+			* before. Otherwise the Providers that can look an id up are asked among
+			* the spaces in `scope`, and a found memory is admitted to this View. An
+			* Agent can so forget what it just wrote, and a delegated worker can act on
+			* an id from its parent's turn (#337). A Provider that cannot look ids up
+			* keeps to evidence: its own call may reach beyond the space named.
+			*/
+			const ownerOf = async (viewId, id, requestedSpace, scope, signal) => {
+				const entries = admittedByView.get(viewId);
+				if (requestedSpace !== void 0) {
+					if (entries?.has(requestedSpace + "/" + id) === true) return requestedSpace;
+				} else {
+					const owners = [...entries?.entries() ?? []].filter(([reference]) => reference.endsWith("/" + id)).map(([, owner]) => owner);
+					if (owners.length > 0) return owners.length === 1 ? owners[0] : void 0;
+				}
+				const candidates = requestedSpace === void 0 ? scope : scope.includes(requestedSpace) ? [requestedSpace] : [];
+				if (candidates.length === 0) return void 0;
+				const found = await service.locate(id, candidates, signal);
+				const owners = [...new Set(found.flatMap((item) => item.memoryBodyId === void 0 ? [] : [item.memoryBodyId]))];
+				if (owners.length !== 1) return void 0;
+				admit(viewId, [{
+					id,
+					memoryBodyId: owners[0]
+				}]);
+				return owners[0];
 			};
 			const evidence = (request, items, unavailable) => {
 				const catalog = request.route.sourceRouteId === "inspect";
@@ -3106,15 +4032,15 @@ function createMemorySpacesSource(providerSnapshot, config = {}) {
 			};
 			return {
 				facts(request) {
-					const { active, revision } = sourceState(request.scope);
+					const { active, providerReady, revision } = sourceState(request.scope);
 					const routeIds = [
 						"inspect",
 						...active.some((body) => body.provider.capabilities.search) ? ["recall"] : [],
 						...active.some((body) => body.provider.capabilities.related) ? ["related"] : []
 					];
 					const actionIds = service.config.writeEnabled ? [
-						"manage-spaces",
-						...canRemember ? ["remember"] : [],
+						...providerReady ? ["manage-spaces"] : [],
+						...canRemember && providerReady ? ["remember"] : [],
 						...active.some((body) => body.provider.capabilities.link) ? ["link"] : [],
 						...active.some((body) => body.provider.capabilities.forget) ? ["forget"] : []
 					] : [];
@@ -3135,7 +4061,8 @@ function createMemorySpacesSource(providerSnapshot, config = {}) {
 						actionIds,
 						hints: {
 							activeCount: active.length,
-							providerCount: new Set(active.map((body) => body.provider.id)).size
+							providerCount: new Set(active.map((body) => body.provider.id)).size,
+							archivableCount: active.filter((body) => body.provider.capabilities.remember && body.provider.capabilities.forget && body.provider.capabilities.writeMode === "exact").length
 						}
 					};
 				},
@@ -3199,9 +4126,9 @@ function createMemorySpacesSource(providerSnapshot, config = {}) {
 						const category = memoryInputText(input.category, "category", 30, false);
 						const source = memoryInputText(input.source, "source", 30, false);
 						const intent = memoryInputText(input.intent, "intent", 30, false);
-						if (category !== void 0 && !CATEGORIES.has(category)) throw new Error(`unsupported category: ${category}`);
-						if (source !== void 0 && !SOURCES.has(source)) throw new Error(`unsupported source: ${source}`);
-						if (intent !== void 0 && !INTENTS.has(intent)) throw new Error(`unsupported intent: ${intent}`);
+						if (category !== void 0 && !CATEGORY_SET.has(category)) throw new Error(`unsupported category: ${category}`);
+						if (source !== void 0 && !SOURCE_SET.has(source)) throw new Error(`unsupported source: ${source}`);
+						if (intent !== void 0 && !INTENT_SET.has(intent)) throw new Error(`unsupported intent: ${intent}`);
 						const requestedSpaces = memoryInputStringArray(input.memoryBodyIds, "memoryBodyIds", 1e4) ?? allowedBodies;
 						if (requestedSpaces.some((id) => !allowedBodies.includes(id))) throw new Error("Recall requested a Memory Space outside this View ReadGrant");
 						const mode = memoryInputText(input.mode, "mode", 20, false);
@@ -3219,13 +4146,11 @@ function createMemorySpacesSource(providerSnapshot, config = {}) {
 					if (request.route.sourceRouteId === "related") {
 						const id = memoryInputText(input.id, "id", 2e3);
 						const requestedSpace = memoryInputText(input.memoryBodyId, "memoryBodyId", 300, false);
-						const admitted = admittedByView.get(request.view.id);
-						const owners = [...admitted?.entries() ?? []].filter(([reference]) => reference.endsWith("/" + id)).map(([, bodyId]) => bodyId);
-						const owner = requestedSpace === void 0 ? owners.length === 1 ? owners[0] : void 0 : admitted?.get(requestedSpace + "/" + id);
-						if (owner === void 0) throw new Error("related-memory traversal requires evidence already admitted by this View");
+						const owner = await ownerOf(request.view.id, id, requestedSpace, allowedBodies, request.signal);
+						if (owner === void 0) throw new Error("related-memory traversal requires evidence already admitted by this View, or an id found in a Memory Space it can read");
 						if (!allowedBodies.includes(owner)) throw new Error("related-memory owner is outside this View ReadGrant");
 						const edge = memoryInputText(input.edge, "edge", 30, false);
-						if (edge !== void 0 && !EDGES.has(edge)) throw new Error(`unsupported edge: ${edge}`);
+						if (edge !== void 0 && !EDGE_SET.has(edge)) throw new Error(`unsupported edge: ${edge}`);
 						const results = await service.related(id, memoryInputInteger(input.depth, 2, 1, 5), edge, request.signal, owner);
 						return evidence(request, results);
 					}
@@ -3237,16 +4162,9 @@ function createMemorySpacesSource(providerSnapshot, config = {}) {
 					const grant = request.grant;
 					if (grant === void 0) throw new Error("Memory Spaces action has no View ReadGrant");
 					const allowedBodies = grantIds(grant);
-					const knownBodies = memoryInputStringArray(memoryInputRecord(grant.value, "Memory Spaces scope").knownMemoryBodyIds, "knownMemoryBodyIds", 1e4) ?? allowedBodies;
 					const created = createdByView.get(request.view.id) ?? /* @__PURE__ */ new Set();
-					const writeBodies = [.../* @__PURE__ */ new Set([...knownBodies, ...created])];
-					const admittedOwner = (id) => {
-						const requestedSpace = memoryInputText(input.memoryBodyId, "memoryBodyId", 300, false);
-						const entries = admittedByView.get(request.view.id);
-						if (requestedSpace !== void 0) return entries?.get(requestedSpace + "/" + id);
-						const owners = [...entries?.entries() ?? []].filter(([reference]) => reference.endsWith("/" + id)).map(([, owner]) => owner);
-						return owners.length === 1 ? owners[0] : void 0;
-					};
+					const writableBodies = writeBodies(request.view.id, grant);
+					const admittedOwner = (id) => ownerOf(request.view.id, id, memoryInputText(input.memoryBodyId, "memoryBodyId", 300, false), allowedBodies, request.signal);
 					let result;
 					let bodyId;
 					if (request.offer.sourceActionId === "manage-spaces") {
@@ -3269,10 +4187,10 @@ function createMemorySpacesSource(providerSnapshot, config = {}) {
 							};
 						} else if (input.operation === "update") {
 							bodyId = memoryInputText(input.memoryBodyId, "memoryBodyId", 300);
-							if (!writeBodies.includes(bodyId)) throw new Error("Memory Space update is outside this View scope");
+							if (!writableBodies.includes(bodyId)) throw new Error("Memory Space update is outside this View scope");
 							const body = service.updateSpace(bodyId, {
 								...input.name === void 0 ? {} : { name: memoryInputText(input.name, "name", 100) },
-								...input.description === void 0 ? {} : { description: memoryInputText(input.description, "description", 1e3) },
+								...input.description === void 0 ? {} : { description: memoryInputText(input.description, "description", MEMORY_SPACE_DESCRIPTION_MAX_LENGTH) },
 								...typeof input.active === "boolean" ? { active: input.active } : {}
 							});
 							result = {
@@ -3285,7 +4203,7 @@ function createMemorySpacesSource(providerSnapshot, config = {}) {
 						} else if (input.operation === "merge") {
 							const target = memoryInputText(input.targetMemoryBodyId, "targetMemoryBodyId", 300);
 							const sources = memoryInputStringArray(input.sourceMemoryBodyIds, "sourceMemoryBodyIds", 20) ?? [];
-							if ([target, ...sources].some((id) => !writeBodies.includes(id))) throw new Error("Memory Space merge is outside this View scope");
+							if ([target, ...sources].some((id) => !writableBodies.includes(id))) throw new Error("Memory Space merge is outside this View scope");
 							bodyId = target;
 							result = await service.mergeSpaces(target, sources, input.deactivateSources !== false, request.signal);
 						} else throw new Error("unsupported Memory Space management action");
@@ -3296,11 +4214,11 @@ function createMemorySpacesSource(providerSnapshot, config = {}) {
 							if (defaults.length !== 1) throw new Error("remember requires an explicit Memory Space in this View scope");
 							bodyId = defaults[0];
 						}
-						if (!writeBodies.includes(bodyId)) throw new Error("remember destination is outside this View scope");
+						if (!writableBodies.includes(bodyId)) throw new Error("remember destination is outside this View scope");
 						const category = memoryInputText(input.category, "category", 30, false);
 						const source = memoryInputText(input.source, "source", 30, false);
-						if (category !== void 0 && !CATEGORIES.has(category)) throw new Error(`unsupported category: ${category}`);
-						if (source !== void 0 && !SOURCES.has(source)) throw new Error(`unsupported source: ${source}`);
+						if (category !== void 0 && !CATEGORY_SET.has(category)) throw new Error(`unsupported category: ${category}`);
+						if (source !== void 0 && !SOURCE_SET.has(source)) throw new Error(`unsupported source: ${source}`);
 						result = await service.remember({
 							content: memoryInputText(input.content, "content", 1e5),
 							...category === void 0 ? {} : { category },
@@ -3313,18 +4231,20 @@ function createMemorySpacesSource(providerSnapshot, config = {}) {
 					} else if (request.offer.sourceActionId === "link") {
 						const sourceId = memoryInputText(input.sourceId, "sourceId", 2e3);
 						const targetId = memoryInputText(input.targetId, "targetId", 2e3);
-						const sourceSpace = admittedOwner(sourceId);
-						const targetSpace = admittedOwner(targetId);
-						if (sourceSpace === void 0 || targetSpace === void 0 || sourceSpace !== targetSpace || !allowedBodies.includes(sourceSpace)) throw new Error("link requires two evidence items admitted by this View from the same Memory Space");
+						const sourceSpace = await admittedOwner(sourceId);
+						const targetSpace = await admittedOwner(targetId);
+						if (sourceSpace === void 0 || targetSpace === void 0 || sourceSpace !== targetSpace || !allowedBodies.includes(sourceSpace)) throw new Error("link requires two evidence items admitted by this View from the same Memory Space, or two ids found in one Memory Space it can read");
 						bodyId = sourceSpace;
 						const edge = memoryInputText(input.type, "type", 30, false);
-						if (edge !== void 0 && !EDGES.has(edge)) throw new Error(`unsupported edge: ${edge}`);
+						if (edge !== void 0 && !EDGE_SET.has(edge)) throw new Error(`unsupported edge: ${edge}`);
 						const weight = typeof input.weight === "number" ? input.weight : .5;
 						result = await service.link(sourceId, targetId, edge, weight, memoryInputText(input.reason, "reason", 1e3, false), request.signal, bodyId);
 					} else if (request.offer.sourceActionId === "forget") {
 						const id = memoryInputText(input.id, "id", 2e3);
-						bodyId = admittedOwner(id);
-						if (bodyId === void 0 || !allowedBodies.includes(bodyId)) throw new Error("forget requires evidence already admitted by this View");
+						const named = memoryInputText(input.memoryBodyId, "memoryBodyId", 300, false);
+						if (named !== void 0 && !allowedBodies.includes(named)) throw new Error(outsideView(service, named));
+						bodyId = await admittedOwner(id);
+						if (bodyId === void 0 || !allowedBodies.includes(bodyId)) throw new Error(`forget requires evidence already admitted by this View, or an id found in one Memory Space it can read; name the space (memoryBodyId) when several hold it${switchedOffSpaces(service)}`);
 						result = await service.forget(id, request.signal, bodyId);
 					} else throw new Error(`unsupported Memory Spaces action: ${request.offer.sourceActionId}`);
 					return createMemoryMutationReceipt(request.view.id, request.offer.id, context.sourceInstanceKey, service.memoryRevision(), {
@@ -3333,6 +4253,23 @@ function createMemorySpacesSource(providerSnapshot, config = {}) {
 					}, mutationResultCompletion(result));
 				},
 				manage(request) {
+					if (request.mode === "read" && request.operation === "body-directory" && request.input !== null) {
+						const input = memoryInputRecord(request.input, "Memory Spaces body-directory");
+						if (input.writeScope !== void 0) {
+							if (!service.config.writeEnabled) throw new Error("Memory Spaces is configured read-only");
+							const scope = memoryInputRecord(input.writeScope, "Memory Spaces write scope");
+							const viewId = memoryInputText(scope.viewId, "write scope viewId", 300);
+							const grant = memoryInputRecord(scope.grant ?? null, "Memory Spaces write scope grant");
+							return managementResult(service, {
+								...service.spaceDirectory(),
+								writeScope: {
+									viewId,
+									sourceInstanceKey: context.sourceInstanceKey,
+									memoryBodyIds: writeBodies(viewId, grant)
+								}
+							});
+						}
+					}
 					return manageMemorySpaces(service, request);
 				},
 				async dispose() {
@@ -3344,7 +4281,6 @@ function createMemorySpacesSource(providerSnapshot, config = {}) {
 		}
 	});
 }
-/** Empty template; actual installations must provide explicit Provider children. */
 //#endregion
 //#region src/index.ts
 const name = "dsh-mnemon-source-memory-spaces";
@@ -3356,8 +4292,8 @@ const memoryPlugin = defineMemoryPlugin({
 		"zh-CN": "记忆空间"
 	},
 	description: {
-		en: "Durable evidence backed by explicitly configured Provider children.",
-		"zh-CN": "由显式配置的 Provider 子插件承载的长期证据。"
+		en: "Provider-backed durable evidence recalled on demand across tasks and sessions.",
+		"zh-CN": "由 Provider 支撑的持久证据，按需跨任务与会话召回。"
 	},
 	roles: ["source"],
 	provides: [{ id: "source" }, { id: "source.durable-evidence" }]
@@ -3371,27 +4307,25 @@ const Config = z.intersect([MemorySpacesConfig, z.object({ providers: z.array(z.
 function sourceInstanceId(ctx, explicit) {
 	const configured = explicit?.trim();
 	if (configured !== void 0 && configured !== "") return configured;
-	const located = (typeof ctx.get === "function" ? ctx.get("loader", false) : void 0)?.locate(ctx.fiber)?.trim();
+	const located = ctx.get("loader", false)?.locate(ctx.fiber)?.trim();
 	if (located !== void 0 && located !== "") return located;
-	const entryId = ctx.fiber.entry?.options?.id;
-	if (typeof entryId === "string" && entryId.trim() !== "") return entryId.trim();
 	throw new Error("Memory Spaces requires a stable Loader Entry id; pass instanceId for a direct mount");
 }
 function importedProviderModule(loader, value, specifier) {
-	const unwrapped = loader.unwrapExports?.(value) ?? (typeof value === "object" && value !== null && "default" in value ? value.default : value);
+	const unwrapped = loader.unwrapExports(value);
 	if (typeof unwrapped !== "object" || unwrapped === null) throw new Error(`Memory Space Provider module ${specifier} did not export a typed child module`);
 	return defineMemorySpaceProvider(unwrapped);
 }
 /** Resolve only the explicitly listed children; no dependency scanning occurs. */
 async function resolveMemorySpaceProviderEntries(ctx, declarations) {
 	if (declarations.length === 0) throw new Error("Memory Spaces requires at least one explicit Provider child");
-	const loader = typeof ctx.get === "function" ? ctx.get("loader", false) : void 0;
+	const loader = ctx.get("loader", false);
 	const entries = [];
 	const instanceIds = /* @__PURE__ */ new Set();
 	for (const declaration of declarations) {
 		const use = (typeof declaration === "string" ? declaration : declaration.use).trim();
 		if (use === "") throw new Error("Memory Space Provider declaration use is required");
-		if (loader?.import === void 0) throw new Error("cannot resolve installed Memory Space Provider module without the DSH Loader: " + use);
+		if (loader === void 0) throw new Error("cannot resolve installed Memory Space Provider module without the DSH Loader: " + use);
 		const module = importedProviderModule(loader, await loader.import(use), use);
 		const entry = {
 			instanceId: typeof declaration === "string" ? module.id : declaration.instanceId?.trim() || module.id,
@@ -3418,7 +4352,11 @@ async function installMemorySpaces(ctx, entries, options = {}) {
 		const snapshot = privateHost.snapshot();
 		installMemory(ctx, {
 			plugin: memoryPlugin,
-			sources: [createMemorySpacesSource(snapshot, options.config)]
+			sources: [createMemorySpacesSource(snapshot, options.config, async (reference) => {
+				const credentials = ctx.get("credentials", false);
+				if (credentials === void 0) throw new Error("DSH credentials service is unavailable");
+				return credentials.readRecord(reference);
+			})]
 		}, {
 			instanceId: entryId,
 			effectiveDigest: "providers:" + memoryConfigurationDigest({
@@ -3431,7 +4369,17 @@ async function installMemorySpaces(ctx, entries, options = {}) {
 		throw error;
 	}
 }
+/**
+* dshmarket's client-only mount of a Memory Spaces package installed on its own
+* in a profile, `include:dsh-market:mkt-client-<package>`: it is meant to run no
+* host code, and the Starter's own Entry composes the Source with its Providers (#359).
+*/
+function isMarketClientShim(ctx) {
+	const loader = ctx.get("loader", false);
+	return /(?:^|:)mkt-client-[^:]*$/u.test(loader?.locate(ctx.fiber)?.trim() ?? "");
+}
 async function apply(ctx, config = { providers: [] }) {
+	if (isMarketClientShim(ctx)) return;
 	const { providers, ...sourceConfig } = config;
 	await installMemorySpaces(ctx, await resolveMemorySpaceProviderEntries(ctx, providers), { config: sourceConfig });
 }

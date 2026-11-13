@@ -49,6 +49,16 @@ export declare function makeWellKnownSid(api: Win32Bindings, type: number): Nati
  * @param sidPtr - the restricting SID whose full-access ACE joins the default DACL.
  */
 export declare function setTokenDefaultDaclGrant(api: Win32Bindings, token: NativePtr, sidPtr: NativePtr): void;
+/**
+ * Lower the restricted token's integrity level to Low (S-1-16-4096), the level
+ * the mandatory labels `grantWrite` applies are matched against; a token left
+ * at Medium would ignore them. Requires TOKEN_ADJUST_DEFAULT on the token;
+ * fails closed before any child is spawned.
+ * @param api - the binding table.
+ * @param token - the restricted token to lower.
+ * @param lowLabelSidPtr - the Low integrity SID (S-1-16-4096).
+ */
+export declare function restrictTokenIntegrity(api: Win32Bindings, token: NativePtr, lowLabelSidPtr: NativePtr): void;
 /** The well-known SID packed into every restricted token's restricting list. */
 export interface RestrictingSidSet {
     world: NativePtr;

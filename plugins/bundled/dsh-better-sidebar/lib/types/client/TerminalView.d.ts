@@ -1,24 +1,18 @@
+import { type ReactNode } from 'react';
 import '@xterm/xterm/css/xterm.css';
-import { type SessionScope, type TerminalDepsStatus } from './api.ts';
-import { type SidebarStore } from './state.ts';
-/** The degraded-mode payload rendered by {@link TerminalDepsBanner}. */
-type TerminalDepsInfo = Extract<TerminalDepsStatus, {
-    ok: false;
-}>;
-export declare function TerminalView(props: {
+import type { Context } from '../context-types.ts';
+import type { SessionScope } from './api.ts';
+import type { SidebarTab } from './state.ts';
+/** The props the bottom terminal view consumes from its tab descriptor. */
+export interface TerminalBottomProps {
+    ctx: Context;
     scope: SessionScope;
-    tabId: string;
-    store: SidebarStore;
-}): import("react").JSX.Element;
+    tab: SidebarTab;
+    visible: boolean;
+}
 /**
- * The node-pty dependency failure banner (issue #140): explains that the
- * terminal's native dependency failed to load and shows the PASTEABLE repair
- * command (bash / cmd / PowerShell) with a copy button — the user pastes it
- * into a terminal where their DSH profile lives and runs it, then retries.
- * Extracted as a standalone component for direct testing.
+ * Render the bottom workbench's terminal tab.
+ * @param props - the client context, the tab's session scope and visibility.
+ * @returns the terminal screen plus its status/degradation panels.
  */
-export declare function TerminalDepsBanner(props: {
-    deps: TerminalDepsInfo;
-    onRetry: () => void;
-}): import("react").JSX.Element;
-export {};
+export declare function TerminalBottomView({ ctx, scope, tab, visible }: TerminalBottomProps): ReactNode;

@@ -1,7 +1,7 @@
 /**
  * Active Loader-backed plugin package inventory for official DeepSeek requests.
  * Host entries and the requesting agent's standing preset are resolved at request time;
- * installed dependencies and plugin fibers without Loader package provenance are excluded.
+ * installed dependencies and plugin fibers without Loader-backed package identity are excluded.
  * @module @deepseek-ai/dsh-plugin-package-inventory-deepseek
  */
 import { type Context } from '@deepseek-ai/cordis';
@@ -20,7 +20,7 @@ export interface Config {
 export declare const Config: z<Config>;
 /**
  * Register the complete `dsh_plugin_packages` request contribution when enabled.
- * @param ctx - plugin context carrying Loader provenance and the DeepSeek request-extension registry.
+ * @param ctx - plugin context carrying Loader entry metadata and the DeepSeek request-extension registry.
  * @param config - validated default-on configuration.
  */
 export declare function apply(ctx: Context, config: Config): void;

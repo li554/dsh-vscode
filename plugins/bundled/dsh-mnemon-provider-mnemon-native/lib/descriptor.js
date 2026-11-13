@@ -1,7 +1,7 @@
 //#region src/descriptor.ts
 const descriptor = {
 	"id": "mnemon-native",
-	"label": "mnemon",
+	"label": "Mnemon Native",
 	"icon": {
 		"kind": "brand",
 		"value": "mnemon"

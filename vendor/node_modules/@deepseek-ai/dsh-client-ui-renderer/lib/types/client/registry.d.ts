@@ -6,13 +6,13 @@
  * declaration injection through the caller's ctx.effect (fiber unload
  * collects both), the renderer installation contract (install()/renderSlot('root') +
  * the SlotRendererHost face), and the store INSTANCE axis — handle x scope
- * key -> create/cache, dropped with the last holding entry, session instances
- * cleared (with persisted state) on scope death.
+ * key -> create/cache, dropped with the last holding entry, and in-memory
+ * session instances released without clearing persisted state on scope death.
  */
 import { Service } from '@deepseek-ai/cordis';
 import type { Context } from '@deepseek-ai/cordis';
 import { SlotCore } from '@deepseek-ai/dsh-client-ui-slots';
-import type { LiveSlotNode, LocaleFace, OwnerOf, SlotMap, SlotRenderer, RootStandardSourceContribution, ScopedStandardSourceBinding, SlotScope, SlotScopeAdapter, SlotSpec, StoredEntry } from '@deepseek-ai/dsh-client-ui-slots';
+import type { LiveCompositionNode, LocaleFace, OwnerOf, RegisterFactory, SlotMap, SlotRenderer, RootStandardSourceContribution, ScopedStandardSourceBinding, SlotScope, SlotScopeAdapter, SlotSpec, StoredFactory, StoredEntry } from '@deepseek-ai/dsh-client-ui-slots';
 declare module '@deepseek-ai/dsh-client-ui-slots' {
     interface SlotMap {
         /**
@@ -47,6 +47,7 @@ export declare class SlotRegistry extends Service {
     private readonly _core;
     /** Store-instance axis: handle -> mounted scope, refcount, resolved instances. */
     private readonly _stores;
+    private readonly _factoryStores;
     /** Latest live Context generation for each scoped store key. */
     private readonly _storeScopeOwners;
     private _renderer;
@@ -65,7 +66,7 @@ export declare class SlotRegistry extends Service {
      */
     constructor(ctx: Context);
     /**
-     * The single registration API. The typed face IS the core's register
+     * The ordinary Slot registration API. The typed face IS the core's register
      * (both overloads reused verbatim — one authority, no structural copy;
      * see SlotCore.register for children declaration, store seat, inject
      * face, load-time validation, and the unload cascade). This layer adds:
@@ -82,6 +83,16 @@ export declare class SlotRegistry extends Service {
      * own root ctx and silently break per-plugin disposal.
      */
     readonly register: SlotCore['register'];
+    /**
+     * Register one reusable Component Factory under the caller's effect lifetime.
+     * A Store factory mints one handle per rendered occurrence rather than per
+     * definition. Like {@link SlotRegistry.register}, this remains a prototype
+     * method so the Cordis proxy binds `this.ctx` to the caller's Context.
+     * @param options - runtime definition checked against `SlotFactoryMap`.
+     * @param component - reusable Factory Component.
+     * @returns the idempotent definition disposer.
+     */
+    readonly registerFactory: RegisterFactory;
     /**
      * Install an effect for each declaration lifetime of a slot. The callback
      * runs synchronously when the declaration already exists; otherwise it runs
@@ -128,11 +139,10 @@ export declare class SlotRegistry extends Service {
      */
     installScope(scope: Exclude<SlotScope, 'root' | 'session-maybe'>, adapter: SlotScopeAdapter): void;
     /**
-     * Bind all scoped Store handles to one owner Context lifetime. The cleanup
-     * materializes an otherwise-unused handle before clearing it, because a
-     * previous application run may have persisted state for a Slot that this
-     * scope never rendered. Rebinding the same key transfers cleanup ownership
-     * to the newest Context generation.
+     * Bind scoped Store instances to one Context generation. Rebinding the key
+     * drops the previous generation's memory instances before the new owner can
+     * resolve them. Cleanup never clears persisted state, which belongs to the
+     * durable scope key, or drops a replacement generation's instances.
      *
      * @param binding - materialized scope identity and its owning Context.
      */
@@ -156,30 +166,28 @@ export declare class SlotRegistry extends Service {
      * Shadowing winners per cell for a key: the first live (non-abdicated)
      * entry of each cell in priority order — what outlets render; chain keys
      * pass through unchanged (election consumes every entry). The raw
-     * {@link SlotsService.entries} view stays the inspection surface. Fresh
+     * {@link SlotRegistry.entries} view stays the inspection surface. Fresh
      * array per call, not a uSES getSnapshot source.
      * @param key - SlotMap key.
      * @returns the winning entry per occupied cell.
      */
     entriesOfSlot(key: keyof SlotMap & string): readonly StoredEntry[];
     /**
-     * Export the current JSON-safe Slot declaration tree for read-only inspection.
-     * @param root - exact live Slot root; omitted returns all roots.
-     * @returns selected Slot trees.
+     * Export the current JSON-safe Slot and Factory declaration trees for read-only inspection.
+     * @param root - exact live Slot key or `factory:<name>`; omitted returns all roots.
+     * @returns selected composition trees.
      */
-    snapshot(root?: string): LiveSlotNode[];
+    snapshot(root?: string): LiveCompositionNode[];
     /**
-     * Observe entry boundary crashes (every render-time entry failure the
-     * boundaries contain, abdicating or not) — the supervision seam for
-     * plugins mirroring contribution health. Fires synchronously per report,
-     * after the registry mutated for abdicating crashes. Callers own the
-     * disposer (wire it through ctx.effect for fiber-lifetime cleanup, as with
-     * {@link SlotsService.subscribe}).
-     * @param fn - called with the slot key, the crashed entry, the crash
-     * cause, and `abdicated`: whether the crash retired the entry from its cell.
+     * Observe ordinary entry and Factory occurrence crashes through one
+     * supervision channel. Fires synchronously after any ordinary-entry
+     * abdication mutation. Callers own the disposer (wire it through ctx.effect
+     * for fiber-lifetime cleanup, as with {@link SlotRegistry.subscribe}).
+     * @param fn - called with the Slot or `factory:<name>` key, crashed
+     * registration, cause, and whether an ordinary entry was retired.
      * @returns unsubscribe.
      */
-    onEntryError(fn: (key: string, entry: StoredEntry, error: unknown, info: {
+    onEntryError(fn: (key: string, registration: StoredEntry | StoredFactory, error: unknown, info: {
         abdicated: boolean;
     }) => void): () => void;
     /**
@@ -203,6 +211,7 @@ export declare class SlotRegistry extends Service {
     getVersion(key: keyof SlotMap & string): number;
     /** Delegating registration path: factory minting + registrant stamp + core write + instance-axis bookkeeping. */
     private _register;
+    private _registerFactory;
     /** Build the domain-neutral host face once; installed adapters remain live through getters. */
     private hostFace;
     /** Validate and atomically publish the current root contribution roster. */
@@ -211,8 +220,10 @@ export declare class SlotRegistry extends Service {
     private publishScopeRevision;
     /** Resolve (create or reuse) the store instance for a registered handle under a scope key. */
     private resolveStore;
-    /** Clear every live non-root Store handle for one dead scope key. */
-    private clearStoreScope;
+    private resolveFactoryStore;
+    private retainFactoryOccurrence;
+    /** Drop every materialized non-root Store instance for one ended Context generation. */
+    private releaseStoreScope;
     /** Bind (or re-reference) a handle on the axis; cross-scope conflicts already threw in the core. */
     private _acquire;
     /** Drop one reference; the last holder's unload drops the record (instances go with it — engine stores need no explicit dispose). */

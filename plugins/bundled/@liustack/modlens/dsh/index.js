@@ -107,6 +107,64 @@ function cachedToolRead(cache, key, remote, load) {
   return promise
 }
 
+/**
+ * The vision result from one finished CLI run, or an error the model can read:
+ * the exit code with the head of stderr, or the head of a non-JSON answer.
+ * Shared by every way the plugin runs the CLI so they fail alike.
+ */
+function parseCliResult({ stdout, stderr, code }) {
+  if (code !== 0) {
+    throw new Error(`modlens failed (exit ${code}): ${(stderr || stdout).trim().slice(0, 500)}`)
+  }
+  let parsed
+  try {
+    parsed = JSON.parse(stdout)
+  } catch {
+    throw new Error(`modlens produced no JSON: ${stdout.trim().slice(0, 300)}`)
+  }
+  // The canonical value is the vision result itself; routing details
+  // (meta.attempts, whose quota a reused engine spent) stay operational.
+  return parsed.result
+}
+
+// A dsh attachment id as the local store mints it: the sha256 of the stored
+// bytes. The value comes from the host store and is written into evidence
+// text that goes on the wire, so only this exact shape is ever echoed: a
+// newline or other free text in it would be a fake turn boundary.
+const ATTACHMENT_ID = /^sha256:[0-9a-f]{64}$/
+// What the tool treats as an id rather than a path. Wider than ATTACHMENT_ID
+// on purpose, so a mangled id gets the clear refusal instead of a missing
+// file error from the CLI.
+const ATTACHMENT_ID_PREFIX = /^sha256:/i
+const ATTACHMENT_REF_LIMIT = 256
+// Success evidence block to the ref whose id it names. The cache hands out
+// these frozen blocks, so the block itself carries the id back to the record.
+const NAMED_EVIDENCE = new WeakMap()
+
+/**
+ * Record a ref this plugin read, keyed by its id, so the tool can read the
+ * same bytes again when the model asks for a new focus (#121). Map insertion
+ * order is the LRU order, the same as the tool read cache.
+ */
+function rememberAttachmentRef(refs, ref) {
+  const id = ref?.attachmentId
+  if (typeof id !== 'string' || !ATTACHMENT_ID.test(id)) return
+  refs.delete(id)
+  refs.set(id, ref)
+  while (refs.size > ATTACHMENT_REF_LIMIT) {
+    refs.delete(refs.keys().next().value)
+  }
+}
+
+function lookupAttachmentRef(refs, id) {
+  const ref = refs.get(id)
+  if (ref !== undefined) {
+    refs.delete(id)
+    refs.set(id, ref)
+  }
+  return ref
+}
+
 export const name = 'modlens'
 export const inject = ['tools', 'agents', 'attachments', 'llm']
 
@@ -129,11 +187,14 @@ export function apply(ctx, config = {}) {
   // Keep their completed evidence beside the attachment cache so the model's
   // repeated decision does not become repeated vision-provider work (#81).
   const toolReadCache = new Map()
+  // The attachments behind the evidence this plugin wrote, by id, so the
+  // tool can re-read a pasted image with a new focus (#121).
+  const attachmentRefs = new Map()
   // Off by default since the vision provider converts at request time and
   // keeps the durable log (and the UI thumbnail) intact; turn it on only for
   // setups where images enter through a provider this plugin does not wrap.
   if (config.autoRead === true) {
-    registerAutoRead(ctx, evidenceCache)
+    registerAutoRead(ctx, evidenceCache, attachmentRefs)
   }
   // The provider ids this plugin registered itself. The takeover verdict has
   // to skip them: our wrapper models are synthetic twins of upstream ones,
@@ -152,10 +213,10 @@ export function apply(ctx, config = {}) {
     // keep the dependency-free plugin's former feature-detected path.
     if (typeof ctx.inject === 'function') {
       ctx.inject(['llm'], (scope) => {
-        return registerVisionProvider(scope, config, ownProviders, evidenceCache)
+        return registerVisionProvider(scope, config, ownProviders, evidenceCache, attachmentRefs)
       })
     } else {
-      registerVisionProvider(ctx, config, ownProviders, evidenceCache)
+      registerVisionProvider(ctx, config, ownProviders, evidenceCache, attachmentRefs)
     }
   }
   // Paste-to-path: the browser half (dsh/client.js) intercepts image pastes
@@ -203,9 +264,12 @@ export function apply(ctx, config = {}) {
   // toJSON, the same stance the LlmAdapter takes: importing a dsh package for
   // it would pin this plugin to one harness version. Harnesses without the
   // settings service never run the closure, and their older settings page
-  // rendered every registered card anyway.
+  // rendered every registered card anyway. 0.1.7 keeps the service but drops
+  // runtime namespaces, since plugin cards moved to the Plugins page, which
+  // dispatches by package name instead (#113): nothing to register there.
   if (config.settingsCard !== false && typeof ctx.inject === 'function') {
     ctx.inject(['settings'], (scope) => {
+      if (typeof scope.settings.register !== 'function') return
       try {
         const passThrough = (value) => ({ ...(value ?? {}) })
         passThrough.toJSON = () => ({
@@ -231,13 +295,14 @@ export function apply(ctx, config = {}) {
   const readImageTool = (toolName) => ({
     name: toolName,
     description:
-      'Read an image through the modlens vision bridge. Use whenever a message references an image the current model cannot see: a local file path or an http(s) URL to a screenshot, photo, chart, diagram, or document scan. Returns structured evidence with every word transcribed (ocr.full_text), layout regions in reading order, semantics, and an uncertainty list. Quote the evidence instead of guessing. For the same image and focus, call this tool once and reuse its returned evidence instead of calling again. Requires a configured modlens engine (run `npx @liustack/modlens doctor` in a terminal to check).',
+      'Read an image through the modlens vision bridge. Use whenever a message references an image the current model cannot see: a local file path or an http(s) URL to a screenshot, photo, chart, diagram, or document scan. Returns structured evidence with every word transcribed (ocr.full_text), layout regions in reading order, semantics, and an uncertainty list. Quote the evidence instead of guessing. For the same image and focus, call this tool once and reuse its returned evidence instead of calling again. Evidence for a pasted image carries an `attachment-id:` line: to read that image again with a new focus, pass the id as path, and do not search the filesystem for the file. Requires a configured modlens engine (run `npx @liustack/modlens doctor` in a terminal to check).',
     parameters: {
       type: 'object',
       properties: {
         path: {
           type: 'string',
-          description: 'Absolute local file path or http(s) URL of the image',
+          description:
+            'Absolute local file path, http(s) URL, or the attachment-id (sha256:...) from pasted-image evidence',
         },
         prompt: {
           type: 'string',
@@ -258,7 +323,9 @@ export function apply(ctx, config = {}) {
       title: toolName,
       kind: 'read',
       rawInput: args,
-      ...(typeof args?.path === 'string' && !/^https?:\/\//i.test(args.path)
+      ...(typeof args?.path === 'string' &&
+      !/^https?:\/\//i.test(args.path) &&
+      !ATTACHMENT_ID_PREFIX.test(args.path.trim())
         ? { locations: [{ path: args.path }] }
         : {}),
     }),
@@ -266,8 +333,31 @@ export function apply(ctx, config = {}) {
       if (typeof args?.path !== 'string' || args.path.trim() === '') {
         throw new Error(`${toolName} needs a non-empty string "path".`)
       }
+      const focus = typeof args.prompt === 'string' ? args.prompt : ''
+      const source = args.path.trim()
+      if (ATTACHMENT_ID_PREFIX.test(source)) {
+        // A pasted image named by the id in its evidence (#121). Checked
+        // before the cache, so an id that becomes known later is not stuck
+        // behind a cached refusal.
+        const ref = lookupAttachmentRef(attachmentRefs, source)
+        if (ref === undefined) {
+          // The path is model text and goes back on the wire: only a strict
+          // id is echoed, anything else gets the fixed sentence alone.
+          const named = ATTACHMENT_ID.test(source) ? ` ${source}` : ''
+          throw new Error(
+            `${toolName}: the attachment-id${named} is not an image read in this session. Do not search the filesystem for it, ask the user to attach the image again or give its file path.`,
+          )
+        }
+        // The id is the sha256 of the stored bytes, so it is the identity.
+        const cacheKey = JSON.stringify([`attachment:${source}`, focus])
+        const pending = cachedToolRead(toolReadCache, cacheKey, false, async () => {
+          const stored = await readStoredImage(ctx.attachments, ref, undefined)
+          return readImageBytes(stored.data, storedImageExt(stored, ref), focus, undefined)
+        })
+        return structuredClone(await abortableWait(pending, exec.signal))
+      }
       const sourceKey = toolReadSourceKey(args.path)
-      const cacheKey = JSON.stringify([sourceKey, typeof args.prompt === 'string' ? args.prompt : ''])
+      const cacheKey = JSON.stringify([sourceKey, focus])
       const pending = cachedToolRead(toolReadCache, cacheKey, sourceKey.startsWith('remote:'), async () => {
         const cliArgs = [CLI_PATH, '-i', args.path, '--timeout', String(CLI_TIMEOUT_MS)]
         if (args.prompt) {
@@ -276,19 +366,7 @@ export function apply(ctx, config = {}) {
         // The shared read has the CLI's own deadline but not one caller's
         // signal. A caller may stop waiting without cancelling every other
         // concurrent caller that joined the same image read.
-        const { stdout, stderr, code } = await run(process.execPath, cliArgs, undefined)
-        if (code !== 0) {
-          throw new Error(`modlens failed (exit ${code}): ${(stderr || stdout).trim().slice(0, 500)}`)
-        }
-        let parsed
-        try {
-          parsed = JSON.parse(stdout)
-        } catch {
-          throw new Error(`modlens produced no JSON: ${stdout.trim().slice(0, 300)}`)
-        }
-        // The canonical value is the vision result itself; routing details
-        // (meta.attempts, whose quota a reused engine spent) stay operational.
-        return parsed.result
+        return parseCliResult(await run(process.execPath, cliArgs, undefined))
       })
       return structuredClone(await abortableWait(pending, exec.signal))
     },
@@ -488,6 +566,14 @@ function registerPasteRoute(ctx, host, ownProviders, config = {}) {
     kind: 'exact',
     path: '/modlens/paste',
     handler: async (req, res) => {
+      // Same fence as /modlens/config, for the same reason: a page on this
+      // machine, or one rebound onto loopback, must not be able to plant a
+      // file here or read back what the takeover verdict discloses.
+      if (!isTrustedRequest(req)) {
+        res.writeHead(403, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ error: ROUTE_REFUSAL }))
+        return
+      }
       if (req.method === 'GET') {
         try {
           const label = new URL(req.url, 'http://localhost').searchParams.get('model') ?? ''
@@ -599,7 +685,9 @@ function registerPasteRoute(ctx, host, ownProviders, config = {}) {
  *   zai, ...) wraps them all instead of hand-picking one. A `discover` array
  *   of provider ids narrows the set. Routes that register late (llm-pi-ai
  *   mounts its routes after settings load) are picked up by re-sweeping on
- *   the registry's own `llm/adapters-updated` notification, no polling. The
+ *   the registry's own `llm/adapters-updated` notification. A route that
+ *   registered but could not answer yet gets a few bounded retries on top
+ *   (issue #116), never open-ended polling. The
  *   deepseek-official wrap keeps its historical `deepseek-modlens` id, so a
  *   selector remembering that provider survives the upgrade.
  */
@@ -655,7 +743,7 @@ function restoreUpstreamSource(messages, wrapperId, upstream) {
   return changed ? out : messages
 }
 
-function registerVisionProvider(ctx, config, ownProviders, evidenceCache) {
+function registerVisionProvider(ctx, config, ownProviders, evidenceCache, attachmentRefs) {
   // Wrap only the text-only members of these families. Their own vision
   // models (present or future: deepseek-vl/ocr/janus, glm-4.5v, glm-5v-...,
   // glm-5.3-flash, deepseek-v4-flash-vision-exp) need no bridge and are
@@ -666,9 +754,10 @@ function registerVisionProvider(ctx, config, ownProviders, evidenceCache) {
   // aliases), because the text-only member is the same model wherever the id
   // carries a prefix. GLM-5.3-Flash (2026-08-26) is native multimodal without
   // a v in the name, so the glm-*v* branch cannot catch it. GLM-5.3 itself
-  // stays wrappable.
+  // stays wrappable. Gateways may spell the version dot as a dash
+  // (sn-glm-5-3-flash, sn-glm-4-6v), so the GLM gates accept either.
   const families = config.families || ['deepseek', 'glm', 'mimo']
-  const VISION_ID = /(deepseek-(vl|ocr)|janus|glm-[\d.]*v(\b|-)|glm-5\.3-flash(?:$|[-:])|\bvision\b)/i
+  const VISION_ID = /(deepseek-(vl|ocr)|janus|glm-[\d.-]*v(\b|-)|glm-5[.-]3-flash(?:$|[-:])|\bvision\b)/i
   const shouldWrap = (info) => {
     const id = String(info?.id ?? '').toLowerCase()
     // The model's own name: alias marker and vendor namespace stripped. The
@@ -709,8 +798,13 @@ function registerVisionProvider(ctx, config, ownProviders, evidenceCache) {
   // framework tears down independently.
   let active = true
   const claimedProviders = new Set()
+  // A pending discovery retry (see scheduleRetry). Plain JavaScript work like
+  // the promises above, so the disposer cancels it rather than Cordis.
+  let retryTimer
   const deactivate = () => {
     active = false
+    clearTimeout(retryTimer)
+    retryTimer = undefined
     for (const providerId of claimedProviders) ownProviders?.delete(providerId)
     claimedProviders.clear()
   }
@@ -842,6 +936,7 @@ function registerVisionProvider(ctx, config, ownProviders, evidenceCache) {
           })()
         },
         evidenceCache,
+        attachmentRefs,
       })
       registrations.set(upstream, { providerId, registration, state })
       // Trusted as ours only on a registration this call actually made. A
@@ -1038,17 +1133,44 @@ function registerVisionProvider(ctx, config, ownProviders, evidenceCache) {
   // skip it while this one is still probing), and sweeps are serialized on
   // one promise chain so two can never interleave their probes at all.
   const discover = Array.isArray(config.discover) ? new Set(config.discover) : null
+  // The registry's notification fires when a route registers, not when it
+  // can answer. An account route registers once per boot and may still be
+  // initializing when the sweep probes it (issue #116): listModels throws or
+  // lists nothing, the claim is released, and on a quiet machine no later
+  // notification ever arrives, so the wrapper stays missing until something
+  // unrelated moves the topology. A sweep that leaves a route unresolved
+  // therefore re-runs itself on a short backoff, bounded so a route that is
+  // simply not wrappable costs three extra probes, not a poll forever. A
+  // topology notification starts the round over, because the route it
+  // announces may itself still be settling.
+  const RETRY_DELAYS_MS = [5_000, 30_000, 120_000]
+  let retryStep = 0
+  const scheduleRetry = () => {
+    if (!active || retryTimer !== undefined || retryStep >= RETRY_DELAYS_MS.length) return
+    retryTimer = setTimeout(() => {
+      retryTimer = undefined
+      retryStep += 1
+      void sweep()
+    }, RETRY_DELAYS_MS[retryStep])
+    // A retry is never a reason to keep the host process alive.
+    retryTimer.unref?.()
+  }
   const sweepOnce = async () => {
     if (!activationCanCommit()) return
+    let unresolved
     try {
-      await sweepBody()
+      unresolved = await sweepBody()
     } catch (error) {
       if (!active) return
       // A sweep failure must never become an unhandled rejection inside the
-      // host process; the next topology notification simply tries again.
+      // host process; the retry or the next topology notification tries again.
       console.error(`[modlens] vision provider discovery sweep failed: ${error}`)
+      unresolved = true
     }
+    if (unresolved) scheduleRetry()
   }
+  // Resolves true when some route was released unresolved and is worth
+  // probing again without waiting for the registry.
   const sweepBody = async () => {
     if (!active) return
     if (typeof llm.listProviders !== 'function') {
@@ -1064,6 +1186,7 @@ function registerVisionProvider(ctx, config, ownProviders, evidenceCache) {
     // Same tolerance as the pinned path: an entry may be a bare id string.
     const idOf = (info) => (typeof info === 'string' ? info : info?.id)
     const available = new Set(providers.map(idOf).filter(Boolean))
+    let unresolved = false
     for (const [upstream, current] of registrations) {
       if (!active) return
       if (available.has(upstream)) continue
@@ -1088,9 +1211,10 @@ function registerVisionProvider(ctx, config, ownProviders, evidenceCache) {
         models = await llm.listModels(id)
       } catch {
         if (!activationCanCommit()) return
-        // Unreachable route today; release the claim so a later topology
-        // change retries it.
+        // Unreachable route today, or one still initializing; release the
+        // claim so a retry or a later topology change probes it again.
         wrapped.delete(id)
+        unresolved = true
         continue
       }
       // The promise can settle just before Cordis marks this fiber UNLOADING,
@@ -1101,13 +1225,16 @@ function registerVisionProvider(ctx, config, ownProviders, evidenceCache) {
       if (!models.some(shouldWrap)) {
         // No eligible models yet: release, the route may gain some later.
         wrapped.delete(id)
+        unresolved = true
         continue
       }
       const providerId = id === 'deepseek-official' ? 'deepseek-modlens' : `modlens-${id}`
       if (!registerWrapper(id, providerId, `${base} (modlens vision)`)) {
         wrapped.delete(id)
+        unresolved = true
       }
     }
+    return unresolved
   }
   // Serialize: a sweep triggered mid-sweep runs after, never interleaved.
   // The first sweep is invoked directly so its synchronous prefix (the
@@ -1119,6 +1246,9 @@ function registerVisionProvider(ctx, config, ownProviders, evidenceCache) {
   }
   if (typeof ctx.on === 'function') {
     ctx.on('llm/adapters-updated', () => {
+      clearTimeout(retryTimer)
+      retryTimer = undefined
+      retryStep = 0
       void sweep()
     })
   }
@@ -1153,6 +1283,13 @@ function evidenceKey(value) {
 }
 
 function cachedEvidence(ctx, adapter, block, walk) {
+  // Every time evidence naming an id is handed out, hit or miss, the id goes
+  // back into the record, so the record follows the history being sent
+  // rather than only first reads (#121). Failure blocks name nothing.
+  const remember = (evidence) => {
+    rememberAttachmentRef(adapter.attachmentRefs, NAMED_EVIDENCE.get(evidence))
+    return evidence
+  }
   const key = evidenceKey(block.attachment ?? block)
   // Everything the current walk touches is pinned for the walk's duration:
   // eviction picks victims outside the union of every open walk, or nothing.
@@ -1164,14 +1301,16 @@ function cachedEvidence(ctx, adapter, block, walk) {
       // Refresh recency: Map iteration order is insertion order.
       adapter.evidenceCache.delete(key)
       adapter.evidenceCache.set(key, hit)
-      return cooling ? Promise.resolve(hit.block) : hit
+      if (cooling) return Promise.resolve(hit.block)
+      void touchEvidence(block.attachment, hit)
+      return hit.then(remember)
     }
     // Cooldown over: fall through into one fresh probe.
   }
   // Deliberately no caller signal: a shared entry must not die with its first
   // caller (their abort used to cancel every concurrent joiner). A cancelled
   // caller simply stops awaiting; the read finishes and the cache keeps it.
-  const pending = readImageBlock(ctx, block, undefined).then(
+  const pending = readEvidence(ctx, block).then(
     (evidence) => {
       // Only replace our own entry: this promise may have been LRU-evicted
       // and the key re-populated by a newer read meanwhile.
@@ -1203,7 +1342,7 @@ function cachedEvidence(ctx, adapter, block, walk) {
   )
   adapter.evidenceCache.set(key, pending)
   trimEvidenceCache(adapter.evidenceCache)
-  return pending
+  return pending.then(remember)
 }
 
 /**
@@ -1384,7 +1523,7 @@ async function convertImagesToEvidence(ctx, messages, signal, adapter) {
  * injectors) see and shape the same final message set; a failed read degrades
  * to an explanatory text block instead of rejecting the step.
  */
-function registerAutoRead(ctx, evidenceCache) {
+function registerAutoRead(ctx, evidenceCache, attachmentRefs) {
   ctx.on('agent/pre-step', async (payload, next) => {
     const decision = await next()
     if (decision.kind !== 'enter') {
@@ -1406,7 +1545,7 @@ function registerAutoRead(ctx, evidenceCache) {
         const content = await convertBlocks(message.content, (block) =>
           // The same cache the wrapper routes use: auto-read used to re-read
           // every image on every step, healthy engine or not (issue #68).
-          abortableWait(cachedEvidence(ctx, { evidenceCache }, block, walk), payload.signal),
+          abortableWait(cachedEvidence(ctx, { evidenceCache, attachmentRefs }, block, walk), payload.signal),
         )
         messages.push({ ...message, content })
       }
@@ -1441,10 +1580,6 @@ const FAILURE_TEXTS = {
  * it only for a cooldown).
  */
 async function readImageBlock(ctx, block, signal) {
-  const { mkdtemp, rm, writeFile } = await import('node:fs/promises')
-  const { tmpdir } = await import('node:os')
-  const { join } = await import('node:path')
-  let dir
   // Which stage failed decides the (constant) placeholder text below. Even
   // the media stage carries no variable part: the type string arrives from
   // paste metadata and replayed content, so it is attacker-shaped, and an
@@ -1452,45 +1587,30 @@ async function readImageBlock(ctx, block, signal) {
   // The concrete type goes to the harness log with the rest of the detail.
   let stage = 'store'
   try {
-    // StoredImageAttachment carries { ref, data: Uint8Array }; the media type
-    // rides the reference (verified against dsh attachment/src/types.ts).
-    const stored = await ctx.attachments.readImage(block.attachment, signal)
-    if (!stored?.data) {
-      // Named failure instead of Buffer.from(undefined)'s bare TypeError the
-      // next time a developer-preview release moves the field (issue #17).
-      throw new Error("attachments.readImage returned no 'data' bytes; the dsh attachment shape may have changed")
-    }
-    const mediaType = stored.ref?.mediaType ?? block.attachment?.mediaType
-    const ext = MEDIA_EXT[mediaType]
-    if (!ext) {
-      // Refusing beats disguising: a fake .png suffix would make the CLI (and
-      // the provider behind it) judge mislabelled bytes.
-      stage = 'media'
-      throw new Error(`unsupported pasted media type ${mediaType ?? '(none declared)'}`)
-    }
+    const stored = await readStoredImage(ctx.attachments, block.attachment, signal)
+    stage = 'media'
+    const ext = storedImageExt(stored, block.attachment)
     stage = 'engine'
-    dir = await mkdtemp(join(tmpdir(), 'modlens-dsh-'))
-    const file = join(dir, `paste${ext}`)
-    await writeFile(file, Buffer.from(stored.data), { mode: 0o600 })
-    const cli = process.env.MODLENS_DSH_CLI || CLI_PATH
-    const { stdout, stderr, code } = await run(
-      process.execPath,
-      [cli, '-i', file, '--timeout', String(CLI_TIMEOUT_MS)],
-      signal,
-    )
-    if (code !== 0) {
-      throw new Error((stderr || stdout).trim().slice(0, 300))
+    const result = await readImageBytes(stored.data, ext, undefined, signal)
+    // Only a well-formed id is echoed (see ATTACHMENT_ID).
+    const id = stored.ref?.attachmentId
+    const named = typeof id === 'string' && ATTACHMENT_ID.test(id)
+    // Frozen: the same object rides every later step from the cache, and a
+    // downstream listener mutating it would silently rewrite history.
+    const evidence = Object.freeze({
+      type: 'text',
+      text: [
+        '[Pasted image, read by the modlens vision bridge]',
+        ...(named ? [`attachment-id: ${id}`] : []),
+        renderEvidence(result),
+      ].join('\n'),
+    })
+    // Tied only once the success block exists, so an engine answer that
+    // fails to render can never leave a re-readable id behind.
+    if (named) {
+      NAMED_EVIDENCE.set(evidence, stored.ref)
     }
-    const parsed = JSON.parse(stdout)
-    return {
-      ok: true,
-      // Frozen: the same object rides every later step from the cache, and a
-      // downstream listener mutating it would silently rewrite history.
-      block: Object.freeze({
-        type: 'text',
-        text: `[Pasted image, read by the modlens vision bridge]\n${renderEvidence(parsed.result)}`,
-      }),
-    }
+    return { ok: true, block: evidence }
   } catch (error) {
     const detail = error instanceof Error ? error.message.slice(0, 300) : String(error)
     console.error(`[modlens] image read failed (${stage}): ${detail}`)
@@ -1501,10 +1621,276 @@ async function readImageBlock(ctx, block, signal) {
         text: FAILURE_TEXTS[stage],
       }),
     }
-  } finally {
-    if (dir) {
-      await rm(dir, { recursive: true, force: true }).catch(() => {})
+  }
+}
+
+/**
+ * One image block's evidence: from the store when an earlier plugin instance
+ * already read it, else from the engine. Same contract as readImageBlock:
+ * never throws, `ok: false` on failure.
+ *
+ * The engine stays one image at a time. Running several at once would turn a
+ * resumed history into a burst against the user's API key, and a rate-limit
+ * answer there cools the key for every harness sharing ~/.modlens, not just
+ * dsh. The store is what removes the re-reads; a cancelled request also
+ * stops at the image in flight instead of draining a queue.
+ */
+async function readEvidence(ctx, block) {
+  const stored = await loadEvidence(block.attachment)
+  if (stored) return { ok: true, block: stored }
+  const evidence = await readImageBlock(ctx, block, undefined)
+  if (evidence.ok) {
+    await saveEvidence(block.attachment, evidence.block)
+  }
+  return evidence
+}
+
+/**
+ * The evidence store: one file per pasted image, so a restarted plugin (dsh
+ * restarts, session resume) answers from disk instead of sending the whole
+ * history back through the engine (#122). The session log stays untouched:
+ * it belongs to dsh, and it keeps the real image blocks on purpose.
+ *
+ * Only content-addressed attachments are stored. Their id is the sha256 of
+ * the bytes, so an entry can never answer for a different picture; any other
+ * id may name new bytes after a restart.
+ *
+ * Evidence is a transcription of the user's image, so the store is private
+ * (0700 directory, 0600 files) and does not keep it forever: entries unread
+ * for EVIDENCE_TTL_MS are removed, and past EVIDENCE_STORE_MAX_BYTES the
+ * least recently read go first.
+ */
+const EVIDENCE_TTL_MS = 30 * 24 * 60 * 60 * 1000
+// Memory hits refresh an entry's file time at most this often. A desktop dsh
+// that stays open answers from memory for weeks, and an entry still in use
+// must not age out underneath it.
+const EVIDENCE_TOUCH_INTERVAL_MS = 24 * 60 * 60 * 1000
+// Bumped whenever the evidence text changes shape (a new header line, a
+// different rendering), so old entries stop answering instead of putting
+// yesterday's format back on the wire.
+const EVIDENCE_FORMAT = 1
+const EVIDENCE_STORE_MAX_BYTES = 64 * 1024 * 1024
+// Housekeeping runs at most this often, on the first store access and then
+// on later ones; a long session must not list the directory on every read.
+const EVIDENCE_SWEEP_INTERVAL_MS = 60 * 60 * 1000
+let lastEvidenceSweepAt = -Infinity
+
+/** Resolved at call time, so a faked HOME (tests) redirects the store too. */
+function evidenceRoot() {
+  return join(homedir(), '.modlens', 'dsh-evidence')
+}
+
+/**
+ * Which engine a read would use, as far as the shared config says. Switching
+ * engines is how a user asks for a better reading, and a restart used to be
+ * enough to get one; keying the store on this keeps it that way. Variables
+ * the file does not mention are not covered, which is acceptable for a
+ * cache: at worst an entry outlives the switch until it expires.
+ */
+function engineFingerprint() {
+  let config
+  try {
+    config = readModlensConfig()
+  } catch {
+    // The CLI refuses the same file, so no read under it can succeed and
+    // nothing is stored under this fingerprint.
+    return ['unreadable']
+  }
+  const provider = typeof config.provider === 'string' ? (ENGINE_ALIASES[config.provider] ?? config.provider) : ''
+  const settings = Object.assign({}, ...settingsKeysFor(provider).map((key) => config.providers?.[key] ?? {}))
+  return [provider, settings.model ?? '', settings.baseUrl ?? '']
+}
+
+async function evidenceFile(ref) {
+  if (typeof ref?.attachmentId !== 'string' || !ATTACHMENT_ID.test(ref.attachmentId)) return undefined
+  const { createHash } = await import('node:crypto')
+  // The whole ref, not just the id: the cache key is the ref, and the same
+  // bytes declared as another media type are a different read.
+  const name = createHash('sha256')
+    .update(JSON.stringify([EVIDENCE_FORMAT, engineFingerprint(), evidenceKey(ref)]))
+    .digest('hex')
+  return join(evidenceRoot(), `${name}.json`)
+}
+
+async function loadEvidence(ref) {
+  const file = await evidenceFile(ref)
+  if (!file) return undefined
+  maybeSweepEvidence()
+  const { readFile, utimes } = await import('node:fs/promises')
+  let entry
+  try {
+    entry = JSON.parse(await readFile(file, 'utf8'))
+  } catch (error) {
+    // Missing is the ordinary miss. Anything else (a torn write, a damaged
+    // file) also reads the image again, which rewrites the entry.
+    if (error?.code !== 'ENOENT') {
+      console.error(`[modlens] evidence store entry unreadable, reading the image again: ${error?.message ?? error}`)
     }
+    return undefined
+  }
+  if (typeof entry?.text !== 'string' || typeof entry.ref?.attachmentId !== 'string') {
+    console.error('[modlens] evidence store entry malformed, reading the image again')
+    return undefined
+  }
+  const evidence = Object.freeze({ type: 'text', text: entry.text })
+  // The restored block names its attachment exactly like a fresh read, so
+  // the tool can re-read it with a new focus (#121).
+  if (ATTACHMENT_ID.test(entry.ref.attachmentId)) {
+    NAMED_EVIDENCE.set(evidence, entry.ref)
+  }
+  await touchFile(file, utimes)
+  return evidence
+}
+
+/**
+ * Recency is the file time: a read keeps the entry clear of the TTL and at
+ * the back of the ceiling's queue. Failing to refresh it only lets the entry
+ * age out early, so it is logged rather than thrown.
+ */
+async function touchFile(file, utimes) {
+  const now = new Date()
+  await utimes(file, now, now).catch((error) => {
+    if (error?.code !== 'ENOENT') {
+      console.error(`[modlens] evidence store entry could not be refreshed: ${error?.message ?? error}`)
+    }
+  })
+}
+
+// When each in-memory entry last refreshed its file, keyed by the cached
+// promise so the record dies with the entry.
+const EVIDENCE_TOUCHED = new WeakMap()
+
+/** A memory hit counts as a read of the stored entry, at most once a day. */
+async function touchEvidence(ref, entry) {
+  const now = Date.now()
+  const last = EVIDENCE_TOUCHED.get(entry)
+  if (last !== undefined && now - last < EVIDENCE_TOUCH_INTERVAL_MS) return
+  EVIDENCE_TOUCHED.set(entry, now)
+  const file = await evidenceFile(ref)
+  if (!file) return
+  const { utimes } = await import('node:fs/promises')
+  await touchFile(file, utimes)
+}
+
+/** Write one entry. A failure only costs a re-read later, so it is logged, not thrown. */
+async function saveEvidence(ref, evidence) {
+  const named = NAMED_EVIDENCE.get(evidence)
+  const file = await evidenceFile(ref)
+  if (!file || !named) return
+  // The display name is the user's original file name: optional in the ref,
+  // not needed to read the bytes again, and not worth keeping on disk.
+  const { name: _displayName, ...kept } = named
+  const { mkdir, writeFile, rename, rm } = await import('node:fs/promises')
+  const temp = `${file}.${process.pid}.${Date.now()}.tmp`
+  try {
+    await mkdir(evidenceRoot(), { recursive: true, mode: 0o700 })
+    // Write then rename, so a crash mid-write never leaves a torn entry
+    // under the real name.
+    await writeFile(temp, JSON.stringify({ text: evidence.text, ref: kept }), { mode: 0o600 })
+    await rename(temp, file)
+  } catch (error) {
+    await rm(temp, { force: true }).catch(() => {})
+    console.error(`[modlens] evidence store write failed: ${error?.message ?? error}`)
+  }
+  maybeSweepEvidence()
+}
+
+function maybeSweepEvidence() {
+  const now = Date.now()
+  if (now - lastEvidenceSweepAt < EVIDENCE_SWEEP_INTERVAL_MS) return
+  lastEvidenceSweepAt = now
+  void sweepEvidenceStore(now)
+}
+
+/**
+ * Remove entries unread past the TTL, then the least recently read until the
+ * store fits the ceiling. Only regular files are touched: entries are read
+ * with withFileTypes, so a symlink reads as a link and is never followed.
+ * Never throws: housekeeping must not fail a read.
+ */
+async function sweepEvidenceStore(now = Date.now(), root = evidenceRoot(), maxBytes = EVIDENCE_STORE_MAX_BYTES) {
+  const { readdir, stat, rm } = await import('node:fs/promises')
+  let entries
+  try {
+    entries = await readdir(root, { withFileTypes: true })
+  } catch (error) {
+    // No store yet is the ordinary case. Anything else means cleanup is not
+    // running, which somebody should be able to find out.
+    if (error?.code !== 'ENOENT') {
+      console.error(`[modlens] evidence store cleanup skipped: ${error?.message ?? error}`)
+    }
+    return
+  }
+  const kept = []
+  for (const entry of entries) {
+    if (!entry.isFile()) continue
+    const full = join(root, entry.name)
+    try {
+      const info = await stat(full)
+      if (now - info.mtimeMs >= EVIDENCE_TTL_MS) {
+        await rm(full, { force: true })
+        continue
+      }
+      kept.push({ full, mtimeMs: info.mtimeMs, bytes: info.size })
+    } catch {
+      // Vanished or held between listing and removal; the next sweep retries.
+    }
+  }
+  let total = kept.reduce((sum, item) => sum + item.bytes, 0)
+  for (const item of kept.sort((a, b) => a.mtimeMs - b.mtimeMs)) {
+    if (total <= maxBytes) break
+    try {
+      await rm(item.full, { force: true })
+      total -= item.bytes
+    } catch {
+      // Still held; keep freeing the rest.
+    }
+  }
+}
+
+/** Fetch one stored image from the host attachment store, bytes checked. */
+async function readStoredImage(attachments, ref, signal) {
+  // StoredImageAttachment carries { ref, data: Uint8Array }; the media type
+  // rides the reference (verified against dsh attachment/src/types.ts).
+  const stored = await attachments.readImage(ref, signal)
+  if (!stored?.data) {
+    // Named failure instead of Buffer.from(undefined)'s bare TypeError the
+    // next time a developer-preview release moves the field (issue #17).
+    throw new Error("attachments.readImage returned no 'data' bytes; the dsh attachment shape may have changed")
+  }
+  return stored
+}
+
+/** The file extension for a stored image's media type, or a refusal. */
+function storedImageExt(stored, ref) {
+  const mediaType = stored.ref?.mediaType ?? ref?.mediaType
+  const ext = MEDIA_EXT[mediaType]
+  if (!ext) {
+    // Refusing beats disguising: a fake .png suffix would make the CLI (and
+    // the provider behind it) judge mislabelled bytes.
+    throw new Error(`unsupported pasted media type ${mediaType ?? '(none declared)'}`)
+  }
+  return ext
+}
+
+/**
+ * Hand image bytes to the CLI through a private temp file and return the
+ * vision result. The file is 0600 in a fresh directory, removed afterwards.
+ */
+async function readImageBytes(data, ext, prompt, signal) {
+  const { mkdtemp, rm, writeFile } = await import('node:fs/promises')
+  const dir = await mkdtemp(join(tmpdir(), 'modlens-dsh-'))
+  try {
+    const file = join(dir, `paste${ext}`)
+    await writeFile(file, Buffer.from(data), { mode: 0o600 })
+    const cli = process.env.MODLENS_DSH_CLI || CLI_PATH
+    const cliArgs = [cli, '-i', file, '--timeout', String(CLI_TIMEOUT_MS)]
+    if (prompt) {
+      cliArgs.push('--prompt', prompt)
+    }
+    return parseCliResult(await run(process.execPath, cliArgs, signal))
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => {})
   }
 }
 
@@ -1517,6 +1903,10 @@ function run(command, args, signal) {
       // this makes it behave as plain node for the spawned CLI (issue #25).
       env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
     })
+    // Decode as one stream, not chunk by chunk: a multi-byte character split
+    // across two pipe chunks came out as replacement characters (issue #110).
+    child.stdout.setEncoding('utf8')
+    child.stderr.setEncoding('utf8')
     let stdout = ''
     let stderr = ''
     child.stdout.on('data', (chunk) => {
@@ -1900,6 +2290,11 @@ function isLoopbackHost(hostname) {
   )
 }
 
+// Both host routes answer an untrusted request with this exact line. It is
+// one constant so the two fences cannot drift apart, and so the tests can
+// assert the wire contract instead of a copy of it.
+const ROUTE_REFUSAL = 'request refused: this route answers same-origin loopback only'
+
 /**
  * The same fence dsh puts in front of its own /api, for the same two
  * confused-deputy paths. Host is the header DNS rebinding cannot forge, so it
@@ -2132,7 +2527,7 @@ function registerConfigRoute(ctx) {
         res.end(JSON.stringify(body))
       }
       if (!isTrustedRequest(req)) {
-        send(403, { error: 'request refused: this route answers same-origin loopback only' })
+        send(403, { error: ROUTE_REFUSAL })
         return
       }
       if (req.method === 'GET') {
@@ -2186,7 +2581,14 @@ function registerConfigRoute(ctx) {
 // reachable from the test suite the way client.js exposes `__card`. They read
 // and write a real file and a real environment, so they are tested against
 // both rather than through the HTTP route.
-export const __config = { engineSummary, applyEngineSettings, modlensConfigPath }
+export const __config = { engineSummary, applyEngineSettings, modlensConfigPath, refusal: ROUTE_REFUSAL }
+
+// The evidence store (#122), reachable from the test suite the way __paste is.
+export const __evidence = {
+  evidenceRoot,
+  sweepEvidenceStore,
+  ttlMs: EVIDENCE_TTL_MS,
+}
 
 // The paste sweeper, reachable from the test suite the way __config is.
 export const __paste = {
@@ -2195,5 +2597,6 @@ export const __paste = {
   openPasteRoot,
   pasteRoot,
   ttlMs: PASTE_TTL_MS,
+  refusal: ROUTE_REFUSAL,
   maxBytes: PASTE_STORE_MAX_BYTES,
 }

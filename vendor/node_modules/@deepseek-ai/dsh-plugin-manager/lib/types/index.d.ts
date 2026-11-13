@@ -1,0 +1,293 @@
+import { Context } from '@deepseek-ai/cordis';
+import z from '@deepseek-ai/schemastery';
+import { TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
+import type { NpmFileSource } from '@deepseek-ai/dsh-plugin-detail/types';
+import type { BundleDetail, BundleInfo, ChangeResult, InspectOptions, InstallBundleOptions, ListVersionsOptions, PluginEntryId, PluginInfo, PluginInstallCancellation, PluginInstallRequestId, PluginRegistries, PluginSpecInspection, PluginUpdateResult, PluginVersionList, UpdateBundleOptions } from './types.ts';
+export type * from './types.ts';
+export { classifyInstallFailure, type InstallFailureFacts } from './install-failure.ts';
+export { InvalidInstallSpecError, parseInstallSpec, pinnedGitOrigin, type ParsedInstallSpec } from './install-spec.ts';
+/** The pnpm executable, registries, and limits for diagnostics, lookups and connection checks. */
+export interface Config {
+    /** The pnpm executable name or path; resolved through `PATH` like the `dsh plugin` command. */
+    pnpmCommand?: string;
+    /** Maximum retained package-operation diagnostic bytes. */
+    outputBytes?: number;
+    /** Maximum time to wait for another process's profile package operation. */
+    lockWaitMs?: number;
+    /** Bound on one registry lookup an inspection runs, in milliseconds. */
+    inspectTimeoutMs?: number;
+    /** Maximum duration of the GitHub repository connection check before installation, in milliseconds. */
+    githubConnectionTimeoutMs?: number;
+    /** Maximum duration of each HTTP(S) and SSH access probe of a self-hosted Git repository before installation, in milliseconds. */
+    gitTransportTimeoutMs?: number;
+    /** Maximum time one captured package run may print nothing before the manager terminates it, in milliseconds. */
+    idleTimeoutMs?: number;
+    /** The registry lookups and installations ask first, as an http(s) URL; absent, the one pnpm's own configuration names. */
+    registry?: string;
+    /**
+     * Registries asked in turn, as http(s) URLs, while the one before is unreachable or holds no copy of the package.
+     * A registry outside this set and `registry` is asked alone, and so is the one pnpm's own configuration names
+     * unless that is npm's own registry or one of these.
+     */
+    fallbackRegistries?: string[];
+    /** How many of the newest versions above the installed one a version listing reads and returns. */
+    versionListLimit?: number;
+    /** How many single-version registry lookups a version listing runs at once. */
+    versionLookupConcurrency?: number;
+    /** Largest bundle detail document, and largest locale file read for one, in bytes. */
+    detailMaxBytes?: number;
+    /** Largest image served beside a bundle detail document, in bytes. */
+    detailImageMaxBytes?: number;
+    /** Deadline of one npm file CDN request for an offered bundle's detail document. */
+    detailFetchTimeoutMs?: number;
+    /** npm file CDNs that offered bundles are read from, in order; a read's `npmFileSources` moves the CDNs it names first. */
+    detailNpmFileSources?: NpmFileSource[];
+}
+declare module '@deepseek-ai/cordis' {
+    interface Context {
+        /** Persistent management of the current profile's composition and packages. */
+        pluginManager: PluginManager;
+    }
+}
+/** Manage profile files and apply their declared reload lifecycle. */
+export declare class PluginManager extends TypertRemoteService {
+    static inject: string[];
+    static Config: z<Config>;
+    /** Management bundles remain protected if their files become unreadable. */
+    private readonly managementBundles;
+    /**
+     * The registry each package was last installed from by this manager in this process. pnpm verifies lockfile tarball
+     * URLs against its default registry unless they belong to a named registry, so a later removal names it again.
+     */
+    private readonly installedFrom;
+    private readonly ownerEntryId;
+    private readonly packageOperations;
+    private readonly profile;
+    private readonly outputBytes;
+    private readonly lockWaitMs;
+    private readonly inspectTimeoutMs;
+    private readonly githubConnectionTimeoutMs;
+    private readonly gitTransportTimeoutMs;
+    private readonly idleTimeoutMs;
+    private readonly pnpmCommand;
+    private readonly versionListLimit;
+    private readonly versionLookupConcurrency;
+    private readonly configuredRegistries;
+    private readonly ownerContext;
+    private readonly abort;
+    /** Installations by request id, from their call until it settles. */
+    private readonly installs;
+    private readonly detail;
+    constructor(ctx: Context, config: Config);
+    /**
+     * Read a bundle's long description: the Markdown file its locale `meta.detail` names in `language`, otherwise its
+     * README. An installed bundle is read from its directory without network access; an official bundle the installation
+     * offers before it is installed is read from the npm file CDNs at its offered version. Nothing is cached.
+     * @param name - the bundle's package name, as `listBundles()` lists it.
+     * @param language - the display language, such as `zh-CN`; documents fall back through its prefixes to English.
+     * @param options - `npmFileSources` names npm file CDNs to ask first for an offered bundle, in order, such as the one
+     *   a Client measured as fastest; configured CDNs it omits follow, and CDNs that are not configured are not asked.
+     * @returns the document with its origin and path, or `none`.
+     * @throws {RemoteError} `plugin-manager/unknown-bundle`, `plugin-manager/invalid-language`, or
+     *   `plugin-manager/detail-unavailable`.
+     */
+    readBundleDetail(name: string, language: string, options?: {
+        npmFileSources?: NpmFileSource[];
+    }): Promise<BundleDetail>;
+    private listedBundle;
+    /**
+     * Answer `GET ${DETAIL_FILE_PATH}?bundle=<name>&document=<path>&path=<destination>[&sources=<cdn>,...]` with one image
+     * beside a bundle document; `sources` names npm file CDNs to ask first for an offered bundle, as `readBundleDetail` does.
+     */
+    private serveDetailFile;
+    /** Read exact plugin-version exemptions saved in this profile.
+     * @returns Accepted package-name@version keys with the runtime versions they may run on, and any
+     * record or file problem the reader rejected, which the caller reports instead of failing.
+     */
+    listVersionExemptions(): {
+        exemptions: Record<string, string[]>;
+        warnings: string[];
+    };
+    /** Grant or revoke one exact plugin/runtime exemption and reevaluate live plugins.
+     * @param packageVersion Exact manifest package name followed by @ and its version; never an installation spec or alias.
+     * @param runtimeVersion Exact current DSH version for grants; revocation may name a previous runtime.
+     * @param enabled Whether to grant rather than revoke the exemption.
+     * @param acceptRisk Required true for grants after the user accepts possible crashes and data loss.
+     * @returns Saved and runtime outcomes. Startup-only profiles require restart.
+     */
+    setVersionExemption(packageVersion: string, runtimeVersion: string, enabled: boolean, acceptRisk?: boolean): Promise<ChangeResult>;
+    /** Read current plugins, including why a row cannot be changed through the profile patch.
+     * @returns Current runtime entries with persistent patch targets.
+     */
+    listPlugins(): Promise<PluginInfo[]>;
+    /** Read installed, installation-provided, and offline Official catalog bundles, plus selected non-bundle names.
+     * A dependency without a bundle patch is listed, as a `not-bundle` problem, only while it is selected.
+     * @returns Package versions, manifest descriptions, the installable spec of profile dependencies, rows, optional
+     * display metadata, activation selections, whether the installation offers the bundle, and removal availability.
+     */
+    listBundles(): Promise<BundleInfo[]>;
+    /** The bundle inventory before update eligibility, which is derived from each listed bundle. */
+    private readBundles;
+    /** Read the registries this manager asks: the configured first one, its fallbacks in order, and what pnpm's own configuration names.
+     * @returns The registries in pnpm's comparison form; null is the one pnpm's own configuration names, `resolved` as pnpm reads it now.
+     */
+    registries(): Promise<PluginRegistries>;
+    /** Read what a spec names before installing it.
+     * @param spec One package spec: a registry name, an absolute path, a git address, or a tarball.
+     * @param options The registry asked first.
+     * @param signal Ends a registry lookup early.
+     * @returns The package the spec names, or why it is refused.
+     */
+    inspect(spec: string, options?: InspectOptions, signal?: AbortSignal): Promise<PluginSpecInspection>;
+    /** Read the published versions newer than an installed registry package's version, from the first registry that answers.
+     * Official bundles follow the DSH version and are not listed.
+     * @param name Installed profile dependency name.
+     * @param options The registry asked first; absent, the one the package was installed from in this process, else the configured one.
+     * @param signal Ends the lookups early.
+     * @returns At most `versionListLimit` newer versions, newest first, with their tags, deprecation, bundle declaration,
+     * and DSH compatibility, and the registry that answered; or why no list could be read, with every registry asked.
+     */
+    listVersions(name: string, options?: ListVersionsOptions, signal?: AbortSignal): Promise<PluginVersionList>;
+    /**
+     * Replace an installed bundle with a newer version. A registry copy updates to `name@version`, checked on the registry
+     * first: it must exist, declare a bundle, and accept the running DSH version, or nothing changes. A Git copy updates
+     * to the Git spec `options.spec` names, which must pin a full commit of the repository directory the copy came from;
+     * with HMR, a network failure or timeout reaching its repository stops the update before anything changes. pnpm reads
+     * a Git package only while installing it, so its bundle and compatibility are checked then. Either target
+     * installation is undone, profile files and modules included, before its bundle loads unless it installs `name` at
+     * `version`. With HMR the installed version is removed, so its plugins stop, and the target is installed with the same
+     * selection; when that installation fails or is cancelled, the removed version is installed again: a registry copy
+     * from the registry it came from, a Git copy from its saved spec. Without HMR the target is installed over the running
+     * version and the result reports the restart.
+     * @param name Installed profile dependency name.
+     * @param version Exact version newer than the installed one.
+     * @param options The registry asked first, as for `listVersions`; the Git spec of `version`, required for and accepted
+     * only by a bundle `listBundles` lists with `update: 'git'`; and the request id naming the progress and the target
+     * installation's logs and cancellation.
+     * @returns The versions, the last step that ran with its result, and the reinstallation when one ran.
+     */
+    updateBundle(name: string, version: string, options?: UpdateBundleOptions): Promise<PluginUpdateResult>;
+    /**
+     * The target of a Git copy's update: the caller's Git spec, pinned to a full commit of the copy's repository directory.
+     * @param name The package name.
+     * @param origin The repository directory the installed copy pins.
+     * @param options The caller's spec and registry.
+     * @returns The spec and the registry its dependencies are asked from first, or why the update is refused.
+     */
+    private planGitUpdate;
+    /**
+     * Check that the network reaches the repository of a Git update's target. Only a network failure or a timeout
+     * counts: a check Git cannot run, or one the repository refuses without credentials, leaves the answer to pnpm.
+     * @param spec The target's pinned Git spec.
+     * @returns The failed check, or undefined when the host answered or the check could not tell.
+     */
+    private gitHostUnreachable;
+    /**
+     * Check a registry copy's update target on the registry plan before anything changes.
+     * @param name The package name.
+     * @param version The target version.
+     * @param options The caller's registry, as for `listVersions`; a spec is refused.
+     * @returns The exact spec and the registry that answered for it, or why the target cannot replace the bundle.
+     */
+    private checkRegistryUpdate;
+    /**
+     * The registry a version listing or an update asks first.
+     * @param name The package name.
+     * @param requested The caller's registry, when it named one.
+     * @returns The requested registry, else the one this process last installed the package from, else undefined for the configured one.
+     */
+    private registryFor;
+    /**
+     * Ask registries in turn through `pnpm view`, moving to the next one while a failure is the registry's: unreachable,
+     * timed out, or without the package or version, which a mirror not yet synced reports.
+     * @param spec The registry spec viewed.
+     * @param fields The manifest fields printed.
+     * @param plan The registries, in order; never empty.
+     * @param parsed The spec's form, which decides whether a failure was the registry's.
+     * @param signal Ends the lookup; a dropped lookup is not carried to the next registry.
+     * @returns The parsed answer and the registry that gave it, or the last refusal, with every registry asked.
+     */
+    private askRegistries;
+    /** Persist a plugin entry's desired enablement and apply it on live profiles.
+     * @param id Loader entry identity returned by listPlugins.
+     * @param enabled Whether the plugin should run.
+     * @returns Saved and runtime outcomes, including higher-priority overrides.
+     */
+    setPluginEnabled(id: PluginEntryId, enabled: boolean): Promise<ChangeResult>;
+    /** Select or remove a bundle layer while retaining installed dependencies.
+     * @param name Bundle package name.
+     * @param enabled Whether the bundle contributes its patch layer.
+     * @returns Persisted and runtime outcomes.
+     */
+    setBundleEnabled(name: string, enabled: boolean): Promise<ChangeResult>;
+    /**
+     * Install a package using the same pnpm implementation as dsh plugin. GitHub
+     * repositories get a connection check bounded by githubConnectionTimeoutMs before pnpm starts;
+     * only network failures or timeouts stop installation, and a stop streams the check's diagnostic
+     * as the installation's install-log run under its request id, while pnpm owns authentication and transport fallback. An
+     * HTTP(S) Git URL on another host is installed over SSH instead when access probes bounded by gitTransportTimeoutMs
+     * find that only SSH can read it. A run
+     * that fails, is cancelled, or adds a package without a bundle patch restores
+     * `package.json` and `pnpm-lock.yaml` as they were; downloaded files can stay.
+     * @param spec One package spec, including local paths relative to the invocation directory.
+     * @param options Whether to activate the installed bundle (defaults to true), the request id a cancellation names,
+     * the pending build scripts to allow, whether to save an exact dependency, and the registry asked first.
+     * @returns Package-manager diagnostics, the registries asked, and the observed activation outcome.
+     */
+    installBundle(spec: string, options?: InstallBundleOptions): Promise<ChangeResult>;
+    /** Recover the result of an active installation without cancelling it.
+     * @param requestId The id supplied when installation started.
+     * @returns The installation's outcome after it settles, or null if no active request has that id.
+     * Completed results are not retained; null establishes neither success nor cancellation.
+     */
+    waitForInstall(requestId: PluginInstallRequestId): Promise<ChangeResult | null>;
+    /** Stop an installation this manager owns and wait until its files are back.
+     * @param requestId The id the installation was started with.
+     * @returns `cancelled` once the Git check or pnpm exited and the files are restored, `too-late` once the bundle is being
+     * applied, `not-running` for any other id.
+     */
+    cancelInstall(requestId: PluginInstallRequestId): Promise<PluginInstallCancellation>;
+    /** Unload and remove a profile-owned bundle dependency through dsh plugin's pnpm path; a selected name no
+     * dependency holds is only deselected.
+     * @param name Installed dependency or selected bundle name.
+     * @returns Removal diagnostics and the remaining profile state.
+     */
+    removeBundle(name: string): Promise<ChangeResult>;
+    /** The rows a bundle's patch inserts and the existing rows it changes; an unreadable patch throws. */
+    private declaredRows;
+    /** Run one pnpm command in the profile, streaming its output as install-log chunks; `expected` is the package an `add` must install. */
+    private runPnpm;
+    /** The profile files an installation may rewrite, as they are now; absent files read as undefined. */
+    private readRestoredFiles;
+    /** Put the profile files back; pnpm has exited by the time this runs. */
+    private restoreFiles;
+    private selectBundle;
+    private bundleRows;
+    private protectsManager;
+    private configure;
+    /**
+     * Publish the profile's runtime resolution without HMR, unless a deselected startup bundle still runs and needs the
+     * current table. A publication that needs a restart waits for the restart the result already reports.
+     */
+    private refreshPackages;
+    /**
+     * Apply a package change: without HMR, publish the runtime resolution when that is safe, then {@link reload}.
+     * @param requiredIds Entry ids that must start.
+     * @returns The reload's outcome.
+     */
+    private publishAndReload;
+    /**
+     * Apply the saved profile; with HMR it recomposes live, including the runtime resolution.
+     * @param requiredIds Entry ids that must start.
+     * @returns Warnings about entries that were already inactive, and why the change waits for a restart, if it does.
+     */
+    private reload;
+    private change;
+    private reportOperation;
+    private operationTarget;
+    /** Read the request-time package version without preventing recovery from damaged metadata. */
+    private operationVersion;
+    private diskState;
+}
+export default PluginManager;
+//# sourceMappingURL=index.d.ts.map

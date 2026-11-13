@@ -1,14 +1,17 @@
-# ppt-master preset — converted from the npm package's cordis.patch.yml insert
-# (dsh-ppt-master@1.0.8 declared `- id: preset-ppt-master, name:
-# '@deepseek-ai/dsh-agent-preset'`, a singular package that only exists on
-# dsh >= 0.1.7. On 0.1.5 this profile declares presets the platform way — a
-# .agent-presets/<id>/{preset.yml,agent.cordis.yml} pair shipped by
-# syncBakedPresets — so the patch's `plugins:` list moves here verbatim.
+# ppt-master preset — the source of the `preset-ppt-master` declaration.
 #
-# Adapted rows (0.1.5 compatibility):
-#   - `workflow-ptc` (@deepseek-ai/dsh-workflow-ptc) does not exist on this
-#     platform; its workflowEngine role is filled by dsh-workflow-worker-thread
-#     (provider: spawn), the same pairing router-standard uses.
+# 0.2.2: this file is embedded as that declaration's `config.plugins` by a
+# bundle patch (.smoke/gen-presets.py); the legacy .agent-presets directory is
+# no longer read. 0.2.2-era migrations applied to the 0.1.5 rows:
+#   - `workflow-worker-thread` no longer ships; `workflow-ptc` provides
+#     workflowEngine (its default export extends WorkflowEngine), mounted with
+#     `provider: spawn` exactly as the shipped Web `ptc` preset does.
+#   - tool-subagent: `modelSelectionSettings` -> `modelSelection` plus
+#     `modelDiscovery: true`; `backgroundMode` removed (every delegation is a
+#     managed activation now, and the runtime delivers the completion notice).
+#   - the retired `tool-subagent-control/list-agents` subpath row was dropped;
+#     the shared control row registers send_message/interrupt_agent/list_agents
+#     together and carries `interrupt: false` like the shipped presets.
 
 # ── persona / instructions ──────────────────────────────────────────────────
 
@@ -250,19 +253,22 @@
     # patch's contextLimit/spawn/fork maps are newer-schema keys that 0.1.5
     # either ignores or rejects (`provider` is required on tool-subagent, and
     # omitting it fails the whole preset at mount).
+    # 0.2.2: one row registers send_message, interrupt_agent and list_agents
+    # together; the separate /list-agents subpath export is gone, so the old
+    # list-agents row was removed. `interrupt: false` matches the shipped Web
+    # presets.
     - id: tool-subagent-control
       name: '@deepseek-ai/dsh-tool-subagent-control'
-
-    - id: tool-subagent-list-agents
-      name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
+      config:
+        interrupt: false
 
     - id: tool-subagent
       name: '@deepseek-ai/dsh-tool-subagent'
       config:
         provider: spawn
         toolName: subagent
-        modelSelectionSettings: true
-        backgroundMode: continuable
+        modelSelection: true
+        modelDiscovery: true
 
     # Fork omits model selection so provider/model stay equal to the parent and
     # the inherited history remains eligible for KV Cache reuse (vendor ptc).
@@ -271,13 +277,13 @@
       config:
         provider: fork
         toolName: subagent_fork
-        backgroundMode: continuable
 
-    # dsh-ppt-master's patch mounted @deepseek-ai/dsh-workflow-ptc here (the
-    # ptcRuntime/workflowEngine provider on dsh >= 0.1.7). It does not exist on
-    # 0.1.5 — dsh-workflow-worker-thread fills the same provider role.
-    - id: workflow-worker-thread
-      name: '@deepseek-ai/dsh-workflow-worker-thread'
+    # 0.2.2: `@deepseek-ai/dsh-workflow-worker-thread` is not shipped. The
+    # workflowEngine provider is `@deepseek-ai/dsh-workflow-ptc` (default export
+    # extends WorkflowEngine); the host plane disables its own copy on the Web
+    # surface, so the preset mounts one with the spawn backend.
+    - id: workflow-ptc
+      name: '@deepseek-ai/dsh-workflow-ptc'
       config:
         provider: spawn
 
@@ -307,8 +313,9 @@
 
 # dsh-ppt-master itself: resolved as a bare name from this profile's
 # node_modules (the package is transplanted by syncBakedPlugins as a bundled
-# entry). Its `dsh.bundle.patch` is emptied — on this platform the preset is
-# declared by .agent-presets/ppt-master/, so no profile-level insert row is
-# needed (the original insert targeted the singular dsh-agent-preset package).
+# entry). 0.2.2 DOES ship @deepseek-ai/dsh-agent-preset, so the package's own
+# `dsh.bundle.patch` (which also declares `preset-ppt-master`) is a DUPLICATE
+# declaration while this source is also embedded by .smoke/gen-presets.py —
+# exactly one owner must win; see docs/upgrade/0.2.2-deltas.md.
 - id: ppt-master-tools
   name: dsh-ppt-master

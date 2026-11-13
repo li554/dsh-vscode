@@ -6,14 +6,16 @@
  * bugs (issue #13) cannot exist by construction. Listens to the session event
  * firehose (`session/event`), sends through the agent registry
  * (`agent.followup`), cancels through `agent.cancel`, and reads configuration
- * from the settings service.
+ * injected by the entry (`apply`'s config argument, merged with schema
+ * defaults by `resolveConfig`).
  *
- * All behavior is driven by the `auto-continue` settings namespace (see the
- * plugin's settings card); every knob below is user-configurable there.
+ * All behavior is driven by the `auto-continue` entry config; every knob below
+ * is user-configurable there.
  */
 import type { Context } from '@deepseek-ai/cordis';
 import type { SessionId } from '@deepseek-ai/dsh-session/types';
-import { type AutoContinueConfig, type DayStats, type NotifyAction } from '../shared/core.ts';
+import { type AutoContinueConfig, type DayStats, type RecoveryAttempt, type SessionMode, type NotifyAction } from '../shared/core.ts';
+import { type ConnectivityProbe } from './connectivity.ts';
 /** 通知桥事件: host 引擎产生, browser 侧订阅展示(Notification / 动作按钮)。 */
 export interface HostNotice {
     /** 稳定标识(供 browser 去重)。 */
@@ -26,26 +28,58 @@ export interface HostNotice {
     /** 产生时间。 */
     at: number;
 }
-/** 插件主体: 一条 mux 流 + 一条 host 流 + 启动/重连扫描。 */
 export declare class AutoContinueRunner {
     private readonly ctx;
     private readonly getConfig;
+    private readonly probe;
     private readonly states;
+    /** Cached subagent lineage: session id -> direct parent id (undefined when the header has none). */
+    private readonly parents;
+    /** Sessions already identified as subagents, including event views without header metadata. */
+    private readonly subagentSessions;
     private readonly pauseUntil;
     private dayStats;
+    private readonly recoveryAttempts;
     private readonly notices;
     private readonly noticeListeners;
     private readonly stateListeners;
+    private readonly prioritizedFollowups;
     private readonly disposeSessionEvents;
+    private readonly disposeInboxEvents;
     private disposed;
+    private readonly bootScannedSessions;
+    /** Also bound diagnostics when even an agent's session getter is unavailable. */
+    private readonly bootScanErrors;
+    /** 存储扫描已裁决的会话 id, 避免每轮重复冷读大日志。 */
+    private readonly storedSwept;
+    /** 子会话裁决独立记账: storedSwept 在 origin 判断之前就已标记, 不能复用。 */
+    private readonly childSwept;
+    /** 本轮已花掉的子会话观察配额(每轮重置, 子会话日志与主会话同等昂贵)。 */
+    private childScanned;
+    /** 本轮收集到的子会话中断, 按 root 主会话 id 归组。 */
+    private readonly childInterrupts;
+    /** 已唤醒过的 root 会话 → 上次唤醒覆盖的子会话签名, 防止每轮重复催同一批。 */
+    private readonly childWoken;
+    /** 已打印过「父链不可解析」的子会话, 避免 15 分钟扫描窗口内每轮重扫把日志刷爆。 */
+    private readonly childDirtyLogged;
+    /** 存储会话的连续观察/物化失败次数, 触达 SWEEP_MAX_FAILURES 后不再重试。 */
+    private readonly storedSweepFailures;
+    private storedSweepAnnounced;
+    private bootScanTimer;
+    private wakeBootScan;
+    private storedSweep;
+    private readonly stopStoredSweep;
+    /** 并发的断网挂起共用同一次连通性检测。 */
+    private connectivityCheck;
     /**
-     * @param ctx - host plugin context (agents registry, session events, settings).
-     * @param getConfig - read the current resolved configuration (settings service).
+     * @param ctx - host plugin context (agents registry, session events).
+     * @param getConfig - read the current resolved configuration (entry config).
      */
-    constructor(ctx: Context, getConfig: () => AutoContinueConfig);
+    constructor(ctx: Context, getConfig: () => AutoContinueConfig, probe?: ConnectivityProbe);
     private log;
     /** 对外(状态桥): 今日统计快照。 */
     todayStats(): DayStats;
+    recentRecoveryAttempts(): RecoveryAttempt[];
     /** 对外(状态桥): 当前生效的会话级暂停列表。 */
     activePauses(): {
         sessionId: SessionId;
@@ -56,17 +90,66 @@ export declare class AutoContinueRunner {
     /** 对外(状态桥): 订阅运行时状态变化(统计/暂停列表)。 */
     subscribeState(listener: () => void): () => void;
     private emitState;
+    private sessionConfig;
+    /**
+     * The session's own mode, ignoring subagent inheritance. The stored-session
+     * sweep and the restart hand-off (`resumeInterruptedChildren`) use this, so
+     * turning live subagent recovery off never silently disables them.
+     */
+    private ownSessionConfig;
+    configurationChanged(): void;
     /** 对外(状态桥): 消费待展示的通知。 */
     drainNotices(): HostNotice[];
     /** 通知动作(browser 通知按钮回传): 立即续跑 / 暂停该会话 / 解除暂停 / 清零统计。 */
     handleNoticeAction(sessionId: SessionId | undefined, action: string): void;
     dispose(): void;
     private state;
+    /** Record a subagent session's lineage and its parent id when the header carries one. */
+    private noteSubagent;
+    /** Read durable origin from the live agent for direct action paths as well. */
+    private isSubagent;
+    /** Header origin, cached set or state flag; for paths that only have the session id. */
+    private isSubagentSession;
+    /**
+     * Direct subagent parent id. DSH stores fork lineage in the same
+     * `header.parentSession` field, so only a session whose header origin is
+     * `subagent` may be followed upward: an ordinary ancestor (the visible main
+     * conversation, even a forked one) is the top of the recovery lineage.
+     */
+    private parentOf;
+    /** Explicit session mode stored for this exact id, if the user gave one. */
+    private explicitMode;
+    /**
+     * A subagent's effective mode, or `undefined` when the lineage cannot be
+     * verified. An intermediate parent that is no longer live (and was never seen
+     * here) used to stop the walk early, fall back to the profile default and
+     * resume a child whose main conversation is Off; refusing the send is safe.
+     */
+    private resolveSubagentMode;
+    /** Whether the setting and the inherited main-chat mode allow live recovery for this child. */
+    private subagentRecoveryEnabled;
+    /** Modes children inherit from their main conversation, for the composer's display. */
+    inheritedSubagentModes(): Record<string, SessionMode>;
+    /**
+     * Keep the lineage caches bounded on long-lived hosts. Once the cache grows,
+     * entries for sessions that are no longer loaded are dropped; they are re-read
+     * from the live header if the session comes back.
+     */
+    private pruneLineage;
+    /** Mark a child session; drop only queued sends that its effective policy no longer allows. */
+    private markSubagent;
+    /** Pause deadline, including the parents' "pause this session 1h" for subagents. */
+    private effectivePauseUntil;
+    /** Whether this session sits below `ancestorId` in the subagent lineage (never fork lineage). */
+    private isDescendantOf;
     /**
      * 事件入口(host 单实例): 预处理工具调用/结果/模型消息(护栏与循环信号),
      * 然后交给回合状态机。
      */
     private onHostEvent;
+    private tracksOutput;
+    /** Treat unknown block kinds conservatively: only reasoning and blank text are silent. */
+    private hasVisibleContent;
     /** 从 assistant/message 事件提取纯文本。 */
     private assistantText;
     private assistantChunkText;
@@ -100,8 +183,25 @@ export declare class AutoContinueRunner {
     /** 本会话当前生效的冷却间隔(自适应退避)。 */
     private cooldownFor;
     private schedule;
+    /**
+     * 冷却期内的恢复: 等到冷却结束再重新调度。
+     * 直接丢弃会让一次瞬时失败把会话搁置, 直到用户手动发消息才恢复。
+     */
+    private deferCooldownRetry;
+    /** 按调度原因选择续跑模板: loop 重启、无输出回合、max-tokens、自主循环, 其余用通用继续文本。 */
+    private templateFor;
     private cancelPending;
     private fire;
+    private resetLoopIterations;
+    /** 自主循环轮数上限: 触顶后静默停下, 每次触顶只提示一次。 */
+    private loopCapReached;
+    private checkConnectivity;
+    /**
+     * 网络类失败的续跑先过连通性检测: 断网时发出去必然再失败一次, 白白吃掉连续上限,
+     * 等网络恢复时预算已耗尽。挂起期间不计次数, 每 offlineCheckMs 复检一次, 恢复后
+     * 重新走 schedule(宽限、冷却照常)。手动续跑和非网络原因不受影响。
+     */
+    private fireWhenOnline;
     /**
      * 组装本次续跑消息: 模板填充 + 幂等护栏。
      * 护栏依据上一步工具调用的执行状态附加指引, 防止重跑副作用操作:
@@ -113,13 +213,52 @@ export declare class AutoContinueRunner {
     /** 上一步工具调用的护栏状态(实时路径, 由 mux 帧维护)。 */
     private currentGuard;
     private bootScanLoop;
-    /** 反复尝试扫描, 直到成功(宿主就绪)或达到次数上限。 */
-    private scanLoop;
-    /**
-     * 扫描最近中断过的会话: 最后回合以非人为原因结束, 且其后没有新回合或用户消息。
-     * @returns 是否成功完成一次扫描(宿主就绪)。
-     */
+    /** Inspect newly available sessions; process each settled startup history once. */
     private scanInterrupted;
+    /** Bound cold reads even if a backend ignores cancellation; release late leases. */
+    private readStored;
+    /**
+     * 存储扫描: 枚举持久化会话, 把尾部命中恢复谓词的未加载会话物化为
+     * live agent。宿主重启后 agent 仅在客户端打开会话时才懒加载, 不物化
+     * 则启动扫描永远看不到它们; 谓词与上方扫描一致, 仅失败类原因。
+     */
+    private sweepStoredSessions;
+    /**
+     * 子会话裁决。子会话本身永不直接续跑(父代理权威, 见 README), 但启动扫描要
+     * 知道它是否在重启时被打断, 才能在自己的 root 会话上补一次带清单的唤醒。
+     * 独立 `childSwept` 记账与独立配额: 主扫描的 `storedSwept` 在 origin 判断
+     * 之前就已标记, 复用它会让子会话永远扫不到, 也会吃掉主扫描的观察预算。
+     */
+    private sweepChild;
+    /** 把本轮收集到的子会话中断转成 root 会话上的一次唤醒(同一批只催一次)。 */
+    private wakeInterruptedChildren;
+    /**
+     * 在 root 会话上唤醒一次。只有在 root 自己是"干净终态"时才动手: 它若被打断,
+     * 主扫描本来就会续跑它; 它若被用户手动停止, 唤醒就是幽灵回合。
+     */
+    private wakeRoot;
+    /** 父会话只在"干净结束"或"被宿主关闭"时接受唤醒; 用户手动停止的绝不复活。 */
+    private rootAcceptsWake;
+    /** 发送需要 live agent; 存储会话沿既有物化路径拉起, 复用 preset 与模型回装。 */
+    private ensureLiveAgent;
+    /** 唤醒文本必须带会话级证据: 否则父会话看不到任何状态, 只会白跑一轮再回一句"都结束了"。 */
+    private buildChildResumeText;
+    /**
+     * 重启会把 active goal 置为 disarmed(宿主卸载驱动的正常动作), 只有人类授权的
+     * resume 能重新 arm; paused 则是人类的显式决定。两者都默认关闭。
+     */
+    private rearmGoal;
+    /**
+     * 按会话记录的 preset 组合把存储会话恢复为 live agent(镜像会话控制
+     * 器的 adopt 路径: preset 挂载 + 会话已记录的模型选择回装)。模型选择
+     * 以日志记录的 request-header 播种 agentOptions——{{model}}/{{provider}}
+     * 提示变量与首次请求路由都读它, 驱动器还会因路由吻合而自行回装日志
+     * 记录的 effort; 无落点(从未发过请求的会话)回落宿主默认。恢复时追
+     * 加的合成 turn/end(`interrupted`)随后由常规扫描按既有关卡恢复。
+     */
+    private materializeStored;
+    /** Captured identity only: even session.id can throw when the header is damaged. */
+    private logBootScanFailure;
     /** 从历史事件恢复上一步工具调用状态(扫描路径的幂等护栏)。 */
     private applyGuardFromEvents;
 }

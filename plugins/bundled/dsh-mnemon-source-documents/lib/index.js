@@ -1,11 +1,11 @@
-import { DOCUMENTS_ACTIVE_LIMIT_BYTES } from "./contracts.js";
+import { DOCUMENTS_ACTIVE_LIMIT_BYTES, DOCUMENTS_DIRECTORY, DOCUMENTS_INDEX_FILE, DOCUMENTS_LOCK_FILE, DOCUMENT_FILENAME_PATTERN } from "./contracts.js";
 import { createMemoryMutationReceipt, defineMemoryPlugin, defineMemorySource, installMemory, memoryConfigurationDigest, memoryInputRecord, memoryInputStringArray, memoryInputText, truncateMemoryText } from "dsh-mnemon/extension-sdk";
 import { homedir } from "node:os";
-import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
-import z from "schemastery";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import z from "@deepseek-ai/schemastery";
 import { createHash, randomUUID } from "node:crypto";
 import { COMPOSABLE_MEMORY_API_VERSION } from "dsh-mnemon/contracts";
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 //#region src/config.ts
 const Config = z.object({
 	dataDir: z.string(),
@@ -47,7 +47,6 @@ function lexicalRequiredMatchCount(tokens) {
 //#region src/controller.ts
 const MAX_DOCUMENT_BYTES = 2097152;
 const LOCK_TIMEOUT_MS = 5e3;
-const LOCK_STALE_MS = 3e4;
 const LOCK_RETRY_MS = 20;
 const MAX_EXCERPT_CACHE_ENTRIES = 2048;
 var DocumentCapacityError = class extends Error {
@@ -66,7 +65,7 @@ var DocumentCapacityError = class extends Error {
 var DocumentConflictError = class extends Error {
 	code = "revision-conflict";
 	constructor() {
-		super("document changed while archival was running; the active copy was preserved");
+		super("document index or content changed; reload before retrying");
 		this.name = "DocumentConflictError";
 	}
 };
@@ -94,7 +93,10 @@ function hash(value) {
 	return createHash("sha256").update(value).digest("hex");
 }
 function indexRevision(index) {
-	return hash(JSON.stringify(index));
+	return hash(JSON.stringify({
+		version: index.version,
+		documents: index.documents.map(parseRecord)
+	}));
 }
 function copyIndex(index) {
 	return {
@@ -200,12 +202,12 @@ var DocumentController = class {
 		if (!existsSync(this.workspaceRoot) || !statSync(this.workspaceRoot).isDirectory()) throw new Error(`document workspace is unavailable: ${this.workspaceRoot}`);
 		if (!Number.isSafeInteger(limitBytes) || limitBytes < 1) throw new Error("active document limit must be a positive integer");
 		this.storageRoot = storageRoot === void 0 ? join(this.workspaceRoot, ".mnemon") : resolve(storageRoot);
-		this.managedRelativePrefix = storageRoot === void 0 ? [".mnemon", "documents"].join("/") : "documents";
-		this.directory = join(this.storageRoot, "documents");
+		this.managedRelativePrefix = storageRoot === void 0 ? [".mnemon", DOCUMENTS_DIRECTORY].join("/") : DOCUMENTS_DIRECTORY;
+		this.directory = join(this.storageRoot, DOCUMENTS_DIRECTORY);
 		this.activeDirectory = join(this.directory, "active");
 		this.archivedDirectory = join(this.directory, "archived");
-		this.indexPath = join(this.directory, "index.json");
-		this.lockPath = join(this.directory, ".index.lock");
+		this.indexPath = join(this.directory, DOCUMENTS_INDEX_FILE);
+		this.lockPath = join(this.directory, DOCUMENTS_LOCK_FILE);
 		this.initialize();
 	}
 	snapshot() {
@@ -251,6 +253,14 @@ var DocumentController = class {
 					memoryBodyIds: []
 				};
 				projected = used + Buffer.byteLength(renderDocument(record, content), "utf8");
+			} else if (request.action === "delete") {
+				const current = this.requireDocument(index, request.id);
+				return {
+					projected: used - (current.status === "active" ? current.sizeBytes : 0),
+					limit: this.limitBytes,
+					fits: true,
+					candidates: []
+				};
 			} else {
 				const current = this.requireDocument(index, request.id);
 				if (current.status !== "active") throw new Error("archived documents are immutable; create a new active revision instead");
@@ -302,12 +312,14 @@ var DocumentController = class {
 				return {
 					result: {
 						...view,
-						score,
-						excerpt: excerpt(view.content)
+						score
 					},
 					tokenMatches
 				};
-			}).filter((candidate) => normalized === "" || candidate.result.score > 0 && candidate.tokenMatches >= requiredTokenMatches).sort((left, right) => right.result.score - left.result.score || Date.parse(right.result.updatedAt) - Date.parse(left.result.updatedAt)).slice(0, limit).map((candidate) => candidate.result);
+			}).filter((candidate) => normalized === "" || candidate.result.score > 0 && candidate.tokenMatches >= requiredTokenMatches).sort((left, right) => right.result.score - left.result.score || Date.parse(right.result.updatedAt) - Date.parse(left.result.updatedAt)).slice(0, limit).map(({ result }) => ({
+				...result,
+				excerpt: excerpt(result.content)
+			}));
 			if (ranked.length > 0) {
 				const accessedAt = this.now().toISOString();
 				const ids = new Set(ranked.map((result) => result.id));
@@ -332,6 +344,13 @@ var DocumentController = class {
 		const operation = this.queue.then(() => this.withLock(() => this.mutateLocked(request, expectedRevision)));
 		this.queue = operation.catch(() => void 0);
 		return operation;
+	}
+	deleteDocument(id, expectedRevision, fileRevision) {
+		return this.mutate({
+			action: "delete",
+			id,
+			fileRevision
+		}, expectedRevision);
 	}
 	archive(id, expectedRevision, details) {
 		const operation = this.queue.then(() => this.withLock(() => {
@@ -370,7 +389,8 @@ var DocumentController = class {
 				action: "archived",
 				document: {
 					...updated,
-					content
+					content,
+					fileRevision: hash(rendered)
 				},
 				snapshot: this.snapshotUnlocked(index)
 			};
@@ -381,6 +401,37 @@ var DocumentController = class {
 	mutateLocked(request, expectedRevision) {
 		const index = this.readIndex();
 		if (expectedRevision !== void 0 && this.revisionOf(index) !== expectedRevision) throw new DocumentConflictError();
+		if (request.action === "delete") {
+			if (expectedRevision === void 0 || expectedRevision === "") throw new Error("Documents deletion requires an index revision");
+			const current = this.requireDocument(index, request.id);
+			const path = this.pathFor(current);
+			const root = realpathSync(this.storageRoot);
+			if (!DOCUMENT_FILENAME_PATTERN.test(current.filename) || path !== join(this.directory, current.status, current.filename) || index.documents.some((record) => record !== current && this.pathFor(record) === path) || realpathSync(dirname(path)) !== join(root, "documents", current.status)) throw new Error("document index contains an unsafe managed path");
+			if (!lstatSync(path).isFile()) throw new Error("Documents deletion requires a regular managed file");
+			const original = readFileSync(path);
+			if (typeof request.fileRevision !== "string" || request.fileRevision === "") throw new Error("Documents deletion requires the current file revision");
+			const fileRevision = hash(original);
+			if (fileRevision !== request.fileRevision) throw new DocumentConflictError();
+			unlinkSync(path);
+			index.documents = index.documents.filter((record) => record.id !== current.id);
+			try {
+				this.persistIndex(index);
+			} catch (error) {
+				this.atomicWrite(path, original);
+				throw error;
+			}
+			this.excerpts.delete(path);
+			return {
+				success: true,
+				action: "deleted",
+				document: {
+					...current,
+					content: documentBody(original.toString("utf8")),
+					fileRevision
+				},
+				snapshot: this.snapshotUnlocked(index)
+			};
+		}
 		const now = this.now().toISOString();
 		if (request.action === "create") {
 			const title = normalizeLine(request.title, "document title", 160, true);
@@ -416,7 +467,8 @@ var DocumentController = class {
 				action: "created",
 				document: {
 					...record,
-					content
+					content,
+					fileRevision: hash(rendered)
 				},
 				snapshot: this.snapshotUnlocked(index)
 			};
@@ -446,7 +498,8 @@ var DocumentController = class {
 			action: "updated",
 			document: {
 				...updated,
-				content
+				content,
+				fileRevision: hash(rendered)
 			},
 			snapshot: this.snapshotUnlocked(index)
 		};
@@ -576,20 +629,22 @@ var DocumentController = class {
 		].join("/");
 	}
 	pathFor(record) {
-		const legacyPrefix = [".mnemon", "documents"].join("/");
+		const legacyPrefix = [".mnemon", DOCUMENTS_DIRECTORY].join("/");
 		const relativePath = record.relativePath === legacyPrefix || record.relativePath.startsWith(`${legacyPrefix}/`) ? record.relativePath.slice(8) : record.relativePath;
 		const path = resolve(this.storageRoot, relativePath);
 		const managedRoot = `${resolve(this.directory)}${sep}`;
 		if (!path.startsWith(managedRoot)) throw new Error("document index contains an unsafe managed path");
 		return path;
 	}
-	readBody(record) {
-		return documentBody(readFileSync(this.pathFor(record), "utf8"));
+	readBody(record, raw = readFileSync(this.pathFor(record))) {
+		return documentBody(raw.toString("utf8"));
 	}
 	view(record) {
+		const raw = readFileSync(this.pathFor(record));
 		return {
 			...record,
-			content: this.readBody(record)
+			content: this.readBody(record, raw),
+			fileRevision: hash(raw)
 		};
 	}
 	persistDocument(record, content) {
@@ -616,7 +671,7 @@ var DocumentController = class {
 		} catch (error) {
 			if (error.code !== "EEXIST") throw error;
 			try {
-				if (Date.now() - statSync(this.lockPath).mtimeMs > LOCK_STALE_MS) rmSync(this.lockPath, { force: true });
+				if (Date.now() - statSync(this.lockPath).mtimeMs > 3e4) rmSync(this.lockPath, { force: true });
 			} catch {}
 			if (Date.now() >= deadline) throw new Error(`timed out waiting for document lock: ${this.lockPath}`);
 			sleepSync(LOCK_RETRY_MS);
@@ -650,11 +705,6 @@ var DocumentManager = class {
 			this.controllers.set(key, controller);
 		}
 		return controller;
-	}
-	forAgent(agent) {
-		const cwd = agent.session.header?.cwd;
-		if (cwd === void 0 || cwd.trim() === "") throw new Error("the current DSH session has no workspace for Mnemon Documents");
-		return this.forWorkspace(cwd);
 	}
 };
 //#endregion
@@ -725,6 +775,14 @@ function documentMutation(value, allowedIds) {
 			...input.sourcePaths === void 0 ? {} : { sourcePaths: memoryInputStringArray(input.sourcePaths, "sourcePaths") ?? [] },
 			...input.sessionIds === void 0 ? {} : { sessionIds: memoryInputStringArray(input.sessionIds, "sessionIds", 20) ?? [] }
 		};
+	} else if (action === "delete") {
+		const id = memoryInputText(input.id, "id", 300);
+		if (allowedIds !== void 0 && !allowedIds.includes(id)) throw new Error("Documents delete target is outside this View ReadGrant");
+		mutation = {
+			action,
+			id,
+			...input.fileRevision === void 0 ? {} : { fileRevision: memoryInputText(input.fileRevision, "fileRevision", 100) }
+		};
 	} else throw new Error(`unsupported Documents action: ${action}`);
 	return mutation;
 }
@@ -765,7 +823,7 @@ function createDocumentsMemorySource(config = {}) {
 			}],
 			actions: [{
 				id: "manage",
-				description: "Create a project Document or update a Document pinned into this View.",
+				description: "Create a project Document, update one pinned into this View or created in this execution, or permanently delete a pinned active/archived managed copy after explicit user confirmation. Delete requires confirmed: true, expectedRevision from the latest Documents search metadata.indexRevision, and fileRevision from the target item provenance (or management document read). It does not archive or change project originals.",
 				capability: "write",
 				inputSchema: {
 					type: "object",
@@ -774,10 +832,17 @@ function createDocumentsMemorySource(config = {}) {
 					properties: {
 						action: {
 							type: "string",
-							enum: ["create", "update"]
+							enum: [
+								"create",
+								"update",
+								"delete"
+							]
 						},
 						id: { type: "string" },
-						...CREATE_PROPERTIES
+						...CREATE_PROPERTIES,
+						confirmed: { type: "boolean" },
+						expectedRevision: { type: "string" },
+						fileRevision: { type: "string" }
 					}
 				}
 			}, {
@@ -804,6 +869,7 @@ function createDocumentsMemorySource(config = {}) {
 			const documents = new DocumentManager(effective.limitBytes, void 0, () => effective.dataDir);
 			const snapshot = (workspaceId) => workspaceId === void 0 ? void 0 : documents.forWorkspace(workspaceId).catalog();
 			const prepared = /* @__PURE__ */ new WeakMap();
+			const created = /* @__PURE__ */ new WeakMap();
 			return {
 				facts(request) {
 					const root = workspace(request.scope);
@@ -933,7 +999,8 @@ function createDocumentsMemorySource(config = {}) {
 								description: document.description,
 								status: document.status,
 								relativePath: document.relativePath,
-								sourcePaths: document.sourcePaths.slice(0, 8)
+								sourcePaths: document.sourcePaths.slice(0, 8),
+								...document.fileRevision === void 0 ? {} : { fileRevision: document.fileRevision }
 							}
 						});
 					}
@@ -961,7 +1028,8 @@ function createDocumentsMemorySource(config = {}) {
 						metadata: {
 							query: result.query,
 							includeArchived: result.includeArchived,
-							total: result.total
+							total: result.total,
+							indexRevision: controller.revision()
 						},
 						id: `evidence:${randomUUID()}`,
 						viewId: request.view.id,
@@ -997,8 +1065,9 @@ function createDocumentsMemorySource(config = {}) {
 						default: throw new Error("unsupported Documents management read operation: " + request.operation);
 					}
 					else {
-						if (!request.confirmed) throw new Error("Documents management mutation requires explicit confirmation");
+						if (request.confirmed !== true) throw new Error("Documents management mutation requires explicit confirmation");
 						if (request.operation === "mutate") value = await controller.mutate(documentMutation(request.input), request.expectedRevision);
+						else if (request.operation === "delete") value = await controller.deleteDocument(memoryInputText(input.id, "id", 300), memoryInputText(request.expectedRevision, "expectedRevision", 100), memoryInputText(input.fileRevision, "fileRevision", 100));
 						else if (request.operation === "archive") {
 							const document = controller.get(memoryInputText(input.id, "id", 300));
 							const revision = input.documentRevision === void 0 ? document.revision : input.documentRevision;
@@ -1019,8 +1088,20 @@ function createDocumentsMemorySource(config = {}) {
 					const root = workspace(request.view.scope);
 					if (root === void 0) throw new Error("Documents Action requires a workspace-scoped View");
 					const grant = request.grant;
-					const mutation = request.offer.sourceActionId === "create" ? documentCreation(request.input) : documentMutation(request.input, grant === void 0 ? [] : grantIds(grant));
-					const result = await documents.forWorkspace(root).mutate(mutation);
+					const input = memoryInputRecord(request.input, "Documents Action");
+					const deleting = request.offer.sourceActionId === "manage" && input.action === "delete";
+					if (deleting && input.confirmed !== true) throw new Error("Documents deletion requires explicit user confirmation");
+					const mutation = request.offer.sourceActionId === "create" ? documentCreation(request.input) : documentMutation(request.input, deleting ? grant === void 0 ? [] : grantIds(grant, true) : [...grant === void 0 ? [] : grantIds(grant), ...created.get(request.view) ?? []]);
+					const expectedRevision = deleting ? memoryInputText(input.expectedRevision, "expectedRevision", 100) : void 0;
+					const result = await documents.forWorkspace(root).mutate(mutation, expectedRevision);
+					if (mutation.action === "create") {
+						let ids = created.get(request.view);
+						if (ids === void 0) {
+							ids = /* @__PURE__ */ new Set();
+							created.set(request.view, ids);
+						}
+						ids.add(result.document.id);
+					}
 					return createMemoryMutationReceipt(request.view.id, request.offer.id, context.sourceInstanceKey, result.snapshot.revision, result, "committed");
 				}
 			};
@@ -1035,12 +1116,12 @@ const inject = ["mnemonMemory"];
 const memoryPlugin = defineMemoryPlugin({
 	packageName: name,
 	label: {
-		en: "Documents",
-		"zh-CN": "档案"
+		en: "Project Documents",
+		"zh-CN": "项目档案"
 	},
 	description: {
-		en: "Searchable project records and narrative memory.",
-		"zh-CN": "可检索的项目档案与叙事记忆。"
+		en: "Versioned narrative documents searched first and read in full on demand.",
+		"zh-CN": "可版本化的叙事文档，先检索，再按需阅读全文。"
 	},
 	roles: ["source"],
 	provides: [{ id: "source" }, { id: "source.narrative" }]

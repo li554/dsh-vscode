@@ -1,5 +1,3 @@
-// File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
-
 import { APIResource } from '../../../core/resource';
 import * as BetaAPI from '../beta';
 import { APIPromise } from '../../../core/api-promise';
@@ -43,7 +41,7 @@ export class Batches extends APIResource {
    * ```
    */
   create(params: BatchCreateParams, options?: RequestOptions): APIPromise<BetaMessageBatch> {
-    const { betas, user_profile_id, ...body } = params;
+    const { betas, user_profile_id, workspace_id, ...body } = params;
     return this._client.post('/v1/messages/batches?beta=true', {
       body,
       ...options,
@@ -51,6 +49,7 @@ export class Batches extends APIResource {
         {
           'anthropic-beta': [...(betas ?? []), 'message-batches-2024-09-24'].toString(),
           ...(user_profile_id != null ? { 'anthropic-user-profile-id': user_profile_id } : undefined),
+          ...(workspace_id != null ? { 'anthropic-workspace-id': workspace_id } : undefined),
         },
         options?.headers,
       ]),
@@ -78,11 +77,14 @@ export class Batches extends APIResource {
     params: BatchRetrieveParams | null | undefined = {},
     options?: RequestOptions,
   ): APIPromise<BetaMessageBatch> {
-    const { betas } = params ?? {};
+    const { betas, workspace_id } = params ?? {};
     return this._client.get(path`/v1/messages/batches/${messageBatchID}?beta=true`, {
       ...options,
       headers: buildHeaders([
-        { 'anthropic-beta': [...(betas ?? []), 'message-batches-2024-09-24'].toString() },
+        {
+          'anthropic-beta': [...(betas ?? []), 'message-batches-2024-09-24'].toString(),
+          ...(workspace_id != null ? { 'anthropic-workspace-id': workspace_id } : undefined),
+        },
         options?.headers,
       ]),
     });
@@ -107,12 +109,15 @@ export class Batches extends APIResource {
     params: BatchListParams | null | undefined = {},
     options?: RequestOptions,
   ): PagePromise<BetaMessageBatchesPage, BetaMessageBatch> {
-    const { betas, ...query } = params ?? {};
+    const { betas, workspace_id, ...query } = params ?? {};
     return this._client.getAPIList('/v1/messages/batches?beta=true', Page<BetaMessageBatch>, {
       query,
       ...options,
       headers: buildHeaders([
-        { 'anthropic-beta': [...(betas ?? []), 'message-batches-2024-09-24'].toString() },
+        {
+          'anthropic-beta': [...(betas ?? []), 'message-batches-2024-09-24'].toString(),
+          ...(workspace_id != null ? { 'anthropic-workspace-id': workspace_id } : undefined),
+        },
         options?.headers,
       ]),
     });
@@ -140,11 +145,14 @@ export class Batches extends APIResource {
     params: BatchDeleteParams | null | undefined = {},
     options?: RequestOptions,
   ): APIPromise<BetaDeletedMessageBatch> {
-    const { betas } = params ?? {};
+    const { betas, workspace_id } = params ?? {};
     return this._client.delete(path`/v1/messages/batches/${messageBatchID}?beta=true`, {
       ...options,
       headers: buildHeaders([
-        { 'anthropic-beta': [...(betas ?? []), 'message-batches-2024-09-24'].toString() },
+        {
+          'anthropic-beta': [...(betas ?? []), 'message-batches-2024-09-24'].toString(),
+          ...(workspace_id != null ? { 'anthropic-workspace-id': workspace_id } : undefined),
+        },
         options?.headers,
       ]),
     });
@@ -177,11 +185,14 @@ export class Batches extends APIResource {
     params: BatchCancelParams | null | undefined = {},
     options?: RequestOptions,
   ): APIPromise<BetaMessageBatch> {
-    const { betas } = params ?? {};
+    const { betas, workspace_id } = params ?? {};
     return this._client.post(path`/v1/messages/batches/${messageBatchID}/cancel?beta=true`, {
       ...options,
       headers: buildHeaders([
-        { 'anthropic-beta': [...(betas ?? []), 'message-batches-2024-09-24'].toString() },
+        {
+          'anthropic-beta': [...(betas ?? []), 'message-batches-2024-09-24'].toString(),
+          ...(workspace_id != null ? { 'anthropic-workspace-id': workspace_id } : undefined),
+        },
         options?.headers,
       ]),
     });
@@ -210,14 +221,14 @@ export class Batches extends APIResource {
     params: BatchResultsParams | undefined = {},
     options?: RequestOptions,
   ): Promise<JSONLDecoder<BetaMessageBatchIndividualResponse>> {
-    const batch = await this.retrieve(messageBatchID);
+    const batch = await this.retrieve(messageBatchID, params, options);
     if (!batch.results_url) {
       throw new AnthropicError(
         `No batch \`results_url\`; Has it finished processing? ${batch.processing_status} - ${batch.id}`,
       );
     }
 
-    const { betas } = params ?? {};
+    const { betas, workspace_id } = params ?? {};
     return this._client
       .get(batch.results_url, {
         ...options,
@@ -225,6 +236,7 @@ export class Batches extends APIResource {
           {
             'anthropic-beta': [...(betas ?? []), 'message-batches-2024-09-24'].toString(),
             Accept: 'application/binary',
+            ...(workspace_id != null ? { 'anthropic-workspace-id': workspace_id } : undefined),
           },
           options?.headers,
         ]),
@@ -436,6 +448,16 @@ export interface BatchCreateParams {
    * is errored.
    */
   user_profile_id?: string;
+
+  /**
+   * Header param: Optional header to select the Workspace for this request. The
+   * value is a Workspace ID (for example, `wrkspc_011CZkZaBF1tNoB5wlCeusgy`).
+   *
+   * Only needed for credentials that can act on more than one Workspace. A
+   * credential that belongs to a specific Workspace may omit it; if sent, it must
+   * match that Workspace.
+   */
+  workspace_id?: string;
 }
 
 export namespace BatchCreateParams {
@@ -568,6 +590,19 @@ export namespace BatchCreateParams {
       cache_control?: BetaMessagesAPI.BetaCacheControlEphemeral | null;
 
       /**
+       * Compaction configuration.
+       *
+       * When set on `POST /v1/messages`, the request is a compaction request: the
+       * conversation in `messages` is summarized and the response holds only the
+       * resulting `compaction` block (`stop_reason` `"compaction"`), which later
+       * requests send first in `messages` in place of the messages it summarizes.
+       * `POST /v1/messages/count_tokens` accepts this parameter and ignores it: the
+       * count it returns is for the conversation in `messages` as sent. Cannot be
+       * combined with `context_management`.
+       */
+      compaction?: BetaMessagesAPI.BetaCompactionConfig | null;
+
+      /**
        * Container identifier for reuse across requests.
        */
       container?: BetaMessagesAPI.BetaContainerParams | string | null;
@@ -581,8 +616,9 @@ export namespace BatchCreateParams {
       context_management?: BetaMessagesAPI.BetaContextManagementConfig | null;
 
       /**
-       * Request-level diagnostics. Currently carries the previous response id for
-       * prompt-cache divergence reporting.
+       * Request-level diagnostics. Supply `previous_message_id` to have the response
+       * include `diagnostics.cache_miss_reason` explaining any prompt-cache divergence
+       * from that prior request.
        */
       diagnostics?: BetaMessagesAPI.BetaDiagnosticsParam | null;
 
@@ -658,9 +694,8 @@ export namespace BatchCreateParams {
       service_tier?: 'auto' | 'standard_only';
 
       /**
-       * Inference speed mode. `fast` provides significantly faster output token
-       * generation at premium pricing. Not all models support `fast`; invalid
-       * combinations are rejected at create time.
+       * The inference speed mode for this request. `"fast"` enables high
+       * output-tokens-per-second inference.
        */
       speed?: 'standard' | 'fast' | null;
 
@@ -678,10 +713,14 @@ export namespace BatchCreateParams {
       stop_sequences?: Array<string>;
 
       /**
-       * Whether to incrementally stream the response using server-sent events.
+       * Whether to incrementally stream the response using server-sent events. When
+       * `true`, SDKs return a raw event stream.
        *
-       * See [streaming](https://platform.claude.com/docs/en/build-with-claude/streaming)
-       * for details.
+       * In the TypeScript, Python and Ruby SDKs, the recommended way to stream is
+       * `messages.stream()`. It sets `stream` for you and accumulates the events into
+       * the final message. See
+       * [Streaming with SDKs](https://platform.claude.com/docs/en/build-with-claude/streaming#streaming-with-sdks)
+       * for an example in each language.
        */
       stream?: boolean;
 
@@ -696,7 +735,7 @@ export namespace BatchCreateParams {
 
       /**
        * @deprecated Deprecated. Models released after Claude Opus 4.6 do not support
-       * setting temperature. A value of 1.0 of will be accepted for backwards
+       * setting temperature. A value of 1.0 will be accepted for backwards
        * compatibility, all other values will be rejected with a 400 error.
        */
       temperature?: number;
@@ -822,6 +861,16 @@ export interface BatchRetrieveParams {
    * Optional header to specify the beta version(s) you want to use.
    */
   betas?: Array<BetaAPI.AnthropicBeta>;
+
+  /**
+   * Optional header to select the Workspace for this request. The value is a
+   * Workspace ID (for example, `wrkspc_011CZkZaBF1tNoB5wlCeusgy`).
+   *
+   * Only needed for credentials that can act on more than one Workspace. A
+   * credential that belongs to a specific Workspace may omit it; if sent, it must
+   * match that Workspace.
+   */
+  workspace_id?: string;
 }
 
 export interface BatchListParams extends PageParams {
@@ -829,6 +878,16 @@ export interface BatchListParams extends PageParams {
    * Header param: Optional header to specify the beta version(s) you want to use.
    */
   betas?: Array<BetaAPI.AnthropicBeta>;
+
+  /**
+   * Header param: Optional header to select the Workspace for this request. The
+   * value is a Workspace ID (for example, `wrkspc_011CZkZaBF1tNoB5wlCeusgy`).
+   *
+   * Only needed for credentials that can act on more than one Workspace. A
+   * credential that belongs to a specific Workspace may omit it; if sent, it must
+   * match that Workspace.
+   */
+  workspace_id?: string;
 }
 
 export interface BatchDeleteParams {
@@ -836,6 +895,16 @@ export interface BatchDeleteParams {
    * Optional header to specify the beta version(s) you want to use.
    */
   betas?: Array<BetaAPI.AnthropicBeta>;
+
+  /**
+   * Optional header to select the Workspace for this request. The value is a
+   * Workspace ID (for example, `wrkspc_011CZkZaBF1tNoB5wlCeusgy`).
+   *
+   * Only needed for credentials that can act on more than one Workspace. A
+   * credential that belongs to a specific Workspace may omit it; if sent, it must
+   * match that Workspace.
+   */
+  workspace_id?: string;
 }
 
 export interface BatchCancelParams {
@@ -843,6 +912,16 @@ export interface BatchCancelParams {
    * Optional header to specify the beta version(s) you want to use.
    */
   betas?: Array<BetaAPI.AnthropicBeta>;
+
+  /**
+   * Optional header to select the Workspace for this request. The value is a
+   * Workspace ID (for example, `wrkspc_011CZkZaBF1tNoB5wlCeusgy`).
+   *
+   * Only needed for credentials that can act on more than one Workspace. A
+   * credential that belongs to a specific Workspace may omit it; if sent, it must
+   * match that Workspace.
+   */
+  workspace_id?: string;
 }
 
 export interface BatchResultsParams {
@@ -850,6 +929,16 @@ export interface BatchResultsParams {
    * Optional header to specify the beta version(s) you want to use.
    */
   betas?: Array<BetaAPI.AnthropicBeta>;
+
+  /**
+   * Optional header to select the Workspace for this request. The value is a
+   * Workspace ID (for example, `wrkspc_011CZkZaBF1tNoB5wlCeusgy`).
+   *
+   * Only needed for credentials that can act on more than one Workspace. A
+   * credential that belongs to a specific Workspace may omit it; if sent, it must
+   * match that Workspace.
+   */
+  workspace_id?: string;
 }
 
 export declare namespace Batches {

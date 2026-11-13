@@ -6,5 +6,6 @@ export declare function DocumentsPage(props: {
     writeEnabled: boolean;
     sessionId?: string;
     canCreate?: boolean;
+    documentId?: string;
     onMutate: () => void;
 }): JSX.Element;

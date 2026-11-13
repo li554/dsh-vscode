@@ -8,6 +8,7 @@
  */
 import type { WebRoute, WebUpgradeRoute } from '@deepseek-ai/dsh-host-webserver';
 import type { SshEngine } from './engine.ts';
+import { TerminalSessionRegistry } from './engine/terminal-sessions.ts';
 import type { HostStore } from './store.ts';
 /** Route family dependencies. */
 export interface SshRoutesDeps {
@@ -28,4 +29,5 @@ export interface SshRoutesDeps {
 export declare function makeRoutes(deps: SshRoutesDeps): {
     routes: WebRoute[];
     upgrade: WebUpgradeRoute;
+    terminalSessions: TerminalSessionRegistry;
 };

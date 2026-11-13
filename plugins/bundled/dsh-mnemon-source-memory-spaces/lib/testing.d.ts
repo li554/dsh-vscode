@@ -1,5 +1,5 @@
 import { MemoryProviderConnection, MemoryProviderDescriptor, MemorySpace } from "./contracts.js";
-import { f as MemoryProviderAdapter, h as MemorySpaceAuthority, o as MemorySpaceProviderManifest, p as MemoryProviderAdapterFactoryContext, s as MemorySpaceProviderModule } from "./definitions-C5y84OE6.js";
+import { f as MemoryProviderAdapter, h as MemorySpaceAuthority, o as MemorySpaceProviderManifest, p as MemoryProviderAdapterFactoryContext, s as MemorySpaceProviderModule } from "./definitions-BNmfQoWk.js";
 //#region src/testing.d.ts
 interface MemorySpaceProviderTest {
   readonly registered: boolean;

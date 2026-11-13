@@ -3,31 +3,19 @@
  * No I/O and no `Session` dependency — everything derives from the event log
  * and the ordered surface, so this module stays unit-testable.
  *
- * Rewind semantics (see README): rewinding to a user message appends a marker
- * node into the session log whose `surfaceOp` replaces every surface node
- * AFTER the target with itself. The log (the audit trail and the rendered
- * transcript) is untouched; only the model-visible surface is cut, so the
- * next request derives its context from the target message onward.
- *
- * Marker shape (v0.1.5/v3): the marker is a `user/message` carrying a replace
- * `surfaceOp` — a single event:
- *
- *   user/message (marker content) → { surfaceOp {replace, startSeq, endSeq} }
- *
- * v2 reserves surface `replace` to a node that cites every shadowed seq via
- * `sourceEventSeqs`, and `assistant/message` can no longer carry
- * `sourceEventSeqs` (it now embeds its provider stream instead) — so the
- * replacement node must be a `user/message`, exactly as /compact's checkpoint
- * is. No ghost `step/start`…`step/end` frame is needed: the token-meter's
- * step state machine ignores `user/message`, and the session invariant
- * (`invariant.ts`) imposes no open-turn requirement on it, so the marker is
- * appended while idle, outside any turn. It sits at the surface tail as the
- * model-visible "cut point" — a present user turn in derived history.
+ * Rewind semantics: rewinding to a user message appends a marker node into the
+ * session log whose `surfaceOp` replaces the target and every surface node
+ * after it with itself. The log (audit trail, rendered transcript) is
+ * untouched; only the model-visible surface is cut, so the next request
+ * derives its context from before the target message. The marker is a `user/message` carrying a
+ * replace `surfaceOp` and the producer-owned source `{ kind: 'dsh-rewind' }`
+ * (see `marker.ts`); the shape's invariants and history are documented in
+ * `docs/architecture.md`.
  *
  * @module dsh-rewind/rewind
  */
-import type { MessageSource } from '@deepseek-ai/dsh-llm/message';
 import type { SessionEvent, UserMessage } from '@deepseek-ai/dsh-session';
+export { REWIND_MARKER_SOURCE } from './marker.ts';
 /** Which of the two rewind modes a rewind executes. */
 export type RewindMode = 'chat' | 'both';
 /**
@@ -63,43 +51,24 @@ export interface RewindCandidate {
 }
 /** A validated rewind: the target plus the exact surface range to shadow. */
 export interface RewindPlan {
-    /** Target user message seq (stays on the surface). */
+    /** Target user message seq (withdrawn with the surface range). */
     readonly targetSeq: number;
     /** The target's ordered position in the surface. */
     readonly targetIndex: number;
-    /** Ordered surface node seqs the rewind shadows (everything after the target). */
+    /** Ordered surface node seqs the rewind shadows (the target and everything after it). */
     readonly shadowedSeqs: readonly number[];
-    /** First surface node after the target — the replace range start (inclusive). */
+    /** The target — the replace range start (inclusive). */
     readonly surfaceStart: number;
     /** Last surface node — the replace range end (inclusive). */
     readonly surfaceEnd: number;
 }
-/**
- * The rewind-marker source: the backend-independent identity carried by every
- * marker the plugin appends. It is the plain third-party plugin source shape
- * `{ kind: 'plugin', plugin: 'dsh-rewind' }` — no extra fields, because a
- * plugin source is a CLOSED shape in the harness (only `kind`/`plugin`, plus
- * the context-injection `form`/`sections`/`summary`; see `MessageSourceMap` and
- * the released-format source validator). A plugin extends the source map by
- * adding a new `kind`, never by hanging private fields off `plugin`.
- */
-export declare const REWIND_MARKER_SOURCE: Readonly<{
-    readonly kind: 'plugin';
-    readonly plugin: 'dsh-rewind';
-}>;
-/**
- * Test whether a persisted message source identifies a rewind marker.
- * @param source - source restored from a surface user message.
- * @returns whether the source carries the backend-independent rewind brand.
- */
-export declare function isRewindMarker(source: MessageSource): boolean;
 /** Preview length cap for candidate listings. */
 export declare const CANDIDATE_PREVIEW_CHARS = 80;
 /**
  * Default cap on how many user messages a candidate listing returns (newest
- * kept). Matches the snapshot store's MAX_ANCHOR_GROUPS (100), so every
- * anchor group that still has restorable file backups is listed; callers can
- * still pass an explicit `limit`.
+ * kept). Matches the checkpoint store's retention window (100), so every
+ * message that can still have a file checkpoint is listed; callers can still
+ * pass an explicit `limit`.
  */
 export declare const DEFAULT_CANDIDATE_LIMIT = 100;
 /** Narrow an event to a user message. */
@@ -119,7 +88,9 @@ export declare function isHumanUserMessageEvent(event: SessionEvent): event is S
 /** Join the text blocks of a message into one plain string. */
 export declare function messagePreview(message: UserMessage): string;
 /**
- * Parse a raw command token into a rewind target.
+ * Parse a raw command token into a rewind target. Both forms must be plain
+ * decimal integers: a bare `Number()` would also accept `@1e3`, `@0x10` and
+ * `@+5`, and would read a bare `@` as seq 0.
  * @param raw - one token: `@123` (absolute seq) or `12` (recency index).
  * @returns the parsed target, or undefined when the token is malformed.
  */
@@ -135,23 +106,6 @@ export declare function parseRewindTarget(raw: string): RewindTarget | undefined
  * @returns candidates numbered 1..N by recency.
  */
 export declare function listRewindCandidates(events: readonly SessionEvent[], surface: readonly number[], limit?: number): RewindCandidate[];
-/** Header line of the machine-readable candidate list (locale-independent). */
-export declare const CANDIDATE_LIST_HEADER = "candidates=";
-/**
- * Encode a candidate list as the host→client machine channel (the same
- * trailer pattern `formatPlan` uses for `impact=`). The client popupSelect
- * parses this instead of reading the windowed chat snapshot, so the candidate
- * list reflects the FULL host surface — not just the already-loaded history.
- *
- * Lines (each preview is already whitespace-collapsed and tab-free by
- * `messagePreview`):
- *   candidates=<n>
- *   <seq>\t<time>\t<preview>
- *   … (one line per candidate, newest first, matching `listRewindCandidates`)
- *
- * A list with no candidates is just `candidates=0`.
- */
-export declare function formatCandidateList(candidates: readonly RewindCandidate[]): string;
 /**
  * Resolve a target against the session log and surface into a validated plan.
  * @param events - the full session event log.

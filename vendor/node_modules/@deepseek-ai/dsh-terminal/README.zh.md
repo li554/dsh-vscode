@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### 何时选择
 
-当工作状态存在于终端而非文件时，选择持久终端：逐步调试 gdb、在 Python 或 Node REPL 中探索，或中断前台命令后回到 shell。对于有界操作，请选择单次 bash、read、write 与 edit 工具——它们保留更强的校验、审批、输出上限与回放约定。会话只存在于进程本地：harness 进程退出时它们会消失，因此需要持久的工作应写入文件或其他持久系统。
+当工作状态存在于终端而非文件时，选择持久终端：在调试器中单步执行、在 Python 或 Node REPL 中探索，或中断前台命令后回到 shell。对于有界操作，请选择单次 bash、read、write 与 edit 工具——它们保留更强的校验、审批、输出上限与回放约定。会话只存在于进程本地：harness 进程退出时它们会消失，因此需要持久的工作应写入文件或其他持久系统。
 
 ### 组合方式
 
@@ -49,11 +49,11 @@ kind: "package-reference"
 
 ### 所有权与隔离
 
-每个会话都由打开它的确切 agent 拥有。凡是指名会话的操作，只要调用方不是该 agent 就会被拒绝，因此即使模型获知另一个 agent 的 id，也无法操作其终端。可选的会话 `name` 是所有者本地的显示元数据——例如 `main` 或 `gdb` 这样的标签——并且只在所有者范围内唯一。
+每个会话都由打开它的确切 agent 拥有。凡是指名会话的操作，只要调用方不是该 agent 就会被拒绝，因此即使模型获知另一个 agent 的会话 id，也无法操作其终端。可选的会话 `name` 是所有者本地的显示元数据——例如 `main` 或 `gdb` 这样的标签——并且只在所有者范围内唯一。
 
 ### 可观察结果与失败
 
-成功打开会返回会话 id、类型、后端存在时的 pid、状态与有界启动消息。发送以等待原因结算：`stdin_read`（shell 正在等待输入）、`inferred_idle`（输出静默）、`timeout` 或 `session_exit`（顶层 shell 已退出）。失败携带稳定的机器可路由错误码：后端类型缺失（`NO_BACKEND`）、会话未知（`NO_SESSION`）、属于其他 agent 的会话（`FOREIGN_SESSION`）、并发第二次发送（`SEND_ACTIVE`），或所有者不再存活（`OWNER_NOT_LIVE`）。后端设置失败会在发布任何内容之前拒绝打开；清理失败会拒绝关闭，而不是声称成功。
+成功打开会返回会话 id、类型、后端提供的 pid（如有）、状态与有界启动消息。发送以等待原因结算：`stdin_read`（shell 正在等待输入）、`inferred_idle`（输出静默）、`timeout` 或 `session_exit`（顶层 shell 已退出）。失败携带稳定的机器可路由错误码：后端类型缺失（`NO_BACKEND`）、会话未知（`NO_SESSION`）、属于其他 agent 的会话（`FOREIGN_SESSION`）、并发第二次发送（`SEND_ACTIVE`），或所有者不再存活（`OWNER_NOT_LIVE`）。后端设置失败会在发布任何内容之前拒绝打开；清理失败会拒绝关闭，而不是声称成功。
 
 -----
 
@@ -74,8 +74,8 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `TerminalSessionService`：后端注册表、spawn/send/read/signal/kill/list、所有者清理与 dispose |
-| [`src/types.ts`](src/types.ts) | 共享约定：后端接口、会话类型、等待原因、信号集合、错误码 |
-| — | 不发布运行时不变式伴生入口；注册表是私有可变状态。 |
+| [`src/types.ts`](src/types.ts) | 共享约定：后端接口、会话类型、等待原因、信号集合 |
+| [`src/error.ts`](src/error.ts) | `TerminalError`、其 code 与 `TerminalBackendCleanupError` |
 
 ### 数据模型与生命周期
 
@@ -84,12 +84,12 @@ kind: "package-reference"
 ### 所有权与清理规则
 
 - 限制基于确切的 `Agent` 对象：`hasOwnerActivity(owner)` 覆盖从尚未发布的设置到最终关闭的全过程，没有发布竞态，因此生命周期策略可以精确限制所有者。
-- 无法清理部分启动资源的后端会以 `TerminalBackendCleanupError` 拒绝；服务会将该失败保留为受跟踪的所有者活动，直到所有者或服务 dispose 消费并报告它。
+- 无法清理部分启动资源的后端会以 `TerminalBackendCleanupError` 拒绝，它是 code 为 `CLEANUP_FAILED` 的 `TerminalError`，在 `errors` 和 `AggregateError` 类型的 `cause` 中列出两个失败；服务会将该失败保留为受跟踪的所有者活动，直到所有者或服务 dispose 消费并报告它。
 - 调用方取消保留其确切的 `AbortSignal.reason`；`kill()` 与 dispose 只在后端捕获的进程树完全停稳后完成。
 
 ### 发送预留
 
-服务在返回操作之前同步为一个活跃发送预留会话，包括在后台 job id 可见之前；第二次发送会以 `SEND_ACTIVE` 失败，因此输出与取消永远不会跨操作所有权。
+服务在返回操作之前同步为一个活跃发送预留会话，包括在后台任务的 job id 可见之前；第二次发送会以 `SEND_ACTIVE` 失败，因此输出与取消永远不会跨操作所有权。失败均为 `TerminalError`（一种 `HarnessError`）；除注册表 code 外，向正在关闭的会话发送会以 `SESSION_CLOSING` 失败，后端以同一类报告 `SESSION_EXITED`、`STARTUP_EXITED`、`STARTUP_TIMEOUT` 与 `NO_SANDBOX`。通过服务驱动 shell 的消费方在该 shell 拒绝自身的初始化输入时使用 `INIT_REJECTED`。
 
 </details>
 
@@ -103,7 +103,7 @@ kind: "package-reference"
 - [终端子系统参考](../../../docs/subsystems/terminal.zh.md)——共享类型、后端与会话约定，以及生成的 `ctx.terminals` 接口面。
 - [terminal/ 包映射](../README.zh.md)——三包家族及其组合方式。
 - [terminal-bash 后端](../terminal-bash/README.zh.md)——提供 `shell` 类型的随附 shell 后端。
-- [tool-terminal 工具](../tool-terminal/README.zh.md)——操作会话的 6 个面向模型工具。
+- [tool-terminal 工具](../../experimental/tool-terminal/README.zh.md)——操作会话的 6 个面向模型工具。
 - [持久 PTY Agent Note](../../../.agents/notes/implemented/feature/2026-07-16-persistent-pty-sessions.zh.md)——设计理由、备选方案与暂缓边界。
 
 -----

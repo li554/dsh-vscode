@@ -38,7 +38,12 @@ export function apply(ctx) {
         ...decision.messages,
         createUserMessage({
           content: [{ type: 'text', text: `<system-reminder>\n${ZH_DIRECTIVE}\n</system-reminder>` }],
-          source: { kind: 'plugin', plugin: name, form: 'snapshot', sections: [{ name, text: ZH_DIRECTIVE }] },
+          // dsh-vscode local patch: dsh 0.2.2 session format v4 admits only
+          // producer-owned source kinds; `kind: 'plugin'` is rejected at durable
+          // encode ("format v4 message requires a producer-owned source kind",
+          // dsh-session-format-v3-to-v4 source()). The v3→v4 migration spells an
+          // unknown plugin as `plugin:<name>`, so use the same kind here.
+          source: { kind: `plugin:${name}`, plugin: name, form: 'snapshot', sections: [{ name, text: ZH_DIRECTIVE }] },
         }),
       ],
     }

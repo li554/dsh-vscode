@@ -1,12 +1,12 @@
-// File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
-
 export {
   Skills,
   type DeletedSkill,
   type Skill,
   type SkillSource,
   type SkillCreateParams,
+  type SkillRetrieveParams,
   type SkillListParams,
+  type SkillDeleteParams,
   type SkillsPageCursor,
 } from './skills';
 export {

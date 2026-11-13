@@ -50,16 +50,18 @@ const PRESERVED = [
   // leftover-looking but ambiguous: holds user data / is read by a live preset,
   // so it is deliberately NOT in the quarantine allowlist.
   ["task-board/ledger-v2.json", '{"cards":["mine"]}\n'],
-  ["router-standard/stages.json", '{"stage":0}\n']
+  ["router-standard/stages.json", '{"stage":0}\n'],
+  // A user's OWN legacy preset directory: the extension only removes the three
+  // ids it used to bake, and 0.2.2 no longer reads the directory at all.
+  [".agent-presets/user-own/agent.cordis.yml", "[]\n"]
 ];
-// (b) files the CLEANUP must not delete, but which the host or syncBakedPresets
-// legitimately rewrites on every boot (the browser-auth secret is initialised,
-// the anonymous id is minted, the shipped agent preset is re-synced). Asserted as
-// "still there with the user's marker intact", not byte-equality.
+// (b) files the CLEANUP must not delete, but which the host legitimately
+// rewrites on every boot (the browser-auth secret is initialised, the anonymous
+// id is minted). Asserted as "still there with the user's marker intact", not
+// byte-equality.
 const SURVIVES = [
   [".credentials.yaml", "secret: keep-me\n", "keep-me"],
-  [".anonymous-user-id", "abc123\n", null],
-  [".agent-presets/router-standard/agent.cordis.yml", "[]\n", null]
+  [".anonymous-user-id", "abc123\n", null]
 ];
 // (c) retired-plugin state: quarantined, never deleted
 const QUARANTINED = [
@@ -107,7 +109,9 @@ write(path.join(WEB, "package.json"), JSON.stringify({
 }, null, 2) + "\n");
 
 // (e) structural residue
-mkdir(path.join(WEB_MODULES, "@linxin666"));                                            // empty scope dir
+// A synthetic scope dir nothing ships under: @linxin666 now legitimately holds
+// the bundled dsh-ssh, so it can no longer serve as the "empty scope" fixture.
+mkdir(path.join(WEB_MODULES, "@stale-scope"));                                          // empty scope dir
 write(path.join(WEB_MODULES, "@dsh-vscode", "stale-bridge.pnpm-old", "package.json"), "{}\n");
 write(path.join(WEB_MODULES, "@canglongcl", ".ignored_dsh-web-review", "package.json"), "{}\n");
 write(path.join(WEB_MODULES, "dsh-memory-evolve", "package.json"), '{"name":"dsh-memory-evolve"}\n'); // RETIRED plugin: REMOVE
@@ -171,7 +175,12 @@ const isLink = (p) => { try { return fs.lstatSync(p).isSymbolicLink(); } catch {
   console.log("\nleftovers removed");
   check("dangling link (target extension uninstalled) removed", !isLink(path.join(SHARED, "react")));
   check("dangling link (plain target gone) removed", !isLink(path.join(SHARED, "left-pad")));
-  check("empty @scope directory removed", !exists(path.join(WEB_MODULES, "@linxin666")));
+  check("empty @scope directory removed", !exists(path.join(WEB_MODULES, "@stale-scope")));
+  // The three ids this extension used to bake into <home>/.agent-presets/ are
+  // removed (0.2.2 reads preset declarations from bundle patches only); a user's
+  // own directory there is NOT touched.
+  check("legacy baked agent-preset directory removed", !exists(path.join(HOME, ".agent-presets", "router-standard")));
+  check("a user's own agent-preset directory survives", exists(path.join(HOME, ".agent-presets", "user-own", "agent.cordis.yml")));
   check("*.pnpm-old removed", !exists(path.join(WEB_MODULES, "@dsh-vscode", "stale-bridge.pnpm-old")));
   check(".ignored_* removed", !exists(path.join(WEB_MODULES, "@canglongcl", ".ignored_dsh-web-review")));
   check("cordis.patch.yml.bak-* removed", !exists(path.join(WEB, "cordis.patch.yml.bak-plugin-manager")));

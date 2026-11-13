@@ -1,4 +1,6 @@
 import { type ReactNode } from 'react';
+import type { MarkdownPathImages } from '@deepseek-ai/dsh-client-ui-primitives';
+import { type MarkdownCopyLabels } from './markdown-labels.tsx';
 import { type AnalyzedMarkdownHtml } from './markdown-html.ts';
 import type { SessionScope } from './api.ts';
 /** The chunk-resident markdown renderer (mermaid lazy chunk), shared with the
@@ -10,15 +12,15 @@ export { LazyMermaidMarkdown } from './mermaid-lazy.tsx';
 export interface MarkdownHtmlMedia {
     scope: SessionScope;
     path: string;
-    origin: string;
+    /** The PAGE base, reverse-proxy prefix included (`hostHttpBase()`). */
+    baseUrl: string;
+    /** The owner's local-path image vocabulary for markdown runs. */
+    pathImages?: MarkdownPathImages | undefined;
 }
 interface MarkdownDocumentProps {
     info: AnalyzedMarkdownHtml;
     media: MarkdownHtmlMedia;
-    codeLabels: {
-        copyLabel: string;
-        copiedLabel: string;
-    };
+    codeLabels: MarkdownCopyLabels;
 }
 /**
  * The split-document renderer: markdown runs render through MarkdownSegment,

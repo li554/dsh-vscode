@@ -13,12 +13,6 @@ export interface WorkbenchActions {
     /** Reorder within a pane (drop onto another tab inserts before it). */
     moveTabBefore: (payload: TabDragPayload, toPane: string, beforeTabId: string) => void;
     resizeSplit: (splitId: string, index: number, deltaFrac: number) => void;
-    /**
-     * Pin/unpin a terminal tab (v0.17.0+). The shell snapshots the home cwd
-     * at pin time; null clears the pin. Optional: when undefined the tab
-     * context menu hides the pin entry (legacy callers).
-     */
-    pinTab?: (tabId: string, scope: 'workspace' | 'global' | null) => void;
 }
 /** The workbench: the split tree filling the sidebar body. `tree` selects
  *  which tree renders (the right panel's by default; the bottom panel passes
@@ -33,4 +27,10 @@ export declare function Workbench(props: {
     renderTab: (tab: SidebarTab, active: boolean, paneId: string) => ReactNode;
     getTabIcon?: (tab: SidebarTab) => ReactNode;
     getTabBadge?: (tab: SidebarTab) => ReactNode;
+    /** Unread mark resolver (see TabBar's `isTabUnread`). */
+    isTabUnread?: (tab: SidebarTab) => boolean;
+    getTabRightActions?: (tab: SidebarTab, paneId: string) => ReactNode;
+    /** Reveal a tab's file in the OS file manager (see TabBar); absent → the
+     *  tab context menu's reveal row is disabled. */
+    onRevealInFileManager?: (path: string) => void;
 }): import("react").JSX.Element;

@@ -1,6 +1,6 @@
 /** Client-side Workspace state model shared by Remote transport and UI projection. */
 import type { RemoteFailure, RemoteResult, TypertClientRemote } from '@deepseek-ai/dsh-typert-protocol';
-import type { WorkspaceArchiveSessionRequest, WorkspaceArchiveValue, WorkspaceBaseline, WorkspaceCreateRequest, WorkspaceCreateValue, WorkspaceDeleteValue, WorkspaceInsertSessionBeforeRequest, WorkspaceOrderValue, WorkspaceValue, WorkspaceId, WorkspaceView } from '../types.ts';
+import type { WorkspaceArchiveSessionRequest, WorkspaceArchiveValue, WorkspaceBaseline, WorkspaceCreateRequest, WorkspaceCreateValue, WorkspaceDeleteValue, WorkspaceInsertSessionBeforeRequest, WorkspaceOrderValue, WorkspacePinSessionRequest, WorkspacePinValue, WorkspaceUnarchiveSessionRequest, WorkspaceUnpinSessionRequest, WorkspaceValue, WorkspaceId, WorkspaceView } from '../types.ts';
 /** Complete generated `ctx.remote.workspace` namespace. */
 export type WorkspaceRemote = TypertClientRemote['workspace'];
 /** Monotone Workspace-list arrival lifecycle. */
@@ -10,6 +10,8 @@ export interface WorkspaceSnapshot {
     readonly items: readonly WorkspaceView[];
     /** Complete registry-global archive set in Host order. */
     readonly archivedSessionIds: WorkspaceArchiveValue['archivedSessionIds'];
+    /** Complete registry-global pin set, most recently pinned first. */
+    readonly pinnedSessionIds: WorkspacePinValue['pinnedSessionIds'];
     readonly state: 'idle' | 'loading' | 'error';
     readonly phase: WorkspaceListPhase;
     readonly error: RemoteFailure | null;
@@ -26,6 +28,8 @@ export interface WorkspaceFollowSink {
     replaceOrder(workspaceIds: readonly WorkspaceId[]): void;
     /** Replace the complete archived Session set. */
     replaceArchived(sessionIds: WorkspaceArchiveValue['archivedSessionIds']): void;
+    /** Replace the complete pinned Session set. */
+    replacePinned(pinnedSessionIds: WorkspacePinValue['pinnedSessionIds']): void;
 }
 /**
  * Owns the Client Workspace projection, mutation echoes, and stream/unary race resolution.
@@ -34,6 +38,7 @@ export declare class ClientWorkspaceModel implements WorkspaceFollowSink {
     private readonly remote;
     private items;
     private archivedSessionIds;
+    private pinnedSessionIds;
     private state;
     private phase;
     private error;
@@ -43,6 +48,10 @@ export declare class ClientWorkspaceModel implements WorkspaceFollowSink {
     private orderFrameGeneration;
     /** Last complete order accepted from a baseline, increment, or current unary echo. */
     private committedOrder;
+    /** Latest archive-set request; a later request or a pushed set supersedes it. */
+    private archiveRequestSeq;
+    /** Latest pin-set request; a later request or a pushed set supersedes it. */
+    private pinRequestSeq;
     /** Host Workspace ids are never reused, so delayed data cannot resurrect a removed row. */
     private readonly removedIds;
     private readonly listeners;
@@ -59,6 +68,12 @@ export declare class ClientWorkspaceModel implements WorkspaceFollowSink {
      * @returns generated Remote result.
      */
     create(input: WorkspaceCreateRequest): Promise<RemoteResult<WorkspaceCreateValue>>;
+    /**
+     * Initialize the default Workspace and merge its authoritative row.
+     * @param signal - caller lifetime.
+     * @returns generated Remote result.
+     */
+    initializeDefault(signal?: AbortSignal): Promise<RemoteResult<WorkspaceValue | undefined>>;
     /**
      * Rename a Workspace and merge the unary result immediately.
      * @param workspaceId - target Workspace.
@@ -89,10 +104,33 @@ export declare class ClientWorkspaceModel implements WorkspaceFollowSink {
     insertSessionBefore(workspaceId: WorkspaceInsertSessionBeforeRequest['workspaceId'], sessionId: WorkspaceInsertSessionBeforeRequest['sessionId'], beforeSessionId?: WorkspaceInsertSessionBeforeRequest['beforeSessionId']): Promise<RemoteResult<WorkspaceValue>>;
     /**
      * Archive one Session and install the returned complete archive set.
+     * A reply superseded by a later archive request or a pushed set installs nothing.
      * @param sessionId - Session to archive.
+     * @param options - Whether the Host stops the Session's running work instead of refusing.
      * @returns generated Remote result.
      */
-    archiveSession(sessionId: WorkspaceArchiveSessionRequest['sessionId']): Promise<RemoteResult<WorkspaceArchiveValue>>;
+    archiveSession(sessionId: WorkspaceArchiveSessionRequest['sessionId'], options?: Pick<WorkspaceArchiveSessionRequest, 'stopActivity'>): Promise<RemoteResult<WorkspaceArchiveValue>>;
+    /**
+     * Unarchive one Session and install the returned complete archive set.
+     * A reply superseded by a later archive request or a pushed set installs nothing.
+     * @param sessionId - Session to unarchive.
+     * @returns generated Remote result.
+     */
+    unarchiveSession(sessionId: WorkspaceUnarchiveSessionRequest['sessionId']): Promise<RemoteResult<WorkspaceArchiveValue>>;
+    /**
+     * Pin one Session and install the returned complete pin set.
+     * A reply superseded by a later pin request or a pushed set installs nothing.
+     * @param sessionId - Session to pin.
+     * @returns generated Remote result.
+     */
+    pinSession(sessionId: WorkspacePinSessionRequest['sessionId']): Promise<RemoteResult<WorkspacePinValue>>;
+    /**
+     * Unpin one Session and install the returned complete pin set.
+     * A reply superseded by a later pin request or a pushed set installs nothing.
+     * @param sessionId - Session to unpin.
+     * @returns generated Remote result.
+     */
+    unpinSession(sessionId: WorkspaceUnpinSessionRequest['sessionId']): Promise<RemoteResult<WorkspacePinValue>>;
     /**
      * Replace the projection from one complete stream-generation baseline.
      * @param baseline - complete Workspace and archive projection.
@@ -109,6 +147,11 @@ export declare class ClientWorkspaceModel implements WorkspaceFollowSink {
      * @param archivedSessionIds - complete Host-confirmed archive set.
      */
     replaceArchived(archivedSessionIds: WorkspaceArchiveValue['archivedSessionIds']): void;
+    /**
+     * Replace the pinned Session set from the current follow generation.
+     * @param pinnedSessionIds - complete Host-confirmed pin set, most recently pinned first.
+     */
+    replacePinned(pinnedSessionIds: WorkspacePinValue['pinnedSessionIds']): void;
     /** Keep the last complete projection visible while a lost carrier reconnects. */
     handleCarrierFailure(): void;
     /**
@@ -129,6 +172,7 @@ export declare class ClientWorkspaceModel implements WorkspaceFollowSink {
     getSnapshot(): WorkspaceSnapshot;
     private buildSnapshot;
     private installArchived;
+    private installPinned;
     private installOrder;
     private upsert;
     private remove;

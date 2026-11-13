@@ -9,7 +9,7 @@
 | Latest stable `dsh-mnemon` Starter and its pinned official plugins | Security fixes |
 | Older releases | Upgrade to the latest stable Starter |
 
-Only the latest stable release receives security fixes. Official Source, Strategy and Provider packages in this repository are in scope even when published independently; report both the Starter version and the affected package version. The Starter pins a tested combination. See the verified Host and runtime baselines in [Compatibility](./docs/en/reference/compatibility.md).
+Only the latest stable release receives security fixes. Official Source, Strategy and Provider packages in this repository are in scope even when published independently; report both the Starter version and the affected package version. The Starter pins a tested combination. See the verified Host and runtime baselines in [Compatibility](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/reference/compatibility.md).
 
 ## Reporting a vulnerability
 
@@ -66,7 +66,7 @@ Out of scope:
 | 最新稳定版 `dsh-mnemon` Starter 及其固定的官方插件组合 | 提供安全修复 |
 | 较旧版本 | 升级到最新稳定版 Starter |
 
-仅最新稳定版本获得安全修复。本仓库的官方 Source、Strategy 和 Provider 包即使独立发布，也属于报告范围；请同时提供 Starter 与受影响包的版本。Starter 固定经过验证的组合，已验证的宿主和运行环境见[兼容性说明](./docs/zh-CN/reference/compatibility.md)。
+仅最新稳定版本获得安全修复。本仓库的官方 Source、Strategy 和 Provider 包即使独立发布，也属于报告范围；请同时提供 Starter 与受影响包的版本。Starter 固定经过验证的组合，已验证的宿主和运行环境见[兼容性说明](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/reference/compatibility.md)。
 
 ### 报告漏洞
 
@@ -90,7 +90,7 @@ Out of scope:
 
 ### 已知限制
 
-- 当前没有确定性的凭据/秘密检测，请勿向热记忆、Documents 或 Memory Spaces 写入密钥、token、私钥。
+- 当前没有确定性的凭据/秘密检测，请勿向运行时记忆、项目档案或记忆空间写入密钥、token、私钥。
 - Cordis isolate 提供生命周期所有权和作用域组合，不是安全沙箱。Source、其内部 Provider 与 Strategy 都是在 DSH Host 进程执行的普通 JavaScript，只能安装受信任来源的扩展。
 - 模型生成的 Strategy 源码不会自动执行。manifest、限定范围的 grant、replay 与 Core/Host 校验可以降低意外越权，但无法让恶意同进程代码变安全。
-- Runtime Memory 与 Documents 为本地存储，Mnemon Native 默认本地；显式启用的三方 Provider 可能按配置 endpoint 与凭据发起网络调用或本地进程调用，并向对应服务暴露数据。
+- 运行时记忆与项目档案为本地存储，Mnemon Native 默认本地；显式启用的三方 Provider 可能按配置 endpoint 与凭据发起网络调用或本地进程调用，并向对应服务暴露数据。

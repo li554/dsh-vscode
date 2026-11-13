@@ -11,20 +11,7 @@
  * cordis loading needs plus types only — all value exports stay internal.
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis';
-import type { SettingsScope, SettingsScopeSpec } from '@deepseek-ai/dsh-client-ui-settings/client';
 import { type SshKey } from './locales.ts';
-declare module '@deepseek-ai/cordis' {
-    interface Context {
-        /**
-         * Optional rc.6 compatibility binder provided by dsh-web-settings;
-         * absent when that group plugin is not installed, so callers fall back to
-         * the official settings scope.
-         */
-        webUiSettings?: {
-            bind<S>(spec: SettingsScopeSpec<S>): SettingsScope<S>;
-        };
-    }
-}
 declare module '@deepseek-ai/dsh-client-ui-slots' {
     interface LocaleNamespaceMap {
         /** dsh-ssh surface copy. */

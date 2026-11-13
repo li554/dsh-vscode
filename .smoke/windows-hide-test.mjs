@@ -1,16 +1,23 @@
-// Regression guard for the local dsh-subprocess-local patch: running a command
-// must not pop up a console window.
+// Regression guard for "running a command must not pop up a console window".
 //
-// Two parts, because either alone is weak:
-//  1. SOURCE — launchWindowsJob's spawn options carry windowsHide, and the fallback
-//     path (spawnSubprocess) still carries its own. This is what actually fails if
-//     the patch is reverted; the platform-patches manifest byte-compares the file,
-//     and this states the property that matters in readable terms.
+// History: this started as the guard for two LOCAL platform patches
+// (dsh-subprocess-local's missing `windowsHide`, and dsh-win32-process's inert
+// `wShowWindow: 0`). 0.2.2 fixed both upstream, so the patches were dropped from
+// .smoke/platform-patches — which makes this test MORE important, not less: it
+// now asserts that the UPSTREAM fix is still present in the vendored tree, so a
+// future platform upgrade that regresses it fails here instead of flashing a
+// window on a user's screen. The one local piece that still exists is the
+// windows-acl capability probe in dsh-sandbox-local.
+//
+// Three parts:
+//  1. SOURCE — the call sites carry hidden-window options.
 //  2. MECHANISM — spawn a child both ways and ask it whether Windows gave it a
 //     console. `windowsHide` passes CREATE_NO_WINDOW, so the child reports
-//     NO_CONSOLE and no window can exist; without it a console is allocated, which
-//     on a console-less host (the Electron extension host) is a window the user
-//     sees for the lifetime of the command.
+//     NO_CONSOLE and no window can exist; without it a console is allocated,
+//     which on a console-less host (the Electron extension host) is a window the
+//     user sees for the lifetime of the command.
+//  3. END TO END — one confined (sandboxed) command still runs and opens no
+//     console window.
 //
 // Usage: node .smoke/windows-hide-test.mjs
 import fs from "node:fs";
@@ -19,7 +26,18 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 
 const FILE = "vendor/node_modules/@deepseek-ai/dsh-subprocess-local/lib/index.js";
-const FALLBACK_FILE = "vendor/node_modules/@deepseek-ai/dsh-subprocess-local/lib/runner-launch-COYGu0Dl.js";
+const RUNNER_DIR = "vendor/node_modules/@deepseek-ai/dsh-subprocess-local/lib";
+
+/** The fallback path lives in a hashed chunk whose name changes every release,
+ *  so locate it by content instead of pinning the hash. */
+function fallbackChunk() {
+  const candidates = fs.readdirSync(RUNNER_DIR).filter((name) => /^runner-launch-.*\.js$/.test(name));
+  for (const name of candidates) {
+    const text = fs.readFileSync(join(RUNNER_DIR, name), "utf8");
+    if (text.includes("function spawnSubprocess")) return { name, text };
+  }
+  return null;
+}
 
 let failures = 0;
 const check = (label, ok, detail = "") => {
@@ -37,16 +55,21 @@ function functionBody(text, name) {
   return text.slice(start, next < 0 ? text.length : next);
 }
 
-console.log("1. the patched call sites");
+console.log("1. the call sites");
 const sub = fs.readFileSync(FILE, "utf8");
 const winJob = functionBody(sub, "launchWindowsJob");
 check("launchWindowsJob spawns a child", winJob.includes("(internals.spawn ?? spawn)"));
 check("its spawn options set windowsHide", winJob.includes("windowsHide"), winJob.replace(/\s+/g, " ").slice(-200));
 check("windowsHide is unconditional (windowsHide: true)", /windowsHide:\s*true/.test(winJob));
 
-const fallback = fs.readFileSync(FALLBACK_FILE, "utf8");
-const fallbackBody = functionBody(fallback, "spawnSubprocess");
-check("the fallback path still sets windowsHide", fallbackBody.includes("windowsHide"));
+const fallback = fallbackChunk();
+if (!fallback) {
+  check("the fallback path (spawnSubprocess) is shipped", false, `no runner-launch-*.js under ${RUNNER_DIR}`);
+} else {
+  check("the fallback path (spawnSubprocess) is shipped", true);
+  const fallbackBody = functionBody(fallback.text, "spawnSubprocess");
+  check(`the fallback path still sets windowsHide (${fallback.name})`, fallbackBody.includes("windowsHide"));
+}
 
 // Part 1b. The SANDBOX path (restricted token), which is what every confined command
 // goes through. A runtime trace of one `powershell -NoProfile -Command "echo hi"` ended

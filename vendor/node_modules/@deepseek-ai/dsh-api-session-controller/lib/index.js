@@ -1,27 +1,33 @@
 import { hostname } from "node:os";
+import { isAbsolute, resolve } from "node:path";
+import { Service } from "@deepseek-ai/cordis";
 import z from "@deepseek-ai/schemastery";
-import { AssistantStreamAccumulator, ReasoningEffortId, assistantStreamChunks, createUserMessage, errorChain, freezeMessage } from "@deepseek-ai/dsh-llm";
-import { canOpenNativePath, nativeFileManager, openNativePath, revealNativePath } from "@deepseek-ai/dsh-native-command";
-import { Remote, RemoteError, TypertRemoteService, remoteErrorOf } from "@deepseek-ai/dsh-typert-protocol";
-import { mkdir } from "node:fs/promises";
-import { installModelSelection } from "@deepseek-ai/dsh-agent";
-import { SessionQueryError } from "@deepseek-ai/dsh-session-query";
-import { randomUUID } from "node:crypto";
-import { brandString } from "@deepseek-ai/dsh-brand";
-import { AttachmentError } from "@deepseek-ai/dsh-attachment";
-import { SessionLogOffset, SessionSeq, isAppendSurfaceEvent } from "@deepseek-ai/dsh-session";
-import { SessionTitleInvalidError } from "@deepseek-ai/dsh-session-title";
+import { AssistantStreamAccumulator, ReasoningEffortId, createUserMessage, errorChain, freezeMessage } from "@deepseek-ai/dsh-llm";
+import { canOpenNativePath, nativeFileApplications, nativeFileManager, openNativeAssociatedPath, openNativeFileApplication, revealNativePath } from "@deepseek-ai/dsh-native-command";
+import { Remote, RemoteError, TypertRemoteService, principalOf, remoteErrorOf } from "@deepseek-ai/dsh-typert-protocol";
 import { canonicalClientTimeZone } from "@deepseek-ai/dsh-util-time";
 import { assertNever } from "@deepseek-ai/dsh-util-values";
-import { Deque } from "@deepseek-ai/dsh-deque";
+import { randomUUID } from "node:crypto";
+import { mkdir } from "node:fs/promises";
+import { installModelSelection } from "@deepseek-ai/dsh-agent";
+import { brandNumber, brandString } from "@deepseek-ai/dsh-brand";
+import { SessionQueryError } from "@deepseek-ai/dsh-session-query";
 import { z as z$1 } from "zod";
+import { credentialRef } from "@deepseek-ai/dsh-credentials";
+import { AttachmentError } from "@deepseek-ai/dsh-attachment";
+import { buildForkSeed } from "@deepseek-ai/dsh-session/fork";
+import { SessionLogOffset, SessionSeq, isAppendSurfaceEvent } from "@deepseek-ai/dsh-session";
+import { SessionTitleInvalidError } from "@deepseek-ai/dsh-session-title";
+import { Deque } from "@deepseek-ai/dsh-deque";
+import { MAX_TIMER_DELAY_MS, deadline, timeoutOf } from "@deepseek-ai/dsh-timeout";
+import { performance } from "node:perf_hooks";
+import { scheduler } from "node:timers/promises";
 import { isUserInvocable } from "@deepseek-ai/dsh-skill";
-import { isAbsolute } from "node:path";
 import { FsError } from "@deepseek-ai/dsh-fs";
 import mime from "mime-types";
 //#region lib/types/agent.js
-/** Agent activation, composition, and model-selection policy owned by API Session. */
-var __addDisposableResource$4 = function(env, value, async) {
+/** Agent activation, composition, and initial model route owned by API Session. */
+var __addDisposableResource$6 = function(env, value, async) {
 	if (value !== null && value !== void 0) {
 		if (typeof value !== "object" && typeof value !== "function") throw new TypeError("Object expected.");
 		var dispose, inner;
@@ -50,7 +56,7 @@ var __addDisposableResource$4 = function(env, value, async) {
 	} else if (async) env.stack.push({ async: true });
 	return value;
 };
-var __disposeResources$4 = (function(SuppressedError) {
+var __disposeResources$6 = (function(SuppressedError) {
 	return function(env) {
 		function fail(e) {
 			env.error = env.hasError ? new SuppressedError(e, env.error, "An error was suppressed during disposal.") : e;
@@ -102,31 +108,25 @@ var ApiSessionCwdConflict = class extends Error {
 		this.existingCwd = existingCwd;
 	}
 };
-/** Explicit-id creation attempted to adopt a Session under another preset. */
+/** Reuse of a Session named an Agent preset while the deployment composes no preset roster. */
 var ApiSessionPresetConflict = class extends Error {
 	sessionId;
 	requestedPreset;
-	existingPreset;
-	constructor(sessionId, requestedPreset, existingPreset) {
-		super(existingPreset === void 0 ? `session "${sessionId}" records no agent preset and cannot be adopted under "${requestedPreset}"` : `session "${sessionId}" runs agent preset "${existingPreset}", not "${requestedPreset}"`);
+	constructor(sessionId, requestedPreset) {
+		super(`the deployment composes no agent preset roster, so session "${sessionId}" cannot run preset "${requestedPreset}"`);
 		this.sessionId = sessionId;
 		this.requestedPreset = requestedPreset;
-		this.existingPreset = existingPreset;
 	}
 };
+/** A blank Session chosen for reuse started a turn before this Host acquired its writer. */
+var ApiSessionStartedSinceObserved = class extends Error {};
 /**
 * Test whether generic Session routing must leave an identity to subagent routing.
-* @param ctx - Host context carrying the Agent ownership registry.
-* @param session - attached or live Session whose ownership is tested.
-* @param agent - live Agent when one exists for the Session.
+* @param session - Attached or live Session whose origin is tested.
 * @returns whether subagent routing owns the Session identity.
 */
-function hasApiSessionSubagentOwner(ctx, session, agent) {
-	if (session.header.origin === "subagent") return true;
-	const parentId = session.header.parentSession;
-	if (parentId === void 0 || agent === void 0) return false;
-	const parent = ctx.agents.get(parentId);
-	return parent !== void 0 && ctx.agents.isOwnedBy(agent.id, parent);
+function hasApiSessionSubagentOwner(session) {
+	return session.header.origin === "subagent";
 }
 /**
 * Build the stable caller-facing subagent ownership rejection.
@@ -136,52 +136,21 @@ function hasApiSessionSubagentOwner(ctx, session, agent) {
 function apiSessionSubagentOwnershipError(sessionId) {
 	return new RemoteError("session/agent-busy", `session "${sessionId}" is owned by subagent routing`, { reason: "use subagent delivery for this child session" });
 }
-/**
-* Inspect one cold Session without repairing, resuming, or publishing it.
-* @param ctx - Host context carrying Session persistence.
-* @param sessionId - durable Session identity.
-* @param signal - optional cancellation for persistence reads.
-* @returns the persisted header and complete event prefix.
-*/
-async function inspectApiSession(ctx, sessionId, signal) {
-	try {
-		const env_1 = {
-			stack: [],
-			error: void 0,
-			hasError: false
-		};
-		try {
-			const observation = __addDisposableResource$4(env_1, await ctx.sessionQuery.observeSession(sessionId, {
-				...signal === void 0 ? {} : { signal },
-				projectionMode: "none"
-			}), false);
-			if (observation.header.cwd === void 0) throw new ApiSessionNotFound(`session "${sessionId}" not found`);
-			return {
-				meta: observation.header,
-				inheritedEventCount: observation.inheritedEventCount,
-				events: [...observation.events]
-			};
-		} catch (e_1) {
-			env_1.error = e_1;
-			env_1.hasError = true;
-		} finally {
-			__disposeResources$4(env_1);
-		}
-	} catch (error) {
-		if (error instanceof SessionQueryError && error.code === "SESSION_QUERY_SESSION_NOT_FOUND") throw new ApiSessionNotFound(`session "${sessionId}" not found`);
-		throw error;
-	}
-}
 /** Owns every operation that may create, resume, or configure a Web Agent. */
 var ApiSessionAgentController = class {
 	ctx;
 	resumes = /* @__PURE__ */ new Map();
-	creations = /* @__PURE__ */ new Map();
-	selections = /* @__PURE__ */ new WeakMap();
+	claims = /* @__PURE__ */ new Map();
 	imageAdmissionChains = /* @__PURE__ */ new WeakMap();
 	/** @param ctx - Host context carrying Agent, model, persistence, and Typert services. */
 	constructor(ctx) {
 		this.ctx = ctx;
+	}
+	/**
+	* Configure Session and Agent lookups for Typert.
+	*/
+	initialize() {
+		const ctx = this.ctx;
 		ctx.typert.lookups.configure("agent", async (sessionId) => {
 			const found = await this.resolveAgent(sessionId);
 			if ("error" in found) throw found.error;
@@ -218,7 +187,7 @@ var ApiSessionAgentController = class {
 		const live = this.liveAgent(sessionId);
 		if (live !== void 0) return live;
 		const attached = this.ctx.sessions.get(sessionId);
-		if (attached !== void 0 && hasApiSessionSubagentOwner(this.ctx, attached, void 0)) return { error: apiSessionSubagentOwnershipError(sessionId) };
+		if (attached !== void 0 && hasApiSessionSubagentOwner(attached)) return { error: apiSessionSubagentOwnershipError(sessionId) };
 		let resume = this.resumes.get(sessionId);
 		if (resume === void 0) {
 			resume = this.resume(sessionId, observation).finally(() => {
@@ -227,113 +196,48 @@ var ApiSessionAgentController = class {
 			this.resumes.set(sessionId, resume);
 		}
 		try {
-			return { agent: await resume };
+			const agent = await resume;
+			return this.liveAgent(sessionId) ?? { agent };
 		} catch (error) {
 			if (error instanceof ApiSessionNotFound) return { error: new RemoteError("session/not-found", error.message, { sessionId }) };
 			if (error instanceof ApiSessionSubagentOwnership) return { error: apiSessionSubagentOwnershipError(error.sessionId) };
 			const raced = this.liveAgent(sessionId);
 			if (raced !== void 0) return raced;
 			const racedSession = this.ctx.sessions.get(sessionId);
-			if (racedSession !== void 0 && hasApiSessionSubagentOwner(this.ctx, racedSession, void 0)) return { error: apiSessionSubagentOwnershipError(sessionId) };
+			if (racedSession !== void 0 && hasApiSessionSubagentOwner(racedSession)) return { error: apiSessionSubagentOwnershipError(sessionId) };
+			if (error instanceof Error && error.name === "SessionAlreadyOwnedError") return { error: new RemoteError("session/writer-held", error.message, { sessionId }) };
 			return { error: new RemoteError("gateway/internal", `resume failed for session "${sessionId}": ${String(error)}`, {}) };
 		}
 	}
 	/**
-	* Resolve one requested identity, creating or resuming it once.
-	* @param sessionId - requested Session identity.
-	* @param cwd - directory the Session must own.
-	* @param checkPersistedIdentity - whether to inspect a cold identity before creation.
-	* @param presetId - optional Agent preset the Session must own.
-	* @returns the matching live ordinary Agent.
+	* Create a Session for a new conversation, reusing the named blank Session
+	* while it is still reusable. A reused Session runs the requested preset, or
+	* the configured default when the request names none; the preset it recorded
+	* is not resolved, and a change is logged as `agent-preset/selected` before
+	* the Agent is published. A named Session that has started a turn, fails the
+	* caller's placement rule, or is written by another owner stays unchanged,
+	* and a new Session is created instead. Requests naming one identity run in
+	* arrival order, including their preset resolution, and check the named
+	* Session's directory and ownership before resolving the preset.
+	* @param request - optional Session to reuse, directory, preset, and placement rule.
+	* @returns the reused or created Session and the preset it ran when this request finished.
+	* @throws ApiSessionCwdConflict when the named Session belongs to another directory.
+	* @throws ApiSessionSubagentOwnership when subagent routing owns the named Session.
+	* @throws RemoteError `agent-preset/not-found` or `agent-preset/invalid` for the requested or default preset.
+	* @throws ApiSessionPresetConflict when no roster is composed and the request names a preset for a reused Session.
 	*/
-	async ensureSession(sessionId, cwd, checkPersistedIdentity, presetId) {
-		let creation = this.creations.get(sessionId);
-		if (creation === void 0) {
-			creation = this.createOrAdopt(sessionId, cwd, checkPersistedIdentity, presetId).catch((error) => {
-				const live = this.ctx.agents.get(sessionId);
-				if (live !== void 0) {
-					if (hasApiSessionSubagentOwner(this.ctx, live.session, live)) throw new ApiSessionSubagentOwnership(sessionId);
-					return live;
-				}
-				const attached = this.ctx.sessions.get(sessionId);
-				if (attached !== void 0 && hasApiSessionSubagentOwner(this.ctx, attached, void 0)) throw new ApiSessionSubagentOwnership(sessionId);
-				throw error;
-			}).finally(() => {
-				this.creations.delete(sessionId);
-			});
-			this.creations.set(sessionId, creation);
-		}
-		const agent = await creation;
-		if (hasApiSessionSubagentOwner(this.ctx, agent.session, agent)) throw new ApiSessionSubagentOwnership(sessionId);
-		if (presetId !== void 0) this.assertPresetUnchanged(sessionId, presetId, this.presetForSession(agent.session));
-		if (agent.session.header.cwd !== cwd) throw new ApiSessionCwdConflict(sessionId, cwd, agent.session.header.cwd);
-		return agent;
-	}
-	/**
-	* Install or return the Session-local model selection used by prompt assembly.
-	* @param agent - live Agent that owns the selection.
-	* @returns the installed mutable selection reference.
-	*/
-	selectionFor(agent) {
-		const installed = this.selections.get(agent);
-		if (installed !== void 0) return installed;
-		const projectionState = this.ctx.sessionProjections.stateOf(agent.session, "modelSelection");
-		if (projectionState === void 0) throw new Error("api-session: required modelSelection projection is not registered");
-		let picked = projectionState.pending === null ? void 0 : agentModelSelection(projectionState.pending);
-		const defaultModel = this.ctx.agentDefaultModel;
-		const selection = {
-			get current() {
-				if (picked !== void 0) return picked;
-				const loggedHeader = agent.session.requestHeader();
-				if (loggedHeader === void 0) return defaultModel.currentSelection();
-				const logged = loggedHeader.config;
-				return {
-					provider: logged.provider,
-					model: logged.model,
-					...logged.reasoningEffort === void 0 || loggedHeader.adapterDefaults?.reasoningEffort === true ? {} : { reasoningEffort: logged.reasoningEffort }
-				};
-			},
-			set current(next) {
-				picked = next;
-			},
-			consume(provider, model, reasoningEffort) {
-				if (picked?.provider !== provider || picked.model !== model || picked.reasoningEffort !== reasoningEffort) return false;
-				picked = void 0;
-				return true;
-			},
-			assembled: void 0
-		};
-		installModelSelection(agent.ctx, selection);
-		this.selections.set(agent, selection);
-		return selection;
-	}
-	/**
-	* Commit and cache one validated selection for the next prompt assembly.
-	* @param agent - live Agent that owns the selection.
-	* @param selection - validated selection to record and apply.
-	*/
-	selectForNextRequest(agent, selection) {
-		agent.session.append("model/selection", selection);
-		this.selectionFor(agent).current = selection;
-	}
-	/**
-	* Let a matching durable request header retire the execution cache.
-	* @param agent - live Agent whose request was recorded.
-	* @param provider - provider route used by the request.
-	* @param model - provider-owned model used by the request.
-	* @param reasoningEffort - adapter-owned effort used by the request.
-	* @returns whether the pending selection was consumed.
-	*/
-	consumeSelection(agent, provider, model, reasoningEffort) {
-		return this.selections.get(agent)?.consume(provider, model, reasoningEffort) ?? false;
+	async createSession(request) {
+		const named = request.sessionId;
+		if (named === void 0) return this.created(await this.createMinted(request.cwd, await this.composeAgent(request.agentPreset)));
+		return this.inOrder(named, async () => this.created(await this.claim(named, request)));
 	}
 	/**
 	* Read the current Agent preset from the Session projection.
 	* @param session - live Session whose projection state is available.
-	* @returns the current preset, or undefined when the capability is absent.
+	* @returns the current preset, or undefined without a preset service or recorded selection.
 	*/
 	presetForSession(session) {
-		return this.ctx.sessionProjections.stateOf(session, "agentPreset") ?? void 0;
+		return this.ctx.get("agentPresets")?.presetForSession(session) ?? void 0;
 	}
 	/**
 	* Serialize image admission and model selection for one Agent.
@@ -353,14 +257,14 @@ var ApiSessionAgentController = class {
 	*/
 	async composeAgent(presetId) {
 		const presets = this.ctx.get("agentPresets");
-		if (presets === void 0) return { setup: (_agentCtx, agent) => {
-			this.installSelection(agent);
+		if (presets === void 0) return { setup: (agentCtx) => {
+			installModelSelection(agentCtx);
 		} };
 		const resolvedId = (await presets.resolve(presetId)).id;
 		return {
 			agentPreset: resolvedId,
-			setup: async (agentCtx, agent) => {
-				this.installSelection(agent);
+			setup: async (agentCtx) => {
+				installModelSelection(agentCtx);
 				await presets.mount(agentCtx, resolvedId);
 			}
 		};
@@ -368,24 +272,24 @@ var ApiSessionAgentController = class {
 	liveAgent(sessionId) {
 		const agent = this.ctx.agents.get(sessionId);
 		if (agent === void 0) return void 0;
-		return hasApiSessionSubagentOwner(this.ctx, agent.session, agent) ? { error: apiSessionSubagentOwnershipError(sessionId) } : { agent };
+		return hasApiSessionSubagentOwner(agent.session) ? { error: apiSessionSubagentOwnershipError(sessionId) } : { agent };
 	}
 	async resume(sessionId, supplied) {
 		if (supplied !== void 0) return this.resumeObserved(sessionId, supplied);
 		try {
-			const env_2 = {
+			const env_1 = {
 				stack: [],
 				error: void 0,
 				hasError: false
 			};
 			try {
-				const observation = __addDisposableResource$4(env_2, await this.ctx.sessionQuery.observeSession(sessionId), false);
+				const observation = __addDisposableResource$6(env_1, await this.ctx.sessionQuery.observeSession(sessionId), false);
 				return await this.resumeObserved(sessionId, observation);
-			} catch (e_2) {
-				env_2.error = e_2;
-				env_2.hasError = true;
+			} catch (e_1) {
+				env_1.error = e_1;
+				env_1.hasError = true;
 			} finally {
-				__disposeResources$4(env_2);
+				__disposeResources$6(env_1);
 			}
 		} catch (error) {
 			if (error instanceof SessionQueryError && error.code === "SESSION_QUERY_SESSION_NOT_FOUND") throw new ApiSessionNotFound(`session "${sessionId}" not found`);
@@ -394,55 +298,128 @@ var ApiSessionAgentController = class {
 	}
 	async resumeObserved(sessionId, observation) {
 		if (observation.header.id !== sessionId || observation.header.cwd === void 0) throw new ApiSessionNotFound(`session "${sessionId}" not found`);
-		if (hasApiSessionSubagentOwner(this.ctx, { header: observation.header }, void 0)) throw new ApiSessionSubagentOwnership(sessionId);
+		if (hasApiSessionSubagentOwner({ header: observation.header })) throw new ApiSessionSubagentOwnership(sessionId);
 		const composition = await this.composeAgent(this.presetForObservation(observation));
 		const published = this.ctx.sessions.get(sessionId);
-		const live = this.ctx.agents.get(sessionId);
-		if (published !== void 0 && hasApiSessionSubagentOwner(this.ctx, published, live)) throw new ApiSessionSubagentOwnership(sessionId);
+		if (published !== void 0 && hasApiSessionSubagentOwner(published)) throw new ApiSessionSubagentOwnership(sessionId);
 		return (await this.ctx.agents.resume({
 			resumeSessionId: sessionId,
 			agentOptions: this.agentOptions(),
 			setup: composition.setup
 		})).agent;
 	}
-	async createOrAdopt(sessionId, cwd, checkPersistedIdentity, presetId) {
+	async inOrder(sessionId, operation) {
+		const result = (this.claims.get(sessionId) ?? Promise.resolve()).then(operation);
+		const settled = result.then(() => void 0, () => void 0);
+		this.claims.set(sessionId, settled);
+		try {
+			return await result;
+		} finally {
+			if (this.claims.get(sessionId) === settled) this.claims.delete(sessionId);
+		}
+	}
+	/** @returns the reused Session, a new Session under `sessionId` when none is stored, or a new Session under a minted identity. */
+	async claim(sessionId, request) {
 		const attached = this.ctx.sessions.get(sessionId);
 		const live = this.ctx.agents.get(sessionId);
-		if (attached !== void 0 && hasApiSessionSubagentOwner(this.ctx, attached, live)) throw new ApiSessionSubagentOwnership(sessionId);
-		if (live !== void 0) return live;
-		if (checkPersistedIdentity) try {
-			const env_3 = {
+		if (attached !== void 0 && hasApiSessionSubagentOwner(attached)) throw new ApiSessionSubagentOwnership(sessionId);
+		if (live !== void 0) {
+			if (live.session.header.cwd !== request.cwd) throw new ApiSessionCwdConflict(live.id, request.cwd, live.session.header.cwd);
+			const composition = await this.composeAgent(request.agentPreset);
+			return await this.reuseLive(live, request, composition) ?? this.createMinted(request.cwd, composition);
+		}
+		let observation;
+		try {
+			observation = await this.ctx.sessionQuery.observeSession(sessionId);
+		} catch (error) {
+			if (!(error instanceof SessionQueryError) || error.code !== "SESSION_QUERY_SESSION_NOT_FOUND") throw error;
+			return this.createAgent(sessionId, request.cwd, await this.composeAgent(request.agentPreset));
+		}
+		let reusable;
+		{
+			const env_2 = {
 				stack: [],
 				error: void 0,
 				hasError: false
 			};
 			try {
-				const observation = __addDisposableResource$4(env_3, await this.ctx.sessionQuery.observeSession(sessionId), false);
-				if (hasApiSessionSubagentOwner(this.ctx, { header: observation.header }, void 0)) throw new ApiSessionSubagentOwnership(sessionId);
-				if (observation.header.cwd !== cwd) throw new ApiSessionCwdConflict(sessionId, cwd, observation.header.cwd);
-				const storedPreset = this.presetForObservation(observation);
-				this.assertPresetUnchanged(sessionId, presetId, storedPreset);
-				const composition = await this.composeAgent(storedPreset);
-				return (await this.ctx.agents.resume({
-					resumeSessionId: sessionId,
-					agentOptions: this.agentOptions(),
-					setup: composition.setup
-				})).agent;
-			} catch (e_3) {
-				env_3.error = e_3;
-				env_3.hasError = true;
+				const observed = __addDisposableResource$6(env_2, observation, false);
+				if (hasApiSessionSubagentOwner({ header: observed.header })) throw new ApiSessionSubagentOwnership(sessionId);
+				if (observed.header.cwd !== request.cwd) throw new ApiSessionCwdConflict(sessionId, request.cwd, observed.header.cwd);
+				reusable = request.reusable(sessionId) && !observed.events.some((event) => event.type === "turn/start");
+			} catch (e_2) {
+				env_2.error = e_2;
+				env_2.hasError = true;
 			} finally {
-				__disposeResources$4(env_3);
+				__disposeResources$6(env_2);
 			}
-		} catch (error) {
-			if (!(error instanceof SessionQueryError) || error.code !== "SESSION_QUERY_SESSION_NOT_FOUND") throw error;
 		}
+		const composition = await this.composeAgent(request.agentPreset);
+		if (!reusable) return this.createMinted(request.cwd, composition);
+		this.assertPresetApplicable(sessionId, request.agentPreset);
+		try {
+			return (await this.ctx.agents.resume({
+				resumeSessionId: sessionId,
+				agentOptions: this.agentOptions(),
+				setup: this.reuseSetup(composition)
+			})).agent;
+		} catch (error) {
+			if (error instanceof ApiSessionStartedSinceObserved) return this.createMinted(request.cwd, composition);
+			if (!(error instanceof Error) || error.name !== "SessionAlreadyOwnedError") throw error;
+			return this.ctx.agents.get(sessionId) === void 0 ? this.createMinted(request.cwd, composition) : this.claim(sessionId, request);
+		}
+	}
+	/** @returns the live blank Session under the requested preset, or undefined when it cannot be reused. */
+	async reuseLive(live, request, composition) {
+		if (!request.reusable(live.id) || !this.isBlank(live.session)) return void 0;
+		this.assertPresetApplicable(live.id, request.agentPreset);
+		const current = this.presetForSession(live.session);
+		const presets = this.ctx.get("agentPresets");
+		const target = composition.agentPreset;
+		if (presets === void 0 || target === void 0 || target === current) return live;
+		try {
+			await presets.select(live, target);
+		} catch (error) {
+			if (remoteErrorOf(error)?.code !== "agent-preset/locked") throw error;
+			return;
+		}
+		return live;
+	}
+	/** Setup that re-checks blankness under the acquired writer, then records a preset change before publication. */
+	reuseSetup(composition) {
+		return async (agentCtx, agent) => {
+			if (!this.isBlank(agent.session)) throw new ApiSessionStartedSinceObserved();
+			const commit = await composition.setup(agentCtx, agent);
+			const target = composition.agentPreset;
+			if (target !== void 0 && this.presetForSession(agent.session) !== target) agent.session.append("agent-preset/selected", { agentPreset: target });
+			return commit;
+		};
+	}
+	/** Whether no turn has started, by the predicate the preset registry's `select` enforces. */
+	isBlank(session) {
+		const boundary = this.ctx.agents.turnBoundaryOf(session);
+		return boundary.openTurnStartSeq === null && boundary.lastTurn === 0;
+	}
+	/** Without a roster, reuse cannot apply a named preset. */
+	assertPresetApplicable(sessionId, requested) {
+		if (requested === void 0 || this.ctx.get("agentPresets") !== void 0) return;
+		throw new ApiSessionPresetConflict(sessionId, requested);
+	}
+	created(agent) {
+		return {
+			agent,
+			agentPreset: this.presetForSession(agent.session)
+		};
+	}
+	createMinted(cwd, composition) {
+		return this.createAgent(brandString(`session-${randomUUID()}`), cwd, composition);
+	}
+	async createAgent(sessionId, cwd, composition) {
 		try {
 			await mkdir(cwd, { recursive: true });
 		} catch (error) {
 			throw new Error(`failed to ensure project directory "${cwd}": ${String(error)}`, { cause: error });
 		}
-		const composition = await this.composeAgent(presetId);
 		return (await this.ctx.agents.create({
 			sessionId,
 			agentOptions: this.agentOptions(),
@@ -454,14 +431,18 @@ var ApiSessionAgentController = class {
 		})).agent;
 	}
 	agentOptions() {
-		const { provider, model } = this.ctx.agentDefaultModel.currentSelection();
+		const defaults = this.ctx.agentDefaultModel;
 		return {
-			provider,
-			model
+			get provider() {
+				return defaults.currentSelection().provider;
+			},
+			get model() {
+				return defaults.currentSelection().model;
+			},
+			get reasoningEffort() {
+				return defaults.currentSelection().reasoningEffort;
+			}
 		};
-	}
-	installSelection(agent) {
-		this.selectionFor(agent);
 	}
 	/**
 	* Read the current Agent preset from an all-projections observation.
@@ -472,22 +453,167 @@ var ApiSessionAgentController = class {
 		if (observation.projections === void 0) throw new Error("api-session: Agent activation requires a projected Session observation");
 		return observation.projections.values.agentPreset ?? void 0;
 	}
-	assertPresetUnchanged(sessionId, requested, existing) {
-		if (requested === void 0 || requested === existing) return;
-		throw new ApiSessionPresetConflict(sessionId, requested, existing);
+};
+//#endregion
+//#region lib/types/continuation.js
+const CONTINUABLE_FAILURES = new Set([
+	"RATE_LIMIT",
+	"SERVER",
+	"TIMEOUT",
+	"TRANSPORT",
+	"EMPTY_RESPONSE",
+	"STREAM_CLOSED"
+]);
+const endingSchema = z$1.number().int().nonnegative().transform(brandNumber).nullable();
+const stateSchema = z$1.object({
+	admitted: z$1.boolean(),
+	failedAttempt: z$1.boolean(),
+	ending: endingSchema
+});
+const EMPTY = {
+	admitted: false,
+	failedAttempt: false,
+	ending: null
+};
+/** Eligibility requires admitted human work and a failed settlement in the last request step. */
+const continuationProjectionDefinition = {
+	key: "conversationContinuation",
+	stateVersion: 4,
+	stateSchema,
+	init: () => EMPTY,
+	apply: (state, event) => {
+		switch (event.type) {
+			case "turn/start": return EMPTY;
+			case "step/start":
+			case "assistant/message": return state.failedAttempt ? {
+				...state,
+				failedAttempt: false
+			} : state;
+			case "user/message": return !state.admitted && event.surfaceOp === "append" && (event.data.source.kind === "user" && event.data.content.length > 0 || event.data.source.kind === "retry" && event.data.content.length === 0) ? {
+				...state,
+				admitted: true
+			} : state;
+			case "assistant/attempt": return state.failedAttempt ? state : {
+				...state,
+				failedAttempt: true
+			};
+			case "turn/end": {
+				const ending = event.data.reason.kind === "error" && CONTINUABLE_FAILURES.has(event.data.reason.error.code) && state.admitted && state.failedAttempt ? event.seq : null;
+				return ending === null ? EMPTY : {
+					...EMPTY,
+					ending
+				};
+			}
+			default: return state;
+		}
+	},
+	wire: {
+		viewSchema: endingSchema,
+		view: (state) => state.ending
 	}
 };
-function agentModelSelection(selection) {
+//#endregion
+//#region lib/types/catalog.js
+/** Shared projection of the live LLM registry into the browser model catalog. */
+/**
+* Build the browser model catalog without requiring a Session.
+* @param ctx - Host context carrying the live LLM registry.
+* @param defaultSelection - deployment default used before a Session selects a model.
+* @returns successful non-empty provider groups and isolated provider failures.
+*/
+async function buildModelCatalog(ctx, defaultSelection = ctx.agentDefaultModel.currentSelection()) {
+	const providers = ctx.llm.listProviders();
+	const catalog = await Promise.all(providers.map(async (provider) => {
+		try {
+			const models = await ctx.llm.listModels(provider.id);
+			const entries = await Promise.all(models.map(async (model) => {
+				const resolved = await ctx.llm.resolveModelInfo(provider.id, model.id);
+				const reasoning = resolved.reasoning === void 0 ? void 0 : {
+					efforts: resolved.reasoning.efforts.map((effort) => ({
+						id: effort.id,
+						name: effort.name,
+						...effort.description === void 0 ? {} : { description: effort.description }
+					})),
+					...resolved.reasoning.defaultEffort === void 0 ? {} : { defaultEffort: resolved.reasoning.defaultEffort }
+				};
+				return {
+					id: model.id,
+					name: model.name,
+					...model.description === void 0 ? {} : { description: model.description },
+					...reasoning === void 0 ? {} : { reasoning },
+					...model.badge === void 0 ? {} : { badge: model.badge }
+				};
+			}));
+			return {
+				kind: "group",
+				group: {
+					id: provider.id,
+					name: provider.name,
+					models: entries
+				}
+			};
+		} catch (error) {
+			return {
+				kind: "failure",
+				failure: {
+					id: provider.id,
+					name: provider.name,
+					message: error instanceof Error ? error.message : String(error)
+				}
+			};
+		}
+	}));
+	const groups = catalog.flatMap((item) => item.kind === "group" ? [item.group] : []).filter((group) => group.models.length > 0);
 	return {
-		provider: selection.provider,
-		model: selection.model,
-		...selection.reasoningEffort === void 0 ? {} : { reasoningEffort: ReasoningEffortId(selection.reasoningEffort) }
+		default: { ...defaultSelection },
+		routableProviders: groups.map((group) => group.id),
+		groups,
+		failures: catalog.flatMap((item) => item.kind === "failure" ? [item.failure] : [])
 	};
+}
+/**
+* Check a GUI selection against the current available provider catalog.
+* @param ctx - Host LLM registry.
+* @param selection - stored or explicitly requested selection.
+* @returns whether the exact model is currently advertised as available.
+*/
+async function modelAvailable(ctx, selection) {
+	if (!ctx.llm.listProviders().some((provider) => provider.id === selection.provider)) return false;
+	let models;
+	try {
+		models = await ctx.llm.listModels(selection.provider);
+	} catch (error) {
+		throw new RemoteError("session/model-unavailable", error instanceof Error ? error.message : String(error), {
+			provider: selection.provider,
+			model: selection.model
+		});
+	}
+	return models.some((model) => model.id === selection.model);
+}
+/**
+* Check configured provider API-key references independently of model availability.
+* @param ctx - Host registry, settings, and credential services.
+* @returns whether any API-key provider has a configured credential.
+*/
+async function hasProviderApiKey(ctx) {
+	const settings = ctx.get("settings");
+	const credentials = ctx.get("credentials");
+	if (settings === void 0 || credentials === void 0) throw new RemoteError("session/provider-credentials-unavailable", "provider credentials are unavailable", {});
+	const namespaces = settings.describe({ redactSecrets: true });
+	for (const provider of ctx.llm.listConfigurableProviders()) {
+		if (provider.provider === "deepseek-account") continue;
+		let profile = namespaces.find((namespace) => namespace.ns === provider.settingsNs)?.value;
+		for (const key of provider.settingsPath) profile = typeof profile === "object" && profile !== null ? Reflect.get(profile, key) : void 0;
+		if (typeof profile !== "object" || profile === null) continue;
+		const ref = Reflect.get(profile, "apiKeyEnv");
+		if (typeof ref === "string" && ref.length > 0 && (await credentials.describe(credentialRef(ref))).configured) return true;
+	}
+	return false;
 }
 //#endregion
 //#region lib/types/commands.js
 /** Session commands whose activation policy is explicit at each Remote method. */
-var __addDisposableResource$3 = function(env, value, async) {
+var __addDisposableResource$5 = function(env, value, async) {
 	if (value !== null && value !== void 0) {
 		if (typeof value !== "object" && typeof value !== "function") throw new TypeError("Object expected.");
 		var dispose, inner;
@@ -516,7 +642,7 @@ var __addDisposableResource$3 = function(env, value, async) {
 	} else if (async) env.stack.push({ async: true });
 	return value;
 };
-var __disposeResources$3 = (function(SuppressedError) {
+var __disposeResources$5 = (function(SuppressedError) {
 	return function(env) {
 		function fail(e) {
 			env.error = env.hasError ? new SuppressedError(e, env.error, "An error was suppressed during disposal.") : e;
@@ -545,17 +671,43 @@ var __disposeResources$3 = (function(SuppressedError) {
 	var e = new Error(message);
 	return e.name = "SuppressedError", e.error = error, e.suppressed = suppressed, e;
 });
+/**
+* Whether prompt content carries non-whitespace text or an attachment.
+* @param content - submitted or edited prompt parts.
+* @returns whether any part supplies ordinary prompt content.
+*/
 function hasPromptContent(content) {
 	return content.some((part) => part.type !== "text" || part.text.trim().length > 0);
+}
+/**
+* Resolve the omitted-`atSeq` default to the latest completed-turn prefix,
+* including standalone events before the next turn begins.
+*/
+function latestCompletedPrefixBoundary(events) {
+	const lastTurnEnd = events.findLast((event) => event.type === "turn/end");
+	if (lastTurnEnd === void 0) return void 0;
+	let boundary = lastTurnEnd.seq;
+	for (const next of events.slice(boundary + 1)) {
+		if (next.type === "turn/start" || next.type === "user/message" && next.surfaceOp === "append" || next.type === "agent/inbox/spliced") break;
+		boundary = next.seq;
+	}
+	return boundary;
 }
 /** Implements Session business commands delegated by the Session Controller Remote service. */
 var SessionCommandController = class {
 	ctx;
 	agents;
 	defaultCwd;
+	/** First-insertion facts cached per exact Session; the log remains the recovery source. */
+	promptReceipts = /* @__PURE__ */ new WeakMap();
+	continuation;
+	/** Register complete-history empty-prompt eligibility. @returns when command admission is ready. */
+	async initialize() {
+		this.continuation = await this.ctx.sessionProjections.register(continuationProjectionDefinition);
+	}
 	/**
 	* @param ctx - Host context carrying Agent, model, attachment, title, and Workspace services.
-	* @param agents - sole owner of create, resume, and Session-local model selection.
+	* @param agents - sole owner of create, resume, and Agent composition.
 	* @param defaultCwd - project directory used when create names neither a Workspace nor a cwd.
 	*/
 	constructor(ctx, agents, defaultCwd) {
@@ -564,25 +716,31 @@ var SessionCommandController = class {
 		this.defaultCwd = defaultCwd;
 	}
 	/**
-	* Create or idempotently adopt one ordinary Session.
-	* @param request - requested identity, location, and Agent preset.
-	* @returns the Session identity and resolved preset when configured.
+	* Create one ordinary Session for a new conversation, reusing the named
+	* blank Session while it is an unarchived member of the requested Workspace.
+	* @param request - optional blank Session to reuse, location, and Agent preset.
+	* @returns the created or reused Session identity and its preset when configured.
 	*/
 	async create(request) {
 		if (request.workspaceId !== void 0 && request.cwd !== void 0) throw new RemoteError("gateway/bad-request", "session.create accepts workspaceId or cwd, not both", {});
-		const sessionId = request.sessionId ?? brandString(`session-${randomUUID()}`);
 		let workspace;
 		if (request.workspaceId !== void 0) {
 			workspace = this.ctx.workspaceRegistry.get(request.workspaceId);
 			if (workspace === void 0) throw new RemoteError("workspace/not-found", `workspace "${request.workspaceId}" not found`, { workspaceId: request.workspaceId });
 		}
 		const cwd = workspace?.path ?? request.cwd ?? this.defaultCwd;
-		let adopted;
+		let created;
 		try {
-			adopted = await this.agents.ensureSession(sessionId, cwd, request.sessionId !== void 0, request.agentPreset);
+			created = await this.agents.createSession({
+				...request.sessionId === void 0 ? {} : { sessionId: request.sessionId },
+				cwd,
+				...request.agentPreset === void 0 ? {} : { agentPreset: request.agentPreset },
+				reusable: (sessionId) => !this.ctx.workspaceRegistry.archivedSessionIds.includes(sessionId) && (workspace === void 0 || workspace.sessionIds.includes(sessionId))
+			});
 		} catch (error) {
-			this.rejectCreation(sessionId, error);
+			this.rejectCreation(error);
 		}
+		const sessionId = created.agent.id;
 		if (workspace !== void 0) try {
 			await workspace.attachSession(sessionId);
 		} catch (error) {
@@ -591,37 +749,31 @@ var SessionCommandController = class {
 				workspaceId: workspace.id
 			});
 		}
-		const agentPreset = this.agents.presetForSession(adopted.session);
 		return {
 			sessionId,
-			...agentPreset === void 0 ? {} : { agentPreset }
+			...created.agentPreset === void 0 ? {} : { agentPreset: created.agentPreset }
 		};
 	}
 	/**
-	* Validate and install one Session-local model selection.
+	* Validate and record one Session model selection; save the default in the background.
 	* @param request - Session identity and requested model selection.
-	* @returns the normalized selection installed for the Session.
+	* @returns the normalized selection recorded for the Session, without waiting for default persistence.
 	*/
 	async selectModel(request) {
 		const agent = await this.resolveAgent(request.sessionId);
 		return this.agents.serializeImageAdmission(agent, async () => {
 			try {
-				const resolved = await this.ctx.llm.resolveCallConfig({
+				await this.requireModel(request);
+				const selected = {
 					provider: request.provider,
 					model: request.model,
 					...request.reasoningEffort === void 0 ? {} : { reasoningEffort: ReasoningEffortId(request.reasoningEffort) }
-				});
-				const selected = {
-					provider: resolved.provider,
-					model: resolved.model,
-					...resolved.reasoningEffort === void 0 ? {} : { reasoningEffort: resolved.reasoningEffort }
 				};
-				this.agents.selectForNextRequest(agent, selected);
-				try {
-					await this.ctx.agentDefaultModel.saveSelection(selected);
-				} catch (error) {
+				await this.ctx.llm.resolveCallConfig(selected);
+				agent.model.select(selected);
+				this.ctx.agentDefaultModel.saveSelection(selected).catch((error) => {
 					this.ctx.logger.warn(`session-controller: model selection changed for the Session but the default was not saved: ${String(error)}`);
-				}
+				});
 				return { selected: { ...selected } };
 			} catch (error) {
 				if (remoteErrorOf(error) !== void 0) throw error;
@@ -653,8 +805,10 @@ var SessionCommandController = class {
 		}
 	}
 	/**
-	* Create a new ordinary Session from one completed-turn prefix.
-	* @param request - source Session and optional event anchor.
+	* Create a new ordinary Session from an exact event prefix. An explicit
+	* `atSeq` is the inclusive cut; an omitted value selects the latest
+	* completed-turn prefix. An open cut receives synthetic fork closers.
+	* @param request - source Session and optional exact event boundary.
 	* @returns the new Session identity.
 	*/
 	async fork(request) {
@@ -677,27 +831,10 @@ var SessionCommandController = class {
 				if (error instanceof SessionQueryError && error.code === "SESSION_QUERY_SESSION_NOT_FOUND") throw new RemoteError("session/not-found", `session "${request.sessionId}" not found`, { sessionId: request.sessionId });
 				throw new RemoteError("gateway/internal", `fork source unavailable for session "${request.sessionId}": ${String(error)}`, {});
 			}
-			const source = __addDisposableResource$3(env_1, observed, false);
-			const lastSeq = source.events.at(-1)?.seq ?? -1;
-			const boundary = (atSeq === void 0 ? void 0 : source.events.find((event) => event.type === "turn/end" && event.seq >= atSeq)) ?? (atSeq === void 0 || atSeq > lastSeq ? source.events.findLast((event) => event.type === "turn/end") : void 0);
-			if (boundary === void 0) throw new RemoteError("session/fork-unavailable", atSeq !== void 0 && atSeq <= lastSeq ? `session "${request.sessionId}" has not completed the turn containing event ${String(atSeq)}` : `session "${request.sessionId}" has no completed turn to fork from`, { sessionId: request.sessionId });
-			// LOCAL PATCH for dsh-vscode: the original loop advanced cut until the
-			// next turn/start, which swallowed any intervening user/message events
-			// (the next prompt already sitting after the completed turn). The child
-			// then auto-ran that "next" instruction when the agent started, and the
-			// user's real new prompt was queued behind it. Stop at turn/start,
-			// user/message, OR agent/inbox/spliced so the seed ends on the completed
-			// turn only and does not rehydrate the parent's pending next-turn inbox.
-			const boundaryIndex = source.events.findIndex((event) => event === boundary || (event.type === "turn/end" && event.seq === boundary.seq));
-			let cut = SessionLogOffset(boundaryIndex >= 0 ? boundaryIndex + 1 : boundary.seq + 1);
-			while (
-				cut < source.events.length &&
-				source.events[cut]?.type !== "turn/start" &&
-				source.events[cut]?.type !== "user/message" &&
-				source.events[cut]?.type !== "agent/inbox/spliced"
-			) {
-				cut = SessionLogOffset(cut + 1);
-			}
+			const source = __addDisposableResource$5(env_1, observed, false);
+			const boundary = atSeq ?? latestCompletedPrefixBoundary(source.events);
+			if (boundary === void 0 || source.events[boundary]?.seq !== boundary) throw new RemoteError("session/fork-unavailable", request.atSeq === void 0 ? `session "${request.sessionId}" has no completed turn to fork from` : `event ${String(request.atSeq)} does not exist in session "${request.sessionId}" (last seq: ${String(source.events.at(-1)?.seq ?? "none")})`, { sessionId: request.sessionId });
+			const seed = buildForkSeed(source.events, boundary);
 			let workspace;
 			try {
 				workspace = await this.forkWorkspace(source.header);
@@ -710,11 +847,10 @@ var SessionCommandController = class {
 				const { provider, model } = this.ctx.agentDefaultModel.currentSelection();
 				const handle = await this.ctx.agents.create({
 					sessionId: childId,
-					seed: source.events.slice(0, cut),
-					inheritedEventCount: cut,
+					seed,
+					inheritedEventCount: SessionLogOffset(boundary + 1),
 					meta: {
 						...source.header.cwd === void 0 ? {} : { cwd: source.header.cwd },
-						parentSession: source.header.id,
 						isSeeded: true,
 						...composition.agentPreset === void 0 ? {} : { agentPreset: composition.agentPreset }
 					},
@@ -724,11 +860,12 @@ var SessionCommandController = class {
 					},
 					setup: composition.setup
 				});
-				// LOCAL PATCH for dsh-vscode: seed may still rebuild the parent's
-				// unclaimed next-turn/next-step inbox (inserts written before the
-				// fork boundary's turn/end). The child then claims that stale prompt
-				// first when the user sends, and the real new send is queued behind
-				// it. Always start the forked child with an empty inbox.
+				// LOCAL PATCH for dsh-vscode: the seed is a verbatim event prefix, so any
+				// agent/inbox/spliced written BEFORE the fork boundary's turn/end still
+				// rehydrates the parent's unclaimed next-turn/next-step inbox into the
+				// child. The child then claims that stale prompt first when the user sends,
+				// and the real new send is queued behind it. Always start a forked child
+				// with an empty inbox.
 				handle.agent.inbox.clear();
 			} catch (error) {
 				throw new RemoteError("gateway/internal", `failed to fork session "${request.sessionId}": ${String(error)}`, {});
@@ -746,31 +883,35 @@ var SessionCommandController = class {
 			env_1.error = e_1;
 			env_1.hasError = true;
 		} finally {
-			__disposeResources$3(env_1);
+			__disposeResources$5(env_1);
 		}
 	}
 	/**
-	* Reject empty content, then admit one prompt after Agent and attachment validation.
-	* @param request - Session identity, prompt content, source metadata, and delivery mode.
+	* Admit one prompt after Agent and attachment validation; the Remote method
+	* has already validated the content and built the durable message source.
+	* @param request - Session identity, prompt content, and delivery mode.
+	* @param source - caller metadata recorded on the accepted ordinary or retry user message.
 	* @returns acknowledgement that the Agent accepted the prompt.
 	*/
-	async prompt(request) {
-		if (!hasPromptContent(request.content)) throw new RemoteError("gateway/bad-request", "prompt content must include non-whitespace text or an attachment", {});
-		const clientTimeZone = request.clientTimeZone === void 0 ? void 0 : canonicalClientTimeZone(request.clientTimeZone);
-		if (request.clientTimeZone !== void 0 && clientTimeZone === void 0) throw new RemoteError("session/invalid-time-zone", "clientTimeZone must be UTC or a valid IANA Area/Location name", { value: request.clientTimeZone });
+	async prompt(request, source) {
 		const agent = await this.resolveAgent(request.sessionId);
-		if (hasPromptRequest(agent, request.requestId)) return { accepted: true };
-		const selection = this.agents.selectionFor(agent).current;
-		if (!routeServed(this.ctx, selection.provider)) throw new RemoteError("session/model-unavailable", `no adapter serves provider "${selection.provider}"; select a model for this session`, {
-			provider: selection.provider,
-			model: selection.model
-		});
-		const source = {
-			kind: "user",
-			rpcId: request.requestId,
-			...clientTimeZone === void 0 ? {} : { clientTimeZone }
-		};
-		const hasImage = request.content.some((part) => part.type === "image");
+		if (this.hasPromptRequest(agent.session, request.requestId)) return { accepted: true };
+		if (request.content.length === 0) try {
+			return await agent.runMaintenance(() => {
+				const inbox = agent.inbox;
+				if (request.mode !== "queue" || this.continuation.stateOf(agent.session).ending === null || inbox.nextTurn.length > 0 || inbox.nextStep.some((message) => message.source.kind === "user")) throw new RemoteError("session/agent-busy", "generation continuation is unavailable", { reason: "NO_CONTINUABLE_FAILURE_OR_PENDING_INPUT" });
+				agent.followup(createUserMessage({
+					content: [],
+					source
+				}));
+				return Promise.resolve({ accepted: true });
+			});
+		} catch (error) {
+			if (remoteErrorOf(error) !== void 0) throw error;
+			throw new RemoteError("session/agent-busy", "generation continuation was not accepted", { reason: String(error) });
+		}
+		const admission = resolvePromptFileReceipts(request.content, (receiptId) => this.ctx.fileUploads.resolve(agent, receiptId));
+		const hasImage = admission.content.some((part) => part.type === "image");
 		const admit = async () => {
 			try {
 				const env_2 = {
@@ -779,18 +920,22 @@ var SessionCommandController = class {
 					hasError: false
 				};
 				try {
+					if (this.hasPromptRequest(agent.session, request.requestId)) return { accepted: true };
 					if (hasImage) {
-						const current = this.agents.selectionFor(agent).current;
-						const model = await this.ctx.llm.resolveModelInfo(current.provider, current.model);
-						if (model.inputModalities !== void 0 && !model.inputModalities.includes("image")) throw new RemoteError("session/attachment-invalid", `Model "${current.model}" does not support image input.`, { reason: "MODEL_DOES_NOT_SUPPORT_IMAGES" });
+						const current = agent.model.current();
+						if (current !== void 0) {
+							const model = await this.ctx.llm.resolveModelInfo(current.provider, current.model);
+							if (model.inputModalities !== void 0 && !model.inputModalities.includes("image")) throw new RemoteError("session/attachment-invalid", `Model "${current.model}" does not support image input.`, { reason: "MODEL_DOES_NOT_SUPPORT_IMAGES" });
+						}
 					}
-					const admission = resolvePromptFileReceipts(request.content, (receiptId) => this.ctx.fileUploads.resolve(agent, receiptId));
+					const content = await this.ctx.attachments.admitPromptContent(admission.content);
+					if (this.hasPromptRequest(agent.session, request.requestId)) return { accepted: true };
 					const message = createUserMessage({
-						content: await this.ctx.attachments.admitPromptContent(admission.content),
+						content,
 						source
 					});
 					if (this.ctx.agents.get(agent.id) !== agent) throw new RemoteError("session/not-found", `session "${agent.id}" was disposed during prompt admission`, { sessionId: agent.id });
-					const binding = __addDisposableResource$3(env_2, this.ctx.fileUploads.bindPrompt(agent, admission.receiptIds, request.requestId), false);
+					const binding = __addDisposableResource$5(env_2, this.ctx.fileUploads.bindPrompt(agent, admission.receiptIds, request.requestId), false);
 					if (request.mode === "steer") agent.steer(message);
 					else agent.followup(message);
 					binding.commit();
@@ -798,9 +943,10 @@ var SessionCommandController = class {
 					env_2.error = e_2;
 					env_2.hasError = true;
 				} finally {
-					__disposeResources$3(env_2);
+					__disposeResources$5(env_2);
 				}
 			} catch (error) {
+				if (this.hasPromptRequest(agent.session, request.requestId)) return { accepted: true };
 				if (remoteErrorOf(error) !== void 0) throw error;
 				if (error instanceof AttachmentError) throw new RemoteError("session/attachment-invalid", error.message, { reason: error.code });
 				throw new RemoteError("session/agent-busy", "prompt rejected", { reason: String(error) });
@@ -809,23 +955,47 @@ var SessionCommandController = class {
 		};
 		return hasImage ? this.agents.serializeImageAdmission(agent, admit) : admit();
 	}
+	/** Recover first input acceptance, including claimed or removed messages, from unseen log entries. */
+	hasPromptRequest(session, requestId) {
+		let receipts = this.promptReceipts.get(session);
+		if (receipts === void 0) {
+			receipts = {
+				offset: SessionLogOffset(0),
+				messages: /* @__PURE__ */ new Set(),
+				requests: /* @__PURE__ */ new Set()
+			};
+			this.promptReceipts.set(session, receipts);
+		}
+		if (receipts.offset !== session.seq) {
+			for (const event of session.snapshotEvents(receipts.offset)) {
+				if (event.type !== "agent/inbox/spliced" && event.type !== "user/message") continue;
+				const messages = event.type === "agent/inbox/spliced" ? event.data.inserted : [event.data];
+				for (const message of messages) {
+					if (receipts.messages.has(message.id)) continue;
+					receipts.messages.add(message.id);
+					if (event.seq < session.inheritedEventCount) continue;
+					const source = message.source;
+					if ((source.kind === "user" || source.kind === "retry") && "rpcId" in source) receipts.requests.add(source.rpcId);
+				}
+			}
+			receipts.offset = session.seq;
+		}
+		return receipts.requests.has(requestId);
+	}
+	async requireModel(selection) {
+		if (!await modelAvailable(this.ctx, selection)) throw new RemoteError("session/model-unavailable", "Select an available model before sending a message.", {
+			provider: selection.provider,
+			model: selection.model
+		});
+	}
 	/**
-	* Read one durable image after proving the Session log references it.
-	* @param request - Session and attachment identities used for authorization.
+	* Read one durable image using the supplied reference without consulting Session history.
+	* @param request - image reference and gateway permission scope; Session existence is not checked.
 	* @returns the durable attachment reference and base64-encoded bytes.
 	*/
 	async attachment(request) {
-		let source;
 		try {
-			source = await this.readSessionState(request.sessionId);
-		} catch (error) {
-			if (error instanceof ApiSessionNotFound) throw new RemoteError("session/not-found", error.message, { sessionId: request.sessionId });
-			throw new RemoteError("gateway/internal", `attachment authorization unavailable for session "${request.sessionId}": ${String(error)}`, {});
-		}
-		const ref = referencedImage(source.events, String(request.attachmentId));
-		if (ref === void 0) throw new RemoteError("session/attachment-invalid", "Image is not referenced by this session.", { reason: "ATTACHMENT_NOT_REFERENCED" });
-		try {
-			const stored = await this.ctx.attachments.readImage(ref);
+			const stored = await this.ctx.attachments.readImage(request.attachment);
 			return {
 				attachment: stored.ref,
 				data: Buffer.from(stored.data).toString("base64")
@@ -836,18 +1006,25 @@ var SessionCommandController = class {
 		}
 	}
 	/**
-	* Mutate one still-pending queue occurrence without resuming a cold Agent.
+	* Mutate one pending Inbox occurrence, restoring an ordinary cold Agent when needed.
 	* @param request - Session, queue item, and requested mutation.
 	* @returns acknowledgement that the queue mutation was applied.
 	*/
-	updateQueue(request) {
+	async updateQueue(request) {
 		if (request.action.kind === "edit") {
 			if (request.action.content.some((block) => block.type !== "text")) throw new RemoteError("session/attachment-invalid", "queue edits accept text content only", { reason: "QUEUE_EDIT_NON_TEXT" });
 			if (!hasPromptContent(request.action.content)) throw new RemoteError("gateway/bad-request", "queue edit content must include non-whitespace text", {});
 		}
-		const agent = this.ctx.agents.get(request.sessionId);
-		if (agent === void 0) throw new RemoteError("session/queue-item-not-found", "queued item is no longer pending", { itemId: request.itemId });
-		if (hasApiSessionSubagentOwner(this.ctx, agent.session, agent)) {
+		let agent = this.ctx.agents.get(request.sessionId);
+		if (agent === void 0) {
+			const found = await this.agents.resolveAgent(request.sessionId);
+			if ("error" in found) {
+				if (found.error.code !== "session/not-found") throw found.error;
+				throw new RemoteError("session/queue-item-not-found", "queued item is no longer pending", { itemId: request.itemId });
+			}
+			agent = found.agent;
+		}
+		if (hasApiSessionSubagentOwner(agent.session)) {
 			const identity = this.ctx.sessionProjections.snapshot(agent.session, ["subagent"]).values.subagent;
 			if (identity?.mode !== "continuable" || !agent.session.isOwnSeq(identity.seq)) throw apiSessionSubagentOwnershipError(request.sessionId);
 		}
@@ -893,7 +1070,7 @@ var SessionCommandController = class {
 	cancel(request) {
 		const agent = this.ctx.agents.get(request.sessionId);
 		if (agent === void 0) throw new RemoteError("session/not-found", `session "${request.sessionId}" not found (not attached)`, { sessionId: request.sessionId });
-		if (hasApiSessionSubagentOwner(this.ctx, agent.session, agent)) throw apiSessionSubagentOwnershipError(request.sessionId);
+		if (hasApiSessionSubagentOwner(agent.session)) throw apiSessionSubagentOwnershipError(request.sessionId);
 		agent.cancel({ kind: "user" }, { keepInbox: true });
 		return { accepted: true };
 	}
@@ -902,12 +1079,11 @@ var SessionCommandController = class {
 		if ("error" in found) throw found.error;
 		return found.agent;
 	}
-	rejectCreation(sessionId, error) {
+	rejectCreation(error) {
 		if (remoteErrorOf(error) !== void 0) throw error;
 		if (error instanceof ApiSessionPresetConflict) throw new RemoteError("agent-preset/conflict", error.message, {
 			sessionId: error.sessionId,
-			requestedPreset: error.requestedPreset,
-			...error.existingPreset === void 0 ? {} : { existingPreset: error.existingPreset }
+			requestedPreset: error.requestedPreset
 		});
 		if (error instanceof ApiSessionCwdConflict) throw new RemoteError("session/conflict", error.message, {
 			sessionId: error.sessionId,
@@ -915,21 +1091,7 @@ var SessionCommandController = class {
 			...error.existingCwd === void 0 ? {} : { existingCwd: error.existingCwd }
 		});
 		if (error instanceof ApiSessionSubagentOwnership) throw apiSessionSubagentOwnershipError(error.sessionId);
-		throw new RemoteError("gateway/internal", `failed to create session "${sessionId}": ${String(error)}`, {});
-	}
-	async readSessionState(sessionId) {
-		const attached = this.ctx.sessions.get(sessionId);
-		if (attached !== void 0) return {
-			id: attached.id,
-			header: attached.header,
-			events: attached.snapshotEvents()
-		};
-		const inspected = await inspectApiSession(this.ctx, sessionId);
-		return {
-			id: inspected.meta.id,
-			header: inspected.meta,
-			events: inspected.events
-		};
+		throw new RemoteError("gateway/internal", `failed to create session: ${String(error)}`, {});
 	}
 	async forkWorkspace(source) {
 		const workspaces = this.ctx.workspaceRegistry.list();
@@ -942,110 +1104,36 @@ var SessionCommandController = class {
 		}
 	}
 };
-function resolvePromptFileReceipts(content, stagedFile) {
+/** Replace each file part with the file or image its staged receipt names. */
+function resolvePromptFileReceipts(content, staged) {
 	const receiptIds = /* @__PURE__ */ new Set();
 	return {
 		content: content.map((part) => {
 			if (part.type !== "file") return part;
-			const attachment = stagedFile(part.receiptId);
+			const attachment = staged(part.receiptId);
 			if (attachment === void 0) throw new RemoteError("session/attachment-invalid", "File was not uploaded for this session.", { reason: "FILE_NOT_STAGED" });
 			receiptIds.add(part.receiptId);
-			return {
-				type: "file",
-				attachment
-			};
+			return attachment;
 		}),
 		receiptIds: [...receiptIds]
 	};
 }
-function hasPromptRequest(agent, requestId) {
-	const matches = (message) => {
-		const source = message.source;
-		return source.kind === "user" && "rpcId" in source && source.rpcId === requestId;
-	};
-	if (agent.inbox.nextTurn.some(matches) || agent.inbox.nextStep.some(matches)) return true;
-	return agent.session.snapshotEvents().some((event) => {
-		if (event.type !== "user/message") return false;
-		const source = event.data.source;
-		return source.kind === "user" && "rpcId" in source && source.rpcId === requestId;
-	});
-}
-function imageBlockIn(content, match) {
-	if (!Array.isArray(content)) return void 0;
-	for (const value of content) {
-		if (typeof value !== "object" || value === null || Array.isArray(value)) continue;
-		const block = value;
-		if (block.type === "image" && typeof block.attachment === "object" && block.attachment !== null) {
-			const ref = block.attachment;
-			if (match(ref)) return ref;
-		}
-		if (block.type === "tool-result") {
-			const nested = imageBlockIn(block.content, match);
-			if (nested !== void 0) return nested;
-		}
-	}
-}
-function imageInEvent(event, match) {
-	const data = event.data;
-	const direct = imageBlockIn(data.content, match);
-	if (direct !== void 0) return direct;
-	const message = imageBlockIn(data.message?.content, match);
-	if (message !== void 0) return message;
-	for (const inserted of data.inserted ?? []) {
-		const found = imageBlockIn(inserted.content, match);
-		if (found !== void 0) return found;
-	}
-	if (event.type === "assistant/message" || event.type === "assistant/attempt") for (const chunk of assistantStreamChunks(event.data.stream, "block-end")) {
-		const found = imageBlockIn([chunk.block], match);
-		if (found !== void 0) return found;
-	}
-}
-function referencedImage(events, attachmentId) {
-	for (const event of events) {
-		const found = imageInEvent(event, (ref) => String(ref.attachmentId) === attachmentId);
-		if (found !== void 0) return found;
-	}
-}
-function routeServed(ctx, provider) {
-	return ctx.llm.listProviders().some((entry) => entry.id === provider);
-}
 //#endregion
 //#region lib/types/control.js
-/** Live Session queue, jobs, and projection state with reconnect baselines. */
+/** Live Session projection state with reconnect baselines. */
 /** Owns the Host-wide Session control stream. */
 var SessionControlController = class {
 	ctx;
 	streams = /* @__PURE__ */ new Set();
-	/** @param ctx - Host context carrying live Agent, projection, and jobs services. */
+	/** @param ctx - Host context carrying live Agent and projection services. */
 	constructor(ctx) {
 		this.ctx = ctx;
-		ctx.sessionProjections.onChanged((session, key, value, seq) => {
+		ctx.sessionProjections.onEventChanged((session, changes, seq) => {
 			this.broadcast({
 				type: "projection",
 				sessionId: session.id,
-				key,
-				value,
-				seq
-			});
-			if (key !== "inbox") return;
-			if (this.ctx.agents.get(session.id)?.session !== session) return;
-			this.broadcast({
-				type: "queue",
-				sessionId: session.id,
-				items: queueItemsFromInbox(value)
-			});
-		});
-		ctx.inject(["jobs"], (jobsCtx) => {
-			jobsCtx.jobs.onJobsChanged((owner) => {
-				this.onJobsChanged(owner);
-			});
-		});
-		ctx.on("session/created", (session) => {
-			const jobs = this.jobsFor(this.ctx.agents.get(session.id));
-			if (jobs.length > 0) this.broadcast({
-				type: "jobs",
-				sessionId: session.id,
-				jobs
+				seq,
+				changes
 			});
 		});
 		ctx.effect(() => () => {
@@ -1075,18 +1163,7 @@ var SessionControlController = class {
 	}
 	baseline() {
 		const sessions = this.ctx.sessions.list();
-		const queues = Object.create(null);
-		const jobs = Object.create(null);
-		for (const session of sessions) {
-			const agent = this.ctx.agents.get(session.id);
-			queues[session.id] = agent?.session === session ? queueItems(agent) : [];
-			jobs[session.id] = this.jobsFor(agent);
-		}
-		return {
-			queues,
-			jobs,
-			projections: this.projectionBaseline(sessions)
-		};
+		return { projections: this.projectionBaseline(sessions) };
 	}
 	projectionBaseline(sessions) {
 		const blocks = Object.create(null);
@@ -1098,25 +1175,6 @@ var SessionControlController = class {
 			};
 		}
 		return blocks;
-	}
-	onJobsChanged(owner) {
-		if (owner !== void 0) {
-			this.broadcast({
-				type: "jobs",
-				sessionId: owner.id,
-				jobs: this.jobsFor(owner)
-			});
-			return;
-		}
-		for (const session of this.ctx.sessions.list()) this.broadcast({
-			type: "jobs",
-			sessionId: session.id,
-			jobs: this.jobsFor(this.ctx.agents.get(session.id))
-		});
-	}
-	jobsFor(agent) {
-		const jobs = this.ctx.get("jobs");
-		return jobs === void 0 ? [] : jobs.list(agent).map(jobView);
 	}
 	broadcast(frame) {
 		for (const stream of this.streams) stream.push(frame);
@@ -1163,47 +1221,417 @@ var ControlQueue = class {
 		}
 	}
 };
-function queueItems(agent) {
-	return queueItemsFromInbox({
-		"next-turn": agent.inbox.nextTurn,
-		"next-step": agent.inbox.nextStep
+const MESSAGE_TYPES$1 = new Set(["user/message", "assistant/message"]);
+/**
+* Reject an invalid message budget or turn window.
+* @param request - history window fields.
+*/
+function validateHistoryWindow(request) {
+	if (request.maxMessages !== void 0 && (!Number.isSafeInteger(request.maxMessages) || request.maxMessages <= 0)) throw new RemoteError("gateway/bad-request", "maxMessages must be a positive safe integer", {});
+	const window = request.turnWindow;
+	if (window !== void 0) {
+		if (!Number.isSafeInteger(window.minMessages) || window.minMessages <= 0 || window.minMessages > (request.maxMessages ?? 50)) throw new RemoteError("gateway/bad-request", "turnWindow.minMessages must be a positive safe integer no greater than maxMessages", {});
+		if (!Number.isSafeInteger(window.minTurns) || window.minTurns <= 0) throw new RemoteError("gateway/bad-request", "turnWindow.minTurns must be a positive safe integer", {});
+	}
+}
+/**
+* Select the Session whose log an address names.
+* @param address - ordinary Session or direct-subagent address.
+* @returns the Session whose log the address reads.
+*/
+function addressId(address) {
+	return address.kind === "session" ? address.sessionId : address.childSessionId;
+}
+/**
+* Reject an address that does not match the observed Session.
+* @param address - ordinary Session or direct-subagent address.
+* @param header - observed Session header.
+* @param inheritedEventCount - observed fork-inherited event count.
+* @param projections - observed projections; subagent addresses require them.
+*/
+function validateAddress(address, header, inheritedEventCount, projections) {
+	if (address.kind === "session") {
+		if (header.origin === "subagent") throw new RemoteError("session/agent-busy", "subagent Sessions require their durable parent address", { reason: "use subagent delivery for this child session" });
+		return;
+	}
+	if (header.origin !== "subagent" || header.parentSession !== address.parentSessionId) throw new RemoteError("subagent/unauthorized", "subagent does not belong to the supplied parent", { childSessionId: address.childSessionId });
+	const identity = projections?.values.subagent;
+	if (identity === null) throw new RemoteError("subagent/catalog-diagnostic", "subagent descriptor is corrupt", {
+		parentSessionId: address.parentSessionId,
+		childSessionId: address.childSessionId,
+		reason: "corrupt"
+	});
+	if (identity === void 0 || identity.seq < inheritedEventCount) throw new RemoteError("subagent/catalog-diagnostic", "subagent descriptor is unavailable", {
+		parentSessionId: address.parentSessionId,
+		childSessionId: address.childSessionId,
+		reason: "unsupported"
+	});
+	if (address.mode !== "unknown" && identity.mode !== address.mode) throw new RemoteError("subagent/unauthorized", "subagent mode does not match the supplied address", { childSessionId: address.childSessionId });
+}
+/**
+* Reject a missing Session using its address-specific error.
+* @param address - ordinary Session or direct-subagent address.
+* @returns never; this operation always throws.
+* @throws RemoteError `session/not-found` or `subagent/not-found`.
+*/
+function rejectNotFound(address) {
+	if (address.kind === "session") throw new RemoteError("session/not-found", `session "${address.sessionId}" not found`, { sessionId: address.sessionId });
+	throw new RemoteError("subagent/not-found", "subagent is unavailable", {
+		parentSessionId: address.parentSessionId,
+		childSessionId: address.childSessionId
 	});
 }
-function queueItemsFromInbox(inbox) {
-	return [...inbox["next-turn"].map((message) => ({
-		id: message.id,
-		placement: "queued",
-		...promptRpcId(message),
-		message: {
-			id: message.id,
-			content: message.content
+/**
+* Cut one message-aligned backwards page from a contiguous event prefix.
+* @param events - contiguous events starting at seq 0.
+* @param beforeSeq - exclusive upper offset of an older page.
+* @param maxMessages - message budget.
+* @param throughSeq - inclusive log cut.
+* @param turnWindow - optional turn-boundary stop rule.
+* @returns the page events and whether older events remain.
+*/
+function paginate(events, beforeSeq, maxMessages, throughSeq, turnWindow) {
+	const end = SessionLogOffset(Math.min(throughSeq + 1, beforeSeq ?? throughSeq + 1));
+	let count = 0;
+	let turns = 0;
+	let cut = SessionLogOffset(0);
+	for (let index = end - 1; index >= 0; index--) {
+		const event = events[index];
+		if (turnWindow !== void 0 && event.type === "turn/start") {
+			turns++;
+			if (count >= turnWindow.minMessages && turns >= turnWindow.minTurns) {
+				cut = SessionLogOffset(index);
+				break;
+			}
 		}
-	})), ...inbox["next-step"].map((message) => ({
-		id: message.id,
-		placement: message.source.kind === "user" ? "steering" : "context",
-		...promptRpcId(message),
-		message: {
-			id: message.id,
-			content: message.content
+		if (!MESSAGE_TYPES$1.has(event.type) || !isAppendSurfaceEvent(event)) continue;
+		count++;
+		const sources = event.sourceEventSeqs;
+		let groupStart = event.seq;
+		if (sources !== void 0) {
+			for (const source of sources) if (source < groupStart) groupStart = source;
 		}
-	}))];
-}
-/** Prompt-RPC identity carried by a browser-submitted message's user source. */
-function promptRpcId(message) {
-	const source = message.source;
-	return source.kind === "user" && "rpcId" in source ? { rpcId: source.rpcId } : {};
-}
-function jobView(job) {
+		if (count >= maxMessages) {
+			cut = SessionLogOffset(groupStart);
+			break;
+		}
+	}
 	return {
-		id: job.id,
-		kind: job.kind,
-		label: job.label,
-		status: job.status,
-		...job.detail === void 0 ? {} : { detail: job.detail },
-		startedAt: job.startedAt,
-		...job.finishedAt === void 0 ? {} : { finishedAt: job.finishedAt }
+		events: events.slice(cut, end),
+		hasMore: cut > 0
 	};
 }
+/**
+* Convert a committed event to its wire entry.
+* @param event - committed Session event.
+* @returns the wire event entry.
+*/
+function entryFor(event) {
+	return {
+		type: "event",
+		event
+	};
+}
+/**
+* Encode one bounded logical page without changing its pagination cut.
+* @param events - page events.
+* @returns the wire records.
+*/
+function pageRecords(events) {
+	return events.map(entryFor);
+}
+//#endregion
+//#region lib/types/history/listener.js
+/** Passive per-Session streams; subscriptions never acquire Session observations. */
+/** A single subscription buffers before either consumption mode starts. */
+var EventListener = class {
+	buffer;
+	disposes = [];
+	firstReceivedSeq;
+	nextExpectedSeq;
+	/**
+	* @param ctx - context owning the event registrations.
+	* @param sessionId - Session whose notifications are emitted.
+	* @param signal - cancellation that wakes consumers.
+	* @param queue - optional caller-owned buffer; only an internally created buffer is disposed here.
+	*/
+	constructor(ctx, sessionId, signal, queue) {
+		signal.throwIfAborted();
+		const buffer = queue ?? new ListenerBuffer(ctx, signal);
+		this.buffer = queue === void 0 ? buffer : void 0;
+		const input = buffer.createInput((item) => this.transform(item));
+		const target = sessionId;
+		try {
+			this.disposes.push(ctx.on("session/event", (session, event) => {
+				if (session.id !== target) return;
+				buffer.capture(() => {
+					this.recordFirst(event.seq);
+					input.append({
+						type: "event",
+						session,
+						event
+					});
+				});
+			}, { global: true }));
+			this.disposes.push(ctx.on("session/created", (session) => {
+				if (session.id !== target) return;
+				buffer.capture(() => {
+					if (session.firstLiveSeq < session.seq) this.recordFirst(session.firstLiveSeq);
+					input.prepend({
+						type: "created",
+						session,
+						end: session.seq
+					});
+				});
+			}, { global: true }));
+			this.buffer?.own(() => {
+				this[Symbol.dispose]();
+			});
+		} catch (error) {
+			this[Symbol.dispose]();
+			throw error;
+		}
+	}
+	/** Consume notifications without reading history.
+	* @returns event frames from the first received event, without loading a baseline. */
+	events() {
+		return this.iterate();
+	}
+	/** Set the inclusive opening cut for buffered history notifications.
+	* @param cursor - snapshot cut set before consuming the queue. */
+	setCursor(cursor) {
+		this.nextExpectedSeq = cursor + 1;
+	}
+	*transform(item) {
+		if (this.disposes.length === 0) return;
+		this.nextExpectedSeq ??= this.firstReceivedSeq;
+		const result = eventItem(item, this.nextExpectedSeq);
+		this.nextExpectedSeq = result.next;
+		for (const event of result.events) {
+			if (this.disposes.length === 0) return;
+			yield entryFor(event);
+		}
+	}
+	async *iterate() {
+		if (this.buffer === void 0) throw new Error("Consume the externally owned history buffer directly");
+		try {
+			yield* this.buffer.items();
+		} finally {
+			this[Symbol.dispose]();
+		}
+	}
+	recordFirst(seq) {
+		this.firstReceivedSeq = this.firstReceivedSeq === void 0 ? seq : Math.min(this.firstReceivedSeq, seq);
+	}
+	[Symbol.dispose]() {
+		for (const dispose of this.disposes.splice(0).reverse()) dispose();
+		this.buffer?.[Symbol.dispose]();
+	}
+};
+/**
+* Select the uncovered events represented by one notification.
+* @param item - one buffered notification.
+* @param next - next required seq, or undefined before the first event.
+* @returns uncovered events and the next required seq without acquiring an observation.
+*/
+function eventItem(item, next) {
+	if (item.type === "event") {
+		if (next !== void 0 && item.event.seq < next) return {
+			events: [],
+			next
+		};
+		if (next !== void 0 && item.event.seq !== next) throw new RemoteError("gateway/internal", `session event stream skipped seq ${String(next)}`, {});
+		return {
+			events: [item.event],
+			next: item.event.seq + 1
+		};
+	}
+	const start = next ?? item.session.firstLiveSeq;
+	if (start >= item.end) return {
+		events: [],
+		next
+	};
+	const events = item.session.snapshotEvents(SessionLogOffset(start), SessionLogOffset(item.end));
+	for (const event of events) {
+		if (next !== void 0 && event.seq !== next) throw new RemoteError("gateway/internal", `session event stream skipped seq ${String(next)}`, {});
+		next = event.seq + 1;
+	}
+	return {
+		events,
+		next
+	};
+}
+/** Projection changes of one Session, one change per committed event that changed a projection. */
+var ProjectionListener = class {
+	buffer;
+	/**
+	* @param ctx - context owning projection notifications.
+	* @param sessionId - Session whose notifications are emitted.
+	* @param signal - cancellation that removes registrations and wakes consumers.
+	*/
+	constructor(ctx, sessionId, signal) {
+		this.buffer = new ListenerBuffer(ctx, signal);
+		const input = this.buffer.createInput((item) => [item]);
+		const target = sessionId;
+		try {
+			this.buffer.own(ctx.sessionProjections.onEventChanged((session, changes, seq) => {
+				if (session.id !== target) return;
+				this.buffer.capture(() => {
+					const change = {
+						type: "projection",
+						seq,
+						changes
+					};
+					input.append({
+						session,
+						change
+					});
+				});
+			}));
+		} catch (error) {
+			this.buffer[Symbol.dispose]();
+			throw error;
+		}
+	}
+	/** Consume per-event projection changes.
+	* @returns validated change frames, one per committed event; projection seqs need not be contiguous. */
+	async *changes() {
+		try {
+			for await (const { change } of this.buffer.items()) yield change;
+		} finally {
+			this[Symbol.dispose]();
+		}
+	}
+	[Symbol.dispose]() {
+		this.buffer[Symbol.dispose]();
+	}
+};
+/** Owns buffering, callback failure and registration cleanup for one consumer. */
+var ListenerBuffer = class {
+	values = new Deque();
+	transformIds = new Deque();
+	transforms = [];
+	cleanup = [];
+	wake;
+	closed = false;
+	failure;
+	consumed = false;
+	constructor(ctx, signal) {
+		signal.throwIfAborted();
+		const close = () => {
+			this[Symbol.dispose]();
+		};
+		signal.addEventListener("abort", close, { once: true });
+		this.own(() => {
+			signal.removeEventListener("abort", close);
+		});
+		try {
+			const dispose = ctx.effect(() => close, "session-controller.listener-buffer");
+			this.own(() => {
+				dispose();
+			});
+		} catch (error) {
+			this[Symbol.dispose]();
+			throw error;
+		}
+	}
+	/**
+	* Register cleanup, or run it immediately when already closed.
+	* @param dispose - synchronous cleanup.
+	*/
+	own(dispose) {
+		if (this.closed) dispose();
+		else this.cleanup.push(dispose);
+	}
+	/**
+	* Contain producer failure and wake the consumer with that failure.
+	* @param action - synchronous producer operation.
+	*/
+	capture(action) {
+		if (this.closed) return;
+		try {
+			action();
+		} catch (error) {
+			this.failure = { error };
+			this[Symbol.dispose]();
+		}
+	}
+	/**
+	* Register a dequeue transform and obtain its write-only input.
+	* @param transform - conversion bound once and evaluated when each input is dequeued.
+	* @returns a write-only input sharing this buffer's storage and lifetime.
+	* @throws when this buffer is already closed.
+	*/
+	createInput(transform) {
+		if (this.closed) throw new Error("Cannot register a transform on a closed listener buffer");
+		const transformId = this.transforms.length;
+		this.transforms.push((value) => transform(value));
+		return {
+			append: (item) => {
+				if (this.closed) return;
+				this.values.pushBack(item);
+				this.transformIds.pushBack(transformId);
+				this.notify();
+			},
+			prepend: (item) => {
+				if (this.closed) return;
+				this.values.pushFront(item);
+				this.transformIds.pushFront(transformId);
+				this.notify();
+			}
+		};
+	}
+	/**
+	* Consume queued values once, releasing the buffer when iteration ends.
+	* @returns transformed output values.
+	*/
+	async *items() {
+		if (this.consumed) throw new RemoteError("gateway/internal", "Session listener already has a consumer", {});
+		this.consumed = true;
+		try {
+			for (;;) {
+				if (this.failure !== void 0) throw this.failure.error;
+				if (this.closed) return;
+				if (this.transformIds.size === 0) {
+					await new Promise((resolve) => {
+						this.wake = resolve;
+					});
+					continue;
+				}
+				const transformId = this.transformIds.popFront();
+				const value = this.values.popFront();
+				for (const item of this.transforms[transformId](value)) {
+					this.throwIfFailed();
+					if (this.isClosed()) return;
+					yield item;
+				}
+			}
+		} finally {
+			this[Symbol.dispose]();
+		}
+	}
+	throwIfFailed() {
+		if (this.failure !== void 0) throw this.failure.error;
+	}
+	/** @returns whether disposal ended this buffer while a transform was yielding. */
+	isClosed() {
+		return this.closed;
+	}
+	notify() {
+		const wake = this.wake;
+		this.wake = void 0;
+		wake?.();
+	}
+	[Symbol.dispose]() {
+		if (this.closed) return;
+		this.closed = true;
+		this.values.clear();
+		this.transformIds.clear();
+		this.transforms.length = 0;
+		this.notify();
+		for (const dispose of this.cleanup.splice(0).reverse()) dispose();
+	}
+};
 //#endregion
 //#region lib/types/assistant-stream.js
 /** Process-local assistant state retained for reconnecting Web followers. */
@@ -1286,8 +1714,795 @@ var SessionAssistantStreamAccumulator = class {
 	}
 };
 //#endregion
-//#region lib/types/history.js
-/** Cold Session history pagination and live-event source. */
+//#region lib/types/history/assistant-stream.js
+/** Assistant stream baselines and per-connection subscriptions. */
+/** One accumulator per live Session, shared by every subscription bound to it. */
+var SessionAssistantStreamsListener = class {
+	ctx;
+	streams = /* @__PURE__ */ new Map();
+	/** @param ctx - service context owning the accumulator listeners. */
+	constructor(ctx) {
+		this.ctx = ctx;
+		ctx.on("agent/assistant-stream", ({ agent, frame }) => {
+			let stream = this.streams.get(agent.session.id);
+			if (stream === void 0) {
+				stream = new SessionAssistantStreamAccumulator();
+				this.streams.set(agent.session.id, stream);
+			}
+			stream.accept(frame, agent.session.seq === 0 ? -1 : SessionSeq(agent.session.seq - 1));
+		}, { global: true });
+		ctx.on("agent/disposed", ({ agent }) => {
+			this.streams.delete(agent.session.id);
+		}, { global: true });
+		ctx.effect(() => () => {
+			this.streams.clear();
+		}, "session-controller.assistant-streams");
+	}
+	/**
+	* Bind one connection to a Session assistant stream.
+	* @param sessionId - Session to subscribe.
+	* @param signal - cancellation owned by the caller.
+	* @param queue - caller-owned raw notification buffer.
+	* @returns a listener the caller disposes.
+	*/
+	bind(sessionId, signal, queue) {
+		return new AssistantStreamListener(this.ctx, sessionId, signal, () => {
+			return this.streams.get(sessionId)?.snapshot() ?? { revision: 0 };
+		}, queue);
+	}
+};
+/** Writes assistant notifications into the connection's shared queue. */
+var AssistantStreamListener = class {
+	_snapshot;
+	disposes = [];
+	ordinal = 0;
+	cut = 0;
+	constructor(ctx, sessionId, signal, _snapshot, output) {
+		this._snapshot = _snapshot;
+		signal.throwIfAborted();
+		const input = output.createInput((item) => this.transform(item));
+		try {
+			this.disposes.push(ctx.on("agent/assistant-stream", ({ agent, frame }) => {
+				if (agent.session.id !== sessionId) return;
+				output.capture(() => {
+					const wire = frame.type === "start" ? {
+						...frame,
+						startedAfterSeq: agent.session.seq === 0 ? -1 : SessionSeq(agent.session.seq - 1)
+					} : frame.type === "chunk" ? {
+						...frame,
+						chunk: frame.chunk
+					} : frame;
+					input.append({
+						type: "assistant-stream",
+						session: agent.session,
+						frame: wire,
+						ordinal: ++this.ordinal
+					});
+				});
+			}, { global: true }));
+		} catch (error) {
+			this[Symbol.dispose]();
+			throw error;
+		}
+	}
+	/** @returns the baseline and local arrival cut captured synchronously together. */
+	snapshot() {
+		return {
+			baseline: this._snapshot(),
+			ordinal: this.ordinal
+		};
+	}
+	/** @param ordinal - local snapshot cut set before queue consumption. */
+	setOrdinalCut(ordinal) {
+		this.cut = ordinal;
+	}
+	*transform(item) {
+		if (this.disposes.length === 0 || item.ordinal <= this.cut) return;
+		yield {
+			type: "assistant-stream",
+			frame: item.frame
+		};
+	}
+	[Symbol.dispose]() {
+		for (const dispose of this.disposes.splice(0).reverse()) dispose();
+	}
+};
+//#endregion
+//#region lib/types/history/controller.js
+/** Independent Session snapshots and passive event subscriptions. */
+var __addDisposableResource$4 = function(env, value, async) {
+	if (value !== null && value !== void 0) {
+		if (typeof value !== "object" && typeof value !== "function") throw new TypeError("Object expected.");
+		var dispose, inner;
+		if (async) {
+			if (!Symbol.asyncDispose) throw new TypeError("Symbol.asyncDispose is not defined.");
+			dispose = value[Symbol.asyncDispose];
+		}
+		if (dispose === void 0) {
+			if (!Symbol.dispose) throw new TypeError("Symbol.dispose is not defined.");
+			dispose = value[Symbol.dispose];
+			if (async) inner = dispose;
+		}
+		if (typeof dispose !== "function") throw new TypeError("Object not disposable.");
+		if (inner) dispose = function() {
+			try {
+				inner.call(this);
+			} catch (e) {
+				return Promise.reject(e);
+			}
+		};
+		env.stack.push({
+			value,
+			dispose,
+			async
+		});
+	} else if (async) env.stack.push({ async: true });
+	return value;
+};
+var __disposeResources$4 = (function(SuppressedError) {
+	return function(env) {
+		function fail(e) {
+			env.error = env.hasError ? new SuppressedError(e, env.error, "An error was suppressed during disposal.") : e;
+			env.hasError = true;
+		}
+		var r, s = 0;
+		function next() {
+			while (r = env.stack.pop()) try {
+				if (!r.async && s === 1) return s = 0, env.stack.push(r), Promise.resolve().then(next);
+				if (r.dispose) {
+					var result = r.dispose.call(r.value);
+					if (r.async) return s |= 2, Promise.resolve(result).then(next, function(e) {
+						fail(e);
+						return next();
+					});
+				} else s |= 1;
+			} catch (e) {
+				fail(e);
+			}
+			if (s === 1) return env.hasError ? Promise.reject(env.error) : Promise.resolve();
+			if (env.hasError) throw env.error;
+		}
+		return next();
+	};
+})(typeof SuppressedError === "function" ? SuppressedError : function(error, suppressed, message) {
+	var e = new Error(message);
+	return e.name = "SuppressedError", e.error = error, e.suppressed = suppressed, e;
+});
+/** Session snapshots do not share lifetime with passive subscriptions. */
+var HistoryController = class {
+	ctx;
+	/** Reconnect state for this controller's assistant subscriptions. */
+	streamsListener;
+	/** @param ctx - Host context carrying Session reads and projections. */
+	constructor(ctx) {
+		this.ctx = ctx;
+		this.streamsListener = new SessionAssistantStreamsListener(this.ctx);
+	}
+	/**
+	* Read a passive page of Session events at an exact cut.
+	* @param request - Session identity and optional cut and page window.
+	* @param signal - read cancellation.
+	* @returns a page at the supplied cut, or the observed log end when omitted.
+	*/
+	async events(request, signal) {
+		const spec = resolveHistoryRequest(request);
+		try {
+			return await this.usingObservation({
+				sessionId: addressId(request.address),
+				projection: request.address.kind === "subagent"
+			}, signal, (observation) => {
+				validateObservationAddress(request.address, observation);
+				return history(observation, spec);
+			});
+		} catch (error) {
+			if (remoteErrorOf(error)?.code === "session/not-found") rejectNotFound(request.address);
+			throw error;
+		}
+	}
+	/**
+	* Subscribe to Session events without reading or activating the Session.
+	* @param request - Session address to subscribe.
+	* @param signal - stream cancellation.
+	* @returns subscription readiness followed by event frames; readiness does not establish existence.
+	*/
+	async *observeEvent(request, signal) {
+		const env_1 = {
+			stack: [],
+			error: void 0,
+			hasError: false
+		};
+		try {
+			const listener = __addDisposableResource$4(env_1, new EventListener(this.ctx, addressId(request.address), signal), false);
+			yield { type: "ready" };
+			yield* listener.events();
+		} catch (e_1) {
+			env_1.error = e_1;
+			env_1.hasError = true;
+		} finally {
+			__disposeResources$4(env_1);
+		}
+	}
+	/**
+	* Read exact projections or migration cache hints without activating the Session.
+	* @param request - Session identity whose exact projection baseline is required.
+	* @param signal - read cancellation.
+	* @returns exact sequenced values, migration cache hints, or null when absent.
+	*/
+	async projections(request, signal) {
+		const { sessionId } = request;
+		if (sessionId.length === 0) throw new RemoteError("gateway/bad-request", "sessionId must not be empty", {});
+		try {
+			signal.throwIfAborted();
+			const live = this.ctx.sessions.get(sessionId);
+			if (live !== void 0) {
+				const snapshot = this.ctx.sessionProjections.snapshot(live);
+				return {
+					kind: "sequenced",
+					asOfSeq: snapshot.asOfSeq,
+					values: snapshot.values
+				};
+			} else {
+				const stored = await this.ctx.get("sessionPersistence")?.stat(sessionId, { signal });
+				signal.throwIfAborted();
+				if (stored?.formatStatus === "migration-required") return {
+					kind: "migration-required",
+					values: { ...(this.ctx.get("sessionProjectionCache")?.cachedSnapshot(stored.header))?.values }
+				};
+				return await this.usingObservation({
+					sessionId: request.sessionId,
+					projection: true
+				}, signal, (observation) => ({
+					kind: "sequenced",
+					...projections(observation)
+				}));
+			}
+		} catch (error) {
+			const code = typeof error === "object" && error !== null && "code" in error ? error.code : void 0;
+			if (code === "SESSION_QUERY_SESSION_NOT_FOUND" || code === "session/not-found") return null;
+			if (signal.aborted || code === "SESSION_QUERY_ABORTED") throw new RemoteError("gateway/cancelled", "Session projection read was cancelled", {}, { cause: error });
+			if (remoteErrorOf(error) !== void 0) throw error;
+			throw new RemoteError("gateway/internal", "Session projection read failed", {}, { cause: error });
+		}
+	}
+	/**
+	* Subscribe to projection changes without reading a baseline.
+	* @param request - Session identity to subscribe without reading a baseline.
+	* @param signal - stream cancellation.
+	* @returns readiness followed by one change frame per committed event, listing every key it changed.
+	*/
+	async *observeProjections(request, signal) {
+		const env_2 = {
+			stack: [],
+			error: void 0,
+			hasError: false
+		};
+		try {
+			const listener = __addDisposableResource$4(env_2, new ProjectionListener(this.ctx, request.sessionId, signal), false);
+			yield { type: "ready" };
+			yield* listener.changes();
+		} catch (e_2) {
+			env_2.error = e_2;
+			env_2.hasError = true;
+		} finally {
+			__disposeResources$4(env_2);
+		}
+	}
+	/**
+	* Read bounded committed assistant messages through a stopping cursor.
+	* @param sessionId - Session whose committed assistant messages are requested.
+	* @param afterSeq - exclusive lower bound.
+	* @param throughSeq - inclusive stopping-state cursor.
+	* @param maxMessages - positive assistant record limit.
+	* @param signal - caller cancellation, independent of a completed wait deadline.
+	* @returns newest-first assistant messages and whether further matching records were omitted.
+	*/
+	async assistantOutput(sessionId, afterSeq, throughSeq, maxMessages, signal) {
+		return this.usingObservation({
+			sessionId,
+			projection: false
+		}, signal, (observation) => {
+			if (throughSeq > observation.cursor) throw new RemoteError("gateway/internal", "Session history no longer covers the wait cursor", {});
+			const records = [];
+			const events = observation.events;
+			for (let index = throughSeq; index > afterSeq; index--) {
+				const event = events[index];
+				if (event.type !== "assistant/message" || !isAppendSurfaceEvent(event)) continue;
+				if (records.length === maxMessages) return {
+					records,
+					truncated: true
+				};
+				records.push(entryFor(event));
+			}
+			return {
+				records,
+				truncated: false
+			};
+		});
+	}
+	async usingObservation({ sessionId, projection }, signal, callback) {
+		const env_3 = {
+			stack: [],
+			error: void 0,
+			hasError: false
+		};
+		try {
+			let observation;
+			try {
+				observation = await this.ctx.sessionQuery.observeSession(sessionId, {
+					signal,
+					projectionMode: projection ? "all" : "none"
+				});
+			} catch (error) {
+				const code = error?.code;
+				if (code === "SESSION_QUERY_SESSION_NOT_FOUND") throw new RemoteError("session/not-found", `session "${sessionId}" not found`, { sessionId });
+				if (code === "SESSION_QUERY_ABORTED") throw new RemoteError("gateway/cancelled", error instanceof Error ? error.message : "Session read was cancelled", {}, { cause: error });
+				throw error;
+			}
+			try {
+				signal.throwIfAborted();
+			} catch (error) {
+				observation[Symbol.dispose]();
+				throw error;
+			}
+			if (callback === void 0) return observation;
+			return await callback(__addDisposableResource$4(env_3, observation, false));
+		} catch (e_3) {
+			env_3.error = e_3;
+			env_3.hasError = true;
+		} finally {
+			__disposeResources$4(env_3);
+		}
+	}
+};
+/**
+* Validate an Address against the exact read used by a Controller.
+* @param address - caller-supplied Session address.
+* @param observation - borrowed read; subagent addresses require projections.
+*/
+function validateObservationAddress(address, observation) {
+	if (observation.header.cwd === void 0) rejectNotFound(address);
+	validateAddress(address, observation.header, observation.inheritedEventCount, observation.projections);
+}
+/**
+* Convert a borrowed observation to one page without acquiring or retaining it.
+* @param observation - exact read cut owned by the caller.
+* @param request - validated page window and optional inclusive cut.
+* @returns a chronological page at the requested cut.
+*/
+function history(observation, request) {
+	const cursor = request.throughSeq === void 0 ? observation.cursor : request.throughSeq === -1 ? -1 : SessionSeq(request.throughSeq);
+	if (cursor > observation.cursor) throw new RemoteError("gateway/bad-request", `session history cut ${String(cursor)} exceeds ${String(observation.cursor)}`, {});
+	const page = paginate(observation.events, request.beforeSeq === void 0 ? void 0 : SessionLogOffset(request.beforeSeq), request.maxMessages, cursor, request.turnWindow);
+	return {
+		cursor,
+		records: pageRecords(page.events),
+		hasMore: page.hasMore
+	};
+}
+/**
+* Convert the projection baseline without acquiring or retaining its observation.
+* @param observation - projected read cut owned by the caller.
+* @returns the exact baseline; missing projection support fails explicitly.
+*/
+function projections(observation) {
+	const snapshot = observation.projections;
+	if (snapshot === void 0) throw new RemoteError("session/projections-unavailable", "Session projections are unavailable", {});
+	return {
+		asOfSeq: snapshot.asOfSeq,
+		values: snapshot.values
+	};
+}
+/**
+* Validate and resolve the history page window.
+* @param request - external history window.
+* @returns the validated request with an explicit message budget.
+*/
+function resolveHistoryRequest(request) {
+	if (request.throughSeq !== void 0 && (!Number.isSafeInteger(request.throughSeq) || request.throughSeq < -1 || Object.is(request.throughSeq, -0))) throw new RemoteError("gateway/bad-request", "throughSeq must be an integer greater than or equal to -1", {});
+	if (request.beforeSeq !== void 0 && (!Number.isSafeInteger(request.beforeSeq) || request.beforeSeq < 0 || Object.is(request.beforeSeq, -0))) throw new RemoteError("gateway/bad-request", "beforeSeq must be a non-negative safe integer", {});
+	validateHistoryWindow(request);
+	return {
+		...request,
+		maxMessages: request.maxMessages ?? 50
+	};
+}
+//#endregion
+//#region lib/types/state/listener.js
+/** Coalesced Session state observations with Host-local revisions. */
+/** Coalesces Session/Agent invalidations with local revisions; pending events are sampled on reads. */
+var StateListener = class {
+	readState;
+	disposes = [];
+	cancellation = new AbortController();
+	signal;
+	revision = 0;
+	resolver = createDeferredSignal();
+	closed = false;
+	/**
+	* @param ctx - lifecycle notification owner.
+	* @param target - Session to observe.
+	* @param signal - caller cancellation.
+	* @param readState - passive complete-state reader.
+	*/
+	constructor(ctx, target, signal, readState) {
+		this.readState = readState;
+		signal.throwIfAborted();
+		this.signal = AbortSignal.any([signal, this.cancellation.signal]);
+		const notify = (id) => {
+			if (id !== target || this.closed) return;
+			this.revision++;
+			const resolver = this.resolver;
+			this.resolver = createDeferredSignal();
+			resolver.resolve();
+		};
+		const close = () => {
+			this[Symbol.dispose]();
+		};
+		signal.addEventListener("abort", close, { once: true });
+		this.disposes.push(() => {
+			signal.removeEventListener("abort", close);
+		});
+		try {
+			this.disposes.push(ctx.on("session/event", (session) => {
+				notify(session.id);
+			}, { global: true }));
+			this.disposes.push(ctx.on("session/created", (session) => {
+				notify(session.id);
+			}, { global: true }));
+			this.disposes.push(ctx.on("session/disposed", (session) => {
+				notify(session.id);
+			}, { global: true }));
+			this.disposes.push(ctx.on("agent/status", ({ agent }) => {
+				notify(agent.id);
+			}, { global: true }));
+			this.disposes.push(ctx.on("agent/created", ({ agent }) => {
+				notify(agent.id);
+			}, { global: true }));
+			this.disposes.push(ctx.on("agent/disposed", ({ agent }) => {
+				notify(agent.id);
+			}, { global: true }));
+			const dispose = ctx.effect(() => close, "session-controller.state-listener");
+			this.disposes.push(() => {
+				dispose();
+			});
+		} catch (error) {
+			this[Symbol.dispose]();
+			throw error;
+		}
+	}
+	/**
+	* Check whether a completed read still represents the latest invalidation.
+	* @param revision - revision captured with a completed read.
+	* @returns whether no intervening invalidation occurred.
+	*/
+	isCurrent(revision) {
+		return !this.closed && revision === this.revision;
+	}
+	/**
+	* Read coalesced state replacements with optional periodic refresh.
+	* @param refreshMs - optional idle recheck interval; omitted for event-only observation.
+	* @returns complete state replacements with internal consistency revisions.
+	*/
+	async *observeStates(refreshMs) {
+		let lastRevision = -1;
+		try {
+			while (!this.closed) {
+				if (lastRevision === this.revision) if (refreshMs === void 0) await this.resolver.promise;
+				else {
+					let timer;
+					try {
+						await Promise.race([this.resolver.promise, new Promise((resolve) => {
+							timer = setTimeout(resolve, refreshMs);
+						})]);
+					} finally {
+						clearTimeout(timer);
+					}
+					if (this.isCurrent(lastRevision)) {
+						this.revision++;
+						const resolver = this.resolver;
+						this.resolver = createDeferredSignal();
+						resolver.resolve();
+					}
+				}
+				if (!this.isCurrent(this.revision)) return;
+				lastRevision = this.revision;
+				const state = await this.readState(this.signal);
+				if (this.isCurrent(lastRevision)) yield {
+					state,
+					revision: lastRevision
+				};
+			}
+		} finally {
+			this[Symbol.dispose]();
+		}
+	}
+	[Symbol.dispose]() {
+		if (this.closed) return;
+		this.closed = true;
+		this.cancellation.abort();
+		this.resolver.resolve();
+		for (const dispose of this.disposes.splice(0).reverse()) dispose();
+	}
+};
+function createDeferredSignal() {
+	let resolve;
+	return {
+		promise: new Promise((settle) => {
+			resolve = settle;
+		}),
+		resolve
+	};
+}
+//#endregion
+//#region lib/types/state/controller.js
+/** Passive Session state, coalesced observations and quiescence waits. */
+var __addDisposableResource$3 = function(env, value, async) {
+	if (value !== null && value !== void 0) {
+		if (typeof value !== "object" && typeof value !== "function") throw new TypeError("Object expected.");
+		var dispose, inner;
+		if (async) {
+			if (!Symbol.asyncDispose) throw new TypeError("Symbol.asyncDispose is not defined.");
+			dispose = value[Symbol.asyncDispose];
+		}
+		if (dispose === void 0) {
+			if (!Symbol.dispose) throw new TypeError("Symbol.dispose is not defined.");
+			dispose = value[Symbol.dispose];
+			if (async) inner = dispose;
+		}
+		if (typeof dispose !== "function") throw new TypeError("Object not disposable.");
+		if (inner) dispose = function() {
+			try {
+				inner.call(this);
+			} catch (e) {
+				return Promise.reject(e);
+			}
+		};
+		env.stack.push({
+			value,
+			dispose,
+			async
+		});
+	} else if (async) env.stack.push({ async: true });
+	return value;
+};
+var __disposeResources$3 = (function(SuppressedError) {
+	return function(env) {
+		function fail(e) {
+			env.error = env.hasError ? new SuppressedError(e, env.error, "An error was suppressed during disposal.") : e;
+			env.hasError = true;
+		}
+		var r, s = 0;
+		function next() {
+			while (r = env.stack.pop()) try {
+				if (!r.async && s === 1) return s = 0, env.stack.push(r), Promise.resolve().then(next);
+				if (r.dispose) {
+					var result = r.dispose.call(r.value);
+					if (r.async) return s |= 2, Promise.resolve(result).then(next, function(e) {
+						fail(e);
+						return next();
+					});
+				} else s |= 1;
+			} catch (e) {
+				fail(e);
+			}
+			if (s === 1) return env.hasError ? Promise.reject(env.error) : Promise.resolve();
+			if (env.hasError) throw env.error;
+		}
+		return next();
+	};
+})(typeof SuppressedError === "function" ? SuppressedError : function(error, suppressed, message) {
+	var e = new Error(message);
+	return e.name = "SuppressedError", e.error = error, e.suppressed = suppressed, e;
+});
+const DEFAULT_WAIT_TIMEOUT_MS = 3e4;
+/** Reads and waits without activating or cancelling Session execution. */
+var StateController = class {
+	ctx;
+	historyController;
+	/**
+	* @param ctx - live Session and pending Remote event services.
+	* @param historyController - passive read entry used for cold state and its bounded output.
+	*/
+	constructor(ctx, historyController) {
+		this.ctx = ctx;
+		this.historyController = historyController;
+	}
+	/**
+	* Read passive execution and pending-input state.
+	* @param request - Session identity.
+	* @param signal - read cancellation.
+	* @returns current passive state.
+	*/
+	async state(request, signal) {
+		return this.readState(request.sessionId, signal);
+	}
+	/**
+	* Observe complete passive state replacements.
+	* @param request - Session identity.
+	* @param signal - observation cancellation.
+	* @returns complete state replacements, starting with the current state.
+	*/
+	async *observeState(request, signal) {
+		const env_1 = {
+			stack: [],
+			error: void 0,
+			hasError: false
+		};
+		try {
+			const listener = __addDisposableResource$3(env_1, this.listen(request.sessionId, signal), false);
+			for await (const { state } of listener.observeStates()) yield state;
+		} catch (e_1) {
+			env_1.error = e_1;
+			env_1.hasError = true;
+		} finally {
+			__disposeResources$3(env_1);
+		}
+	}
+	/**
+	* Wait for quiescence, pending input, or the deadline without cancelling execution.
+	* @param request - Session identity, timeout and assistant output window.
+	* @param signal - cancellation of this wait only, never of Agent execution.
+	* @returns the stopping reason and last complete state; no state before timeout is an error.
+	*/
+	async wait(request, signal) {
+		const env_2 = {
+			stack: [],
+			error: void 0,
+			hasError: false
+		};
+		try {
+			const timeoutMs = request.timeoutMs ?? DEFAULT_WAIT_TIMEOUT_MS;
+			const afterSeq = request.afterSeq ?? -1;
+			const maxMessages = request.maxMessages ?? 50;
+			if (!Number.isSafeInteger(afterSeq) || afterSeq < -1 || Object.is(afterSeq, -0)) throw new RemoteError("gateway/bad-request", "afterSeq must be an integer greater than or equal to -1", {});
+			if (!Number.isSafeInteger(maxMessages) || maxMessages <= 0) throw new RemoteError("gateway/bad-request", "maxMessages must be a positive safe integer", {});
+			if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > MAX_TIMER_DELAY_MS) throw new RemoteError("gateway/bad-request", "timeoutMs must be a positive supported timer delay", {});
+			const timer = __addDisposableResource$3(env_2, deadline(signal, timeoutMs, "session/wait-timeout"), false);
+			const listener = __addDisposableResource$3(env_2, this.listen(request.sessionId, timer.signal), false);
+			const sessionId = request.sessionId;
+			const statesGenerator = listener.observeStates(1e3);
+			let nextStatePromise = statesGenerator.next();
+			let currentState;
+			let reason = "timeout";
+			try {
+				for (;;) {
+					const observedState = await nextStatePromise;
+					if (observedState.done) {
+						timer.signal.throwIfAborted();
+						throw new RemoteError("session/observation-ended", "Session observation ended before a stopping state", {});
+					}
+					nextStatePromise = statesGenerator.next();
+					nextStatePromise.catch(() => void 0);
+					if (!listener.isCurrent(observedState.value.revision)) continue;
+					currentState = observedState.value.state;
+					const action = computeWaitAction(currentState);
+					if (action === "continue") continue;
+					if (action === "input-required" || action === "idle") {
+						reason = action;
+						break;
+					}
+					const agent = this.ctx.agents.get(sessionId);
+					if (agent === void 0 || this.ctx.sessions.get(sessionId) !== agent.session) continue;
+					if (await waitForIdleOrStateChange(agent, nextStatePromise) === "state-changed") continue;
+					if (!listener.isCurrent(observedState.value.revision) || this.ctx.agents.get(sessionId) !== agent || this.ctx.sessions.get(sessionId) !== agent.session) continue;
+					reason = "idle";
+					break;
+				}
+			} catch (error) {
+				if (signal.aborted) throw signal.reason;
+				if (!expired(timer.signal, error)) throw error;
+			} finally {
+				listener[Symbol.dispose]();
+				await nextStatePromise.catch(() => void 0);
+				await statesGenerator.return(void 0);
+			}
+			signal.throwIfAborted();
+			if (currentState === void 0) throw new RemoteError("session/wait-timeout", "No Session state arrived before the wait deadline", {});
+			const output = await this.historyController.assistantOutput(sessionId, afterSeq, currentState.cursor, maxMessages, signal);
+			return {
+				reason,
+				state: currentState,
+				output
+			};
+		} catch (e_2) {
+			env_2.error = e_2;
+			env_2.hasError = true;
+		} finally {
+			__disposeResources$3(env_2);
+		}
+	}
+	listen(sessionId, signal) {
+		return new StateListener(this.ctx, sessionId, signal, (readSignal) => this.readState(sessionId, readSignal));
+	}
+	/**
+	* @param sessionId - Session to sample.
+	* @param signal - read cancellation.
+	* @param retried - whether a live source already redirected this read once.
+	* @returns one passive state sample.
+	*/
+	async readState(sessionId, signal, retried = false) {
+		signal.throwIfAborted();
+		const agent = this.ctx.agents.get(sessionId);
+		if (agent !== void 0) {
+			if (agent.session.header.cwd === void 0) rejectNotFound({
+				kind: "session",
+				sessionId
+			});
+			return {
+				cursor: agent.session.seq - 1,
+				active: true,
+				running: agent.status === "running",
+				queue: queueItems(agent),
+				pendingInput: this.pendingInput(agent.session.id)
+			};
+		}
+		const state = await this.historyController.usingObservation({
+			sessionId,
+			projection: false
+		}, signal, (observation) => {
+			if (!retried && observation.source === "live") return void 0;
+			if (observation.header.cwd === void 0) rejectNotFound({
+				kind: "session",
+				sessionId
+			});
+			return {
+				cursor: observation.cursor,
+				active: false,
+				running: false,
+				queue: null,
+				pendingInput: this.pendingInput(observation.header.id)
+			};
+		});
+		signal.throwIfAborted();
+		return state ?? this.readState(sessionId, signal, true);
+	}
+	pendingInput(sessionId) {
+		const kinds = /* @__PURE__ */ new Set();
+		for (const { event, agentId } of this.ctx.typertGateway.getPendingRemoteEvents()) {
+			if (String(agentId) !== sessionId) continue;
+			kinds.add(event === "approval/request" ? "approval" : event === "user-questions/request" ? "question" : "other");
+		}
+		return [...kinds];
+	}
+};
+/**
+* @param signal - wait deadline signal.
+* @param error - failure raised by the in-flight read.
+* @returns whether the deadline expired and cancelled that read.
+*/
+function expired(signal, error) {
+	const reason = timeoutOf(signal, "session/wait-timeout");
+	if (reason === void 0) return false;
+	let current = error;
+	for (let depth = 0; depth < 4 && current instanceof Error; depth++) {
+		if (current === reason || current.cause === reason) return true;
+		current = current.cause;
+	}
+	return error === reason;
+}
+/** Choose the next wait action; check-idle requires the caller's whenIdle and identity checks. */
+function computeWaitAction(state) {
+	if (state.pendingInput.length > 0) return "input-required";
+	if (state.running) return "continue";
+	if (!state.active) return "idle";
+	return "check-idle";
+}
+/** Wait for either driver quiescence or the already-armed next state; preserve rejections from both. */
+function waitForIdleOrStateChange(agent, nextStatePromise) {
+	return Promise.race([agent.whenIdle().then(() => "idle"), nextStatePromise.then(() => "state-changed")]);
+}
+function queueItems(agent) {
+	const item = (message, placement) => ({
+		id: message.id,
+		placement,
+		...message.source.kind === "user" && "rpcId" in message.source ? { rpcId: message.source.rpcId } : {},
+		content: message.content
+	});
+	return [...agent.inbox.nextTurn.map((message) => item(message, "queued")), ...agent.inbox.nextStep.map((message) => item(message, message.source.kind === "user" ? "steering" : "context"))];
+}
+//#endregion
+//#region lib/types/web/controller.js
+/** Web opening aggregation over one observation and a shared transforming buffer. */
 var __addDisposableResource$2 = function(env, value, async) {
 	if (value !== null && value !== void 0) {
 		if (typeof value !== "object" && typeof value !== "function") throw new TypeError("Object expected.");
@@ -1346,65 +2561,75 @@ var __disposeResources$2 = (function(SuppressedError) {
 	var e = new Error(message);
 	return e.name = "SuppressedError", e.error = error, e.suppressed = suppressed, e;
 });
-const DEFAULT_MAX_MESSAGES = 50;
-const MESSAGE_TYPES$1 = new Set(["user/message", "assistant/message"]);
-/** Implements cold-safe history operations delegated by the Session Controller. */
-var SessionHistoryController = class {
+/** Combines opening data and consumes transformed listener output from one queue. */
+var WebController = class {
 	ctx;
+	historyController;
 	promote;
-	closeFollowers = /* @__PURE__ */ new Set();
-	assistantStreams = /* @__PURE__ */ new Map();
 	/**
-	* @param ctx - Host context carrying Session query and projection services.
-	* @param promote - starts ordinary Session activation after snapshot delivery.
+	* @param ctx - Host context carrying Session queries and identity projections.
+	* @param historyController - passive reading and listener construction.
+	* @param promote - background activation requested before an opening snapshot is delivered.
 	*/
-	constructor(ctx, promote) {
+	constructor(ctx, historyController, promote) {
 		this.ctx = ctx;
+		this.historyController = historyController;
 		this.promote = promote;
-		ctx.on("agent/assistant-stream", ({ agent, frame }) => {
-			let stream = this.assistantStreams.get(agent.session.id);
-			if (stream === void 0) {
-				stream = new SessionAssistantStreamAccumulator();
-				this.assistantStreams.set(agent.session.id, stream);
-			}
-			stream.accept(frame, cursorBeforeNext(agent.session.seq));
-		}, { global: true });
-		ctx.on("agent/disposed", ({ agent }) => {
-			this.assistantStreams.delete(agent.session.id);
-		}, { global: true });
-		ctx.effect(() => () => {
-			for (const close of this.closeFollowers) close();
-			this.closeFollowers.clear();
-		}, "session-controller.history");
 	}
 	/**
-	* Read one message-aligned history page without activating an Agent.
-	* @param request - durable address and backwards-page cursor.
-	* @param signal - caller cancellation for persistence reads.
-	* @returns a contiguous event page.
+	* Open a history snapshot and follow uncovered history and assistant notifications.
+	* @param request - Session identity, page budget, assistant output and optional activation (default false).
+	* @param signal - cancellation for opening and streaming.
+	* @returns an opening snapshot followed by uncovered queued increments.
 	*/
-	async page(request, signal) {
+	async *follow(request, signal) {
 		const env_1 = {
 			stack: [],
 			error: void 0,
 			hasError: false
 		};
 		try {
-			validatePageRequest(request);
-			const throughSeq = request.throughSeq === -1 ? -1 : SessionSeq(request.throughSeq);
-			const beforeSeq = request.beforeSeq === void 0 ? void 0 : SessionLogOffset(request.beforeSeq);
-			const source = __addDisposableResource$2(env_1, await this.sourceFor(request.address, signal, false), false);
-			signal.throwIfAborted();
-			const sourceLog = source.events;
-			const sourceCursor = sourceLog.at(-1)?.seq ?? -1;
-			if (throughSeq > sourceCursor) throw new RemoteError("gateway/bad-request", `session page through seq ${String(throughSeq)} is past cursor ${String(sourceCursor)}`, {});
-			/* v8 ignore next -- Session and persistence validation guarantee a dense zero-based event prefix. */
-			if (throughSeq >= 0 && sourceLog[throughSeq]?.seq !== throughSeq) throw new RemoteError("gateway/internal", `session log does not contain through seq ${String(throughSeq)}`, {});
-			const page = paginate(sourceLog, beforeSeq, request.maxMessages ?? DEFAULT_MAX_MESSAGES, throughSeq);
-			return {
-				records: pageRecords(page.events),
-				hasMore: page.hasMore
+			const sessionId = addressId(request.address);
+			const spec = resolveHistoryRequest(request);
+			const queue = __addDisposableResource$2(env_1, new ListenerBuffer(this.ctx, signal), false);
+			const listener = __addDisposableResource$2(env_1, new EventListener(this.ctx, sessionId, signal, queue), false);
+			const streams = this.historyController.streamsListener;
+			const assistantListener = __addDisposableResource$2(env_1, request.assistantStream === true ? streams.bind(sessionId, signal, queue) : void 0, false);
+			const observation = __addDisposableResource$2(env_1, await this.historyController.usingObservation({
+				sessionId,
+				projection: true
+			}, signal).catch((error) => {
+				if (remoteErrorOf(error)?.code === "session/not-found") rejectNotFound(request.address);
+				throw error;
+			}), false);
+			validateObservationAddress(request.address, observation);
+			let opening = {
+				type: "snapshot",
+				header: { ...observation.header },
+				projections: projections(observation),
+				...history(observation, spec)
 			};
+			listener.setCursor(opening.cursor);
+			if (assistantListener !== void 0) {
+				const { baseline: assistantStream, ordinal } = assistantListener.snapshot();
+				opening = {
+					...opening,
+					assistantStream
+				};
+				assistantListener.setOrdinalCut(ordinal);
+			}
+			if (request.activate === true && !signal.aborted && observation.header.origin !== "subagent" && observation.source === "prepared") {
+				const promotion = observation.retain();
+				observation[Symbol.dispose]();
+				try {
+					this.promote(promotion);
+				} catch (error) {
+					promotion[Symbol.dispose]();
+					throw error;
+				}
+			} else observation[Symbol.dispose]();
+			yield opening;
+			yield* queue.items();
 		} catch (e_1) {
 			env_1.error = e_1;
 			env_1.hasError = true;
@@ -1412,251 +2637,7 @@ var SessionHistoryController = class {
 			__disposeResources$2(env_1);
 		}
 	}
-	/**
-	* Follow events appended after an initial cursor on one durable address.
-	* @param request - durable address and last committed sequence already held by the caller.
-	* @param signal - stream cancellation owned by the Remote carrier.
-	* @returns a complete opening snapshot followed by gap-free durable events and opted-in assistant frames.
-	*/
-	async *follow(request, signal) {
-		validateFollowRequest(request);
-		const { address } = request;
-		const target = addressId(address);
-		const buffered = new Deque();
-		let snapshotCursor;
-		let assistantStreamOrdinal = 0;
-		let wake;
-		const notify = () => {
-			const resume = wake;
-			wake = void 0;
-			resume?.();
-		};
-		const follower = { closed: false };
-		const close = () => {
-			follower.closed = true;
-			notify();
-		};
-		this.closeFollowers.add(close);
-		const disposeEvent = this.ctx.on("session/event", (session, event) => {
-			if (session.id !== target) return;
-			buffered.pushBack({
-				type: "event",
-				event
-			});
-			notify();
-		}, { global: true });
-		const disposeCreated = this.ctx.on("session/created", (session) => {
-			if (session.id !== target) return;
-			const suffix = session.snapshotEvents(snapshotCursor === void 0 ? session.firstLiveSeq : SessionLogOffset(snapshotCursor + 1));
-			for (let index = suffix.length - 1; index >= 0; index -= 1) buffered.pushFront({
-				type: "event",
-				event: suffix[index]
-			});
-			notify();
-		}, { global: true });
-		const disposeAssistantStream = request.assistantStream !== true ? void 0 : this.ctx.on("agent/assistant-stream", ({ agent, frame }) => {
-			if (agent.session.id !== target) return;
-			buffered.pushBack({
-				type: "assistant-stream",
-				frame: wireAssistantStreamFrame(frame, cursorBeforeNext(agent.session.seq)),
-				ordinal: ++assistantStreamOrdinal
-			});
-			notify();
-		}, { global: true });
-		const onAbort = () => {
-			notify();
-		};
-		signal.addEventListener("abort", onAbort, { once: true });
-		try {
-			const env_2 = {
-				stack: [],
-				error: void 0,
-				hasError: false
-			};
-			try {
-				const source = __addDisposableResource$2(env_2, await this.sourceFor(address, signal, true), false);
-				const events = source.events;
-				signal.throwIfAborted();
-				const cursor = source.cursor;
-				snapshotCursor = cursor;
-				const page = paginate(events, void 0, request.maxMessages ?? DEFAULT_MAX_MESSAGES);
-				const assistantStream = request.assistantStream === true ? this.assistantStreams.get(target)?.snapshot() ?? { revision: 0 } : void 0;
-				const assistantStreamOrdinalCut = assistantStreamOrdinal;
-				yield {
-					type: "snapshot",
-					header: wireHeader(source.header),
-					cursor,
-					records: pageRecords(page.events),
-					hasMore: page.hasMore,
-					projections: source.projections === void 0 ? {
-						asOfSeq: cursor,
-						values: {}
-					} : projectionBlock(source.projections),
-					...assistantStream === void 0 ? {} : { assistantStream }
-				};
-				if (address.kind === "session" && source.source === "prepared") {
-					const promotion = source.retain();
-					try {
-						this.promote(promotion);
-					} catch (error) {
-						promotion[Symbol.dispose]();
-						throw error;
-					}
-				}
-				let nextOffset = SessionLogOffset(cursor + 1);
-				while (!follower.closed && !signal.aborted) {
-					const item = buffered.popFront();
-					if (item === void 0) {
-						await new Promise((resolve) => {
-							wake = resolve;
-						});
-						continue;
-					}
-					if (item.type === "assistant-stream") {
-						if (item.ordinal > assistantStreamOrdinalCut) yield {
-							type: "assistant-stream",
-							frame: item.frame
-						};
-						continue;
-					}
-					const expectedSeq = SessionSeq(nextOffset);
-					if (item.event.seq < expectedSeq) continue;
-					if (item.event.seq !== expectedSeq) throw new RemoteError("gateway/internal", `session event stream skipped seq ${String(expectedSeq)}`, {});
-					nextOffset = SessionLogOffset(nextOffset + 1);
-					yield entryFor(item.event);
-				}
-			} catch (e_2) {
-				env_2.error = e_2;
-				env_2.hasError = true;
-			} finally {
-				__disposeResources$2(env_2);
-			}
-		} finally {
-			this.closeFollowers.delete(close);
-			signal.removeEventListener("abort", onAbort);
-			disposeCreated();
-			disposeEvent();
-			disposeAssistantStream?.();
-		}
-	}
-	async sourceFor(address, signal, withProjections) {
-		const sessionId = addressId(address);
-		try {
-			const observation = await this.ctx.sessionQuery.observeSession(sessionId, {
-				signal,
-				projectionMode: withProjections || address.kind === "subagent" ? "all" : "none"
-			});
-			if (observation.header.cwd === void 0) {
-				observation[Symbol.dispose]();
-				rejectNotFound(address);
-			}
-			try {
-				validateAddress(address, observation.header, observation.inheritedEventCount, observation.projections);
-			} catch (error) {
-				observation[Symbol.dispose]();
-				throw error;
-			}
-			return observation;
-		} catch (error) {
-			if (error instanceof SessionQueryError && error.code === "SESSION_QUERY_SESSION_NOT_FOUND") rejectNotFound(address);
-			throw error;
-		}
-	}
 };
-function cursorBeforeNext(nextSeq) {
-	return nextSeq === 0 ? -1 : SessionSeq(nextSeq - 1);
-}
-function wireAssistantStreamFrame(frame, durableCursor) {
-	if (frame.type === "start") return {
-		...frame,
-		startedAfterSeq: durableCursor
-	};
-	if (frame.type === "end") return frame;
-	return {
-		...frame,
-		chunk: frame.chunk
-	};
-}
-function projectionBlock(snapshot) {
-	return {
-		asOfSeq: snapshot.asOfSeq,
-		values: snapshot.values
-	};
-}
-function validatePageRequest(request) {
-	if (!Number.isSafeInteger(request.throughSeq) || request.throughSeq < -1 || Object.is(request.throughSeq, -0)) throw new RemoteError("gateway/bad-request", "throughSeq must be an integer greater than or equal to -1", {});
-	if (request.beforeSeq !== void 0 && (!Number.isSafeInteger(request.beforeSeq) || request.beforeSeq < 0 || Object.is(request.beforeSeq, -0))) throw new RemoteError("gateway/bad-request", "beforeSeq must be a non-negative safe integer", {});
-	if (request.maxMessages !== void 0 && (!Number.isSafeInteger(request.maxMessages) || request.maxMessages <= 0)) throw new RemoteError("gateway/bad-request", "maxMessages must be a positive safe integer", {});
-}
-function validateFollowRequest(request) {
-	if (request.maxMessages !== void 0 && (!Number.isSafeInteger(request.maxMessages) || request.maxMessages <= 0)) throw new RemoteError("gateway/bad-request", "maxMessages must be a positive safe integer", {});
-}
-function addressId(address) {
-	return address.kind === "session" ? address.sessionId : address.childSessionId;
-}
-function validateAddress(address, header, inheritedEventCount, projections) {
-	if (address.kind === "session") {
-		if (header.origin === "subagent") throw new RemoteError("session/agent-busy", "subagent Sessions require their durable parent address", { reason: "use subagent delivery for this child session" });
-		return;
-	}
-	if (header.origin !== "subagent" || header.parentSession !== address.parentSessionId) throw new RemoteError("subagent/unauthorized", "subagent does not belong to the supplied parent", { childSessionId: address.childSessionId });
-	const identity = projections?.values.subagent;
-	if (identity === null) throw new RemoteError("subagent/catalog-diagnostic", "subagent descriptor is corrupt", {
-		parentSessionId: address.parentSessionId,
-		childSessionId: address.childSessionId,
-		reason: "corrupt"
-	});
-	if (identity === void 0 || identity.seq < inheritedEventCount) throw new RemoteError("subagent/catalog-diagnostic", "subagent descriptor is unavailable", {
-		parentSessionId: address.parentSessionId,
-		childSessionId: address.childSessionId,
-		reason: "unsupported"
-	});
-	if (identity.mode !== address.mode) throw new RemoteError("subagent/unauthorized", "subagent mode does not match the supplied address", { childSessionId: address.childSessionId });
-}
-function rejectNotFound(address) {
-	if (address.kind === "session") throw new RemoteError("session/not-found", `session "${address.sessionId}" not found`, { sessionId: address.sessionId });
-	throw new RemoteError("subagent/not-found", "subagent is unavailable", {
-		parentSessionId: address.parentSessionId,
-		childSessionId: address.childSessionId
-	});
-}
-function paginate(events, beforeSeq, maxMessages, throughSeq = events.at(-1)?.seq ?? -1) {
-	const end = SessionLogOffset(Math.min(throughSeq + 1, beforeSeq ?? throughSeq + 1));
-	let count = 0;
-	let cut = SessionLogOffset(0);
-	for (let index = end - 1; index >= 0; index--) {
-		const event = events[index];
-		if (!MESSAGE_TYPES$1.has(event.type) || !isAppendSurfaceEvent(event)) continue;
-		count++;
-		const sources = event.sourceEventSeqs;
-		let groupStart = event.seq;
-		if (sources !== void 0) {
-			for (const source of sources) if (source < groupStart) groupStart = source;
-		}
-		if (count >= maxMessages) {
-			cut = SessionLogOffset(groupStart);
-			break;
-		}
-	}
-	return {
-		events: events.slice(cut, end),
-		hasMore: cut > 0
-	};
-}
-/** Translate current logical Session metadata to the browser wire. */
-function wireHeader(header) {
-	return { ...header };
-}
-function entryFor(event) {
-	return {
-		type: "event",
-		event
-	};
-}
-/** Encode one bounded logical page without changing its pagination cut. */
-function pageRecords(events) {
-	return events.map(entryFor);
-}
 //#endregion
 //#region lib/types/file-references.js
 /** Session Controller adapter for Agent-scoped file-reference discovery. */
@@ -1794,10 +2775,22 @@ function truncateUnicodeCodePoints(value, maximum) {
 /** Owns list projection registration, bounded cold summaries, and authorized search. */
 var ApiSessionList = class {
 	ctx;
-	/** @param ctx - Host context carrying Session, query, persistence, and projection services. */
-	constructor(ctx) {
+	workSliceMs;
+	listMetadata;
+	/**
+	* @param ctx - Host context carrying Session, query, persistence, and projection services.
+	* @param workSliceMs - Resolved positive integral list-work budget in milliseconds.
+	*/
+	constructor(ctx, workSliceMs) {
 		this.ctx = ctx;
-		ctx.sessionProjections.register({
+		this.workSliceMs = workSliceMs;
+	}
+	/**
+	* Acquire projection readers before exposing dependent operations.
+	* @returns when all required registrations are ready.
+	*/
+	async initialize() {
+		this.listMetadata = await this.ctx.sessionProjections.register({
 			key: "sessionListMetadata",
 			stateSchema: sessionListMetadataSchema,
 			init: () => ({
@@ -1811,40 +2804,47 @@ var ApiSessionList = class {
 			},
 			stateVersion: 1
 		});
-		ctx.inject(["attachments"], (attachmentCtx) => {
-			ctx.sessionProjections.register({
-				key: "imageLimits",
-				stateSchema: z$1.null(),
-				init: () => null,
-				apply: (state) => state,
-				wire: {
-					viewSchema: imageLimitsSchema,
-					view: () => attachmentCtx.attachments.imageLimits
-				},
-				stateVersion: 1
-			});
+		await this.ctx.sessionProjections.register({
+			key: "imageLimits",
+			stateSchema: z$1.null(),
+			init: () => null,
+			apply: (state) => state,
+			wire: {
+				viewSchema: imageLimitsSchema,
+				view: () => this.ctx.attachments.imageLimits,
+				summary: false
+			},
+			stateVersion: 1
 		});
 	}
 	/**
 	* Build one current attached-Session summary.
+	* Blankness and recency come from the `sessionListMetadata` handle; projection
+	* hints carry every summary key computed through `snapshot`. The first call
+	* for a Session computes these projections over its whole in-memory log, and
+	* later calls advance them incrementally. The handle read and the hint with
+	* the same key come from one cell; the handle read does not depend on any
+	* other unit's view.
 	* @param session - attached Session to summarize.
 	* @returns current list metadata and available projections.
 	*/
 	summaryFor(session) {
+		const metadata = this.listMetadata.stateOf(session);
 		const projections = this.projectionsFor(session.header, session);
-		const metadata = projections?.values.sessionListMetadata;
 		return {
 			sessionId: session.id,
 			updatedAt: updatedAt(session.header, metadata),
+			agentAvailable: this.ctx.agents.get(session.id)?.session === session,
+			formatStatus: "current",
 			running: this.ctx.agents.get(session.id)?.status === "running",
-			blank: metadata?.blank ?? session.seq === 0,
+			blank: metadata.blank,
 			...listFields(session.header),
 			...projections === void 0 ? {} : { projections }
 		};
 	}
 	/**
 	* Read every visible attached and persisted Session without activating an Agent.
-	* @param signal - optional cancellation for persistence reads.
+	* @param signal - optional cancellation for persistence reads and summary generation.
 	* @returns visible Session summaries ordered by activity.
 	*/
 	async list(signal) {
@@ -1853,25 +2853,39 @@ var ApiSessionList = class {
 		signal?.throwIfAborted();
 		const items = [];
 		const cold = [];
+		let yieldDeadline = performance.now() + this.workSliceMs;
 		for (const record of records) {
+			signal?.throwIfAborted();
 			const live = this.ctx.sessions.get(record.header.id);
-			if (live !== void 0) {
-				items.push(this.summaryFor(live));
-				continue;
+			if (live !== void 0) items.push(this.summaryFor(live));
+			else if (record.header.cwd !== void 0) cold.push(record);
+			if (performance.now() >= yieldDeadline) {
+				await scheduler.yield();
+				signal?.throwIfAborted();
+				yieldDeadline = performance.now() + this.workSliceMs;
 			}
-			if (record.header.cwd === void 0) continue;
-			cold.push(record.header);
 		}
-		for (const header of cold) items.push(this.summarizeCold(header));
+		for (const record of cold) {
+			signal?.throwIfAborted();
+			items.push(this.summarizeCold(record));
+			if (performance.now() >= yieldDeadline) {
+				await scheduler.yield();
+				signal?.throwIfAborted();
+				yieldDeadline = performance.now() + this.workSliceMs;
+			}
+		}
+		signal?.throwIfAborted();
 		items.sort((left, right) => right.updatedAt - left.updatedAt);
 		return items;
 	}
-	summarizeCold(header) {
+	summarizeCold({ header, formatStatus }) {
 		const projections = this.projectionsFor(header, void 0);
 		const metadata = projections?.values.sessionListMetadata;
 		return {
 			sessionId: header.id,
 			updatedAt: updatedAt(header, metadata),
+			agentAvailable: false,
+			...formatStatus === void 0 ? {} : { formatStatus },
 			running: false,
 			blank: metadata?.blank ?? false,
 			...listFields(header),
@@ -1968,18 +2982,31 @@ var ApiSessionList = class {
 	}
 	projectionsFor(header, session) {
 		try {
+			const keys = this.ctx.sessionProjections.summaryKeys();
+			if (session !== void 0) return hintsOf("sequenced", this.ctx.sessionProjections.snapshot(session, keys));
 			const cache = this.ctx.get("sessionProjectionCache");
-			const block = session === void 0 ? header.isSeeded ? void 0 : cache?.cachedSnapshot(header, SessionLogOffset(0)) ?? cache?.cachedPredecessorTitle(header, SessionLogOffset(0)) : this.ctx.sessionProjections.cachedSnapshot(session);
-			return block !== void 0 && Object.keys(block.values).length > 0 ? {
-				asOfSeq: block.asOfSeq,
-				values: block.values
-			} : void 0;
+			return hintsOf("cached", cache?.cachedSnapshot(header, keys) ?? cache?.cachedPredecessorTitle(header));
 		} catch (error) {
 			this.ctx.logger.warn(`api-session.list: projection column for "${header.id}" failed; serving the row without it: ${String(error)}`);
 			return;
 		}
 	}
 };
+/**
+* Wrap one summary projection block as Session-list hints of the named sequence space.
+* The block is the summary key set's values, not every value the source holds.
+* @param kind - which sequence space the block's watermark belongs to.
+* @param block - the block, or `undefined` when no source served one.
+* @returns the hints, or `undefined` when the block is absent or carries no value.
+*/
+function hintsOf(kind, block) {
+	if (block === void 0 || Object.keys(block.values).length === 0) return void 0;
+	return {
+		kind,
+		asOfSeq: block.asOfSeq,
+		values: block.values
+	};
+}
 function normalizeSearchQuery(query) {
 	const normalized = query.trim();
 	if (normalized.length === 0) throw new RemoteError("gateway/bad-request", "session search query must not be empty", {});
@@ -1996,129 +3023,6 @@ function listFields(header) {
 		...header.origin === void 0 ? {} : { origin: header.origin },
 		...header.cwd === void 0 ? {} : { cwd: header.cwd }
 	};
-}
-//#endregion
-//#region lib/types/catalog.js
-/** Shared projection of the live LLM registry into the browser model catalog. */
-/**
-* Build the browser model catalog without requiring a Session.
-* @param ctx - Host context carrying the live LLM registry.
-* @param defaultSelection - deployment default used before a Session selects a model.
-* @returns successful non-empty provider groups and isolated provider failures.
-*/
-async function buildModelCatalog(ctx, defaultSelection = ctx.agentDefaultModel.currentSelection()) {
-	const providers = ctx.llm.listProviders();
-	const catalog = await Promise.all(providers.map(async (provider) => {
-		try {
-			const models = await ctx.llm.listModels(provider.id);
-			const entries = await Promise.all(models.map(async (model) => {
-				const resolved = await ctx.llm.resolveModelInfo(provider.id, model.id);
-				const reasoning = resolved.reasoning === void 0 ? void 0 : {
-					efforts: resolved.reasoning.efforts.map((effort) => ({
-						id: effort.id,
-						name: effort.name,
-						...effort.description === void 0 ? {} : { description: effort.description }
-					})),
-					...resolved.reasoning.defaultEffort === void 0 ? {} : { defaultEffort: resolved.reasoning.defaultEffort }
-				};
-				return {
-					id: model.id,
-					name: model.name,
-					...model.description === void 0 ? {} : { description: model.description },
-					...reasoning === void 0 ? {} : { reasoning }
-				};
-			}));
-			return {
-				kind: "group",
-				group: {
-					id: provider.id,
-					name: provider.name,
-					models: entries
-				}
-			};
-		} catch (error) {
-			return {
-				kind: "failure",
-				failure: {
-					id: provider.id,
-					name: provider.name,
-					message: error instanceof Error ? error.message : String(error)
-				}
-			};
-		}
-	}));
-	return {
-		default: { ...defaultSelection },
-		routableProviders: providers.map((provider) => provider.id),
-		groups: catalog.flatMap((item) => item.kind === "group" ? [item.group] : []).filter((group) => group.models.length > 0),
-		failures: catalog.flatMap((item) => item.kind === "failure" ? [item.failure] : [])
-	};
-}
-//#endregion
-//#region lib/types/model-selection-projection.js
-/** Durable model-selection intent and request-use projection. */
-const modelSelectionSchema = z$1.object({
-	provider: z$1.string().min(1),
-	model: z$1.string().min(1),
-	reasoningEffort: z$1.string().min(1).optional()
-});
-const modelSelectionProjectionStateSchema = z$1.object({
-	lastUsed: modelSelectionSchema.nullable(),
-	pending: modelSelectionSchema.nullable()
-});
-const modelSelectionProjectionSchema = z$1.object({
-	lastUsed: modelSelectionSchema.nullable(),
-	next: modelSelectionSchema.nullable()
-});
-/**
-* Advance durable model-selection state by one Session event.
-* @param state - selection state before the event.
-* @param event - next committed Session event.
-* @returns the original or advanced selection state.
-*/
-function applyModelSelectionProjection(state, event) {
-	if (event.type === "model/selection") return sameSelection(state.pending, event.data) ? state : {
-		lastUsed: state.lastUsed,
-		pending: event.data
-	};
-	if (event.type !== "request/header") return state;
-	const lastUsed = {
-		provider: event.data.header.config.provider,
-		model: event.data.header.config.model,
-		...event.data.header.config.reasoningEffort === void 0 ? {} : { reasoningEffort: String(event.data.header.config.reasoningEffort) }
-	};
-	const pending = sameSelection(state.pending, lastUsed) ? null : state.pending;
-	return sameSelection(state.lastUsed, lastUsed) && pending === state.pending ? state : {
-		lastUsed,
-		pending
-	};
-}
-const modelSelectionProjection = {
-	key: "modelSelection",
-	stateSchema: modelSelectionProjectionStateSchema,
-	init: () => ({
-		lastUsed: null,
-		pending: null
-	}),
-	apply: applyModelSelectionProjection,
-	wire: {
-		viewSchema: modelSelectionProjectionSchema,
-		view: (state) => ({
-			lastUsed: state.lastUsed,
-			next: state.pending ?? state.lastUsed
-		})
-	},
-	stateVersion: 2
-};
-function sameSelection(left, right) {
-	return left === right || left !== null && right !== null && left.provider === right.provider && left.model === right.model && left.reasoningEffort === right.reasoningEffort;
-}
-/**
-* Register the durable model-selection projection when the registry is present.
-* @param ctx - Session Controller context.
-*/
-function installModelSelectionProjection(ctx) {
-	ctx.sessionProjections.register(modelSelectionProjection);
 }
 //#endregion
 //#region lib/types/skill-catalog.js
@@ -2249,7 +3153,8 @@ let SessionSkillCatalog = (() => {
 		static inject = [
 			"agents",
 			"sessionQuery",
-			"typert"
+			"typert",
+			"workingDirectory"
 		];
 		/** @param ctx - Host context carrying Session reads and optional skill/preset services. */
 		constructor(ctx) {
@@ -2264,58 +3169,72 @@ let SessionSkillCatalog = (() => {
 		* @throws RemoteError when the Session cannot be inspected or no registry can serve it.
 		*/
 		async list(request, signal) {
-			const { sessionId } = request;
-			let cwd;
-			let agentPreset;
+			const env_1 = {
+				stack: [],
+				error: void 0,
+				hasError: false
+			};
 			try {
-				const env_1 = {
-					stack: [],
-					error: void 0,
-					hasError: false
-				};
+				const { sessionId } = request;
+				let cwd;
+				let agentPreset;
 				try {
-					const observation = __addDisposableResource$1(env_1, await this.ctx.sessionQuery.observeSession(sessionId), false);
-					if (observation.projections === void 0) throw new Error("skill catalog requires a projected Session observation");
-					cwd = observation.header.cwd;
-					agentPreset = observation.projections.values.agentPreset ?? void 0;
-				} catch (e_1) {
-					env_1.error = e_1;
-					env_1.hasError = true;
-				} finally {
-					__disposeResources$1(env_1);
+					const env_2 = {
+						stack: [],
+						error: void 0,
+						hasError: false
+					};
+					try {
+						const observation = __addDisposableResource$1(env_2, await this.ctx.sessionQuery.observeSession(sessionId), false);
+						if (observation.projections === void 0) throw new Error("skill catalog requires a projected Session observation");
+						cwd = observation.projections.values.workingDirectory ?? observation.header.cwd ?? this.ctx.workingDirectory.defaultDirectory;
+						agentPreset = observation.projections.values.agentPreset ?? void 0;
+						const live = this.ctx.agents.get(sessionId);
+						if (live !== void 0) cwd = await this.ctx.workingDirectory.ensure(live, signal);
+					} catch (e_1) {
+						env_2.error = e_1;
+						env_2.hasError = true;
+					} finally {
+						__disposeResources$1(env_2);
+					}
+				} catch (error) {
+					if (error instanceof SessionQueryError && error.code === "SESSION_QUERY_SESSION_NOT_FOUND") throw new RemoteError("session/not-found", `session "${sessionId}" not found`, { sessionId });
+					throw new RemoteError("gateway/internal", `session "${sessionId}" could not be inspected: ${String(error)}`, {});
 				}
-			} catch (error) {
-				if (error instanceof SessionQueryError && error.code === "SESSION_QUERY_SESSION_NOT_FOUND") throw new RemoteError("session/not-found", `session "${sessionId}" not found`, { sessionId });
-				throw new RemoteError("gateway/internal", `session "${sessionId}" could not be inspected: ${String(error)}`, {});
-			}
-			if (cwd === void 0) throw new RemoteError("gateway/internal", `session "${sessionId}" has no project cwd`, {});
-			const live = this.ctx.agents.get(sessionId);
-			const presets = this.ctx.get("agentPresets");
-			const skillRegistry = (live === void 0 ? void 0 : presets?.serviceFor(live, "skills")) ?? this.ctx.get("skills");
-			if (skillRegistry === void 0) throw new RemoteError("gateway/internal", "skill registry is absent: neither this session's agent preset nor the host composition mounts @deepseek-ai/dsh-skill", {});
-			const scope = await this.scopeFor(sessionId, agentPreset);
-			try {
-				return { skills: (await skillRegistry.list({
-					cwd,
-					scope
-				})).filter(isUserInvocable).map((skill) => ({
-					name: skill.name,
-					description: skill.description,
-					...skill.whenToUse === void 0 ? {} : { whenToUse: skill.whenToUse },
-					modelInvocable: skill.invocation.modelInvocable
-				})) };
-			} catch (error) {
-				throw new RemoteError("gateway/internal", `skill listing failed: ${String(error)}`, {});
+				const live = this.ctx.agents.get(sessionId);
+				const presets = this.ctx.get("agentPresets");
+				const skillRegistry = (live === void 0 ? void 0 : presets?.serviceFor(live, "skills")) ?? this.ctx.get("skills");
+				if (skillRegistry === void 0) throw new RemoteError("gateway/internal", "skill registry is absent: neither this session's agent preset nor the host composition mounts @deepseek-ai/dsh-skill", {});
+				const lease = __addDisposableResource$1(env_1, live === void 0 ? await this.scopeFor(agentPreset) : void 0, true);
+				const scope = live ?? lease?.key;
+				try {
+					return { skills: (await skillRegistry.list({
+						cwd,
+						scope
+					})).filter(isUserInvocable).map((skill) => ({
+						name: skill.name,
+						...skill.path === void 0 ? {} : { path: skill.path },
+						description: skill.description,
+						...skill.whenToUse === void 0 ? {} : { whenToUse: skill.whenToUse },
+						modelInvocable: skill.invocation.modelInvocable
+					})) };
+				} catch (error) {
+					throw new RemoteError("gateway/internal", `skill listing failed: ${String(error)}`, {});
+				}
+			} catch (e_2) {
+				env_1.error = e_2;
+				env_1.hasError = true;
+			} finally {
+				const result_1 = __disposeResources$1(env_1);
+				if (result_1) await result_1;
 			}
 		}
 		/** Resolve a live or standing preset scope without creating an Agent. */
-		async scopeFor(sessionId, agentPreset) {
-			const live = this.ctx.agents.get(sessionId);
-			if (live !== void 0) return live;
+		async scopeFor(agentPreset) {
 			const presets = this.ctx.get("agentPresets");
 			if (presets === void 0) return void 0;
 			try {
-				return await presets.standingKeyFor(agentPreset);
+				return await presets.acquireScope(agentPreset);
 			} catch {
 				return;
 			}
@@ -2327,37 +3246,57 @@ let SessionSkillCatalog = (() => {
 /**
 * Authenticated GET/HEAD /api/file reads bounded file responses through
 * the composed filesystem provider. Paths and MIME types do not restrict access;
-* the connection service authenticates requests before this handler.
+* the connection service authenticates requests before this handler. A request
+* without the current `v` version is redirected, uncached, to the versioned URL,
+* whose response is cacheable indefinitely.
 * @module @deepseek-ai/dsh-api-session-controller/media-references
 */
 const BASE_HEADERS = {
-	"Cache-Control": "private, no-store",
 	"X-Content-Type-Options": "nosniff",
 	"Content-Security-Policy": "sandbox; default-src 'none'"
+};
+const NO_STORE = {
+	...BASE_HEADERS,
+	"Cache-Control": "private, no-store"
+};
+const VERSIONED = {
+	...BASE_HEADERS,
+	"Cache-Control": "private, max-age=31536000, immutable"
 };
 async function serveFile(request, fs, maxBytes) {
 	const fail = (status, text) => new Response(request.method === "HEAD" ? null : text, {
 		status,
-		headers: BASE_HEADERS
+		headers: NO_STORE
 	});
-	const path = new URL(request.url).searchParams.get("path");
+	const params = new URL(request.url).searchParams;
+	const path = params.get("path");
 	if (path === null || path.length === 0) return fail(400, "missing path");
 	if (path.includes("\0") || !isAbsolute(path)) return fail(400, "absolute path required");
 	try {
 		const target = await fs.resolve(path, { signal: request.signal });
-		const mediaType = mime.lookup(target.displayPath) || "application/octet-stream";
+		const info = await fs.stat(target, request.signal);
+		if (info === void 0) return fail(404, "not found");
+		if (info.type !== "file") return fail(403, "not a regular file");
+		if (info.size !== void 0 && info.size > maxBytes) return fail(413, "file exceeds byte limit");
+		if (params.get("v") !== info.version) {
+			const location = `?${new URLSearchParams({
+				path,
+				v: info.version
+			}).toString()}`;
+			return new Response(null, {
+				status: 302,
+				headers: {
+					...NO_STORE,
+					Location: location
+				}
+			});
+		}
 		const headers = {
-			...BASE_HEADERS,
-			"Content-Type": mediaType
+			...VERSIONED,
+			"Content-Type": mime.lookup(target.displayPath) || "application/octet-stream"
 		};
 		if (request.method === "HEAD") {
-			const info = await fs.stat(target, request.signal);
-			if (info === void 0) return fail(404, "not found");
-			if (info.type !== "file") return fail(403, "not a regular file");
-			if (info.size !== void 0) {
-				if (info.size > maxBytes) return fail(413, "file exceeds byte limit");
-				headers["Content-Length"] = String(info.size);
-			}
+			if (info.size !== void 0) headers["Content-Length"] = String(info.size);
 			return new Response(null, { headers });
 		}
 		const bytes = await fs.readBytes(target, request.signal, maxBytes);
@@ -2395,6 +3334,61 @@ const SessionMediaReferences = {
 		}), "session-controller: /api/file");
 	}
 };
+//#endregion
+//#region lib/types/archived-session-gate.js
+/**
+* The controller's admission gate for archived Sessions: an archived
+* Session, or a subagent descendant of one, must not run a model step until
+* it is restored. The work a Session still runs is reported and stopped by
+* its owners — the Agent registry (`turn`), the job registry seam (`job`),
+* the Subagent runtime (`subagent`), and the Schedule plugin (`schedule`) —
+* through the Workspace registry's archive-admission events. The Subagent
+* runtime also checks its retained ancestry before each step, so a released
+* intermediate Session cannot hide an archived ancestor.
+*/
+/**
+* The gate as a plugin for `ctx.plugin(...)`: it loads once the Agent
+* registry, Session store, and Workspace registry are available and unwinds
+* with the plugin's fiber. A late waking delivery to an archived Session — a
+* subagent settlement, a queued follow-up — proposes a step the gate rejects,
+* which the loop ends as `blocked` without a request; unarchiving lifts the
+* gate for the whole lineage.
+*/
+const ArchivedSessionGate = {
+	name: "archived-session-gate",
+	inject: [
+		"agents",
+		"sessions",
+		"workspaceRegistry"
+	],
+	apply(ctx) {
+		ctx.on("agent/pre-step", (payload, next) => underArchivedSession(ctx, payload.agent) ? Promise.resolve({ kind: "reject" }) : next());
+	}
+};
+/**
+* Whether the Agent's Session, or a Session above it in its subagent lineage,
+* is archived. This header-only check follows the durable fields through
+* subagent-origin Sessions only: a fork of an archived Session is an
+* independent conversation. The Subagent runtime separately checks managed
+* ancestry when an intermediate Session is unavailable here.
+* @param ctx - Host context.
+* @param agent - the Agent proposing a step.
+* @returns whether an archived Session owns the step.
+*/
+function underArchivedSession(ctx, agent) {
+	const archived = ctx.workspaceRegistry.archivedSessionIds;
+	let header = agent.session.header;
+	const visited = /* @__PURE__ */ new Set();
+	while (!visited.has(header.id)) {
+		if (archived.includes(header.id)) return true;
+		visited.add(header.id);
+		if (header.origin !== "subagent" || header.parentSession === void 0) return false;
+		const parent = ctx.sessions.get(header.parentSession);
+		if (parent === void 0) return archived.includes(header.parentSession);
+		header = parent.header;
+	}
+	return false;
+}
 //#endregion
 //#region lib/types/index.js
 /** Session Remote owner: cold reads, explicit Agent commands, and live control state. */
@@ -2494,6 +3488,29 @@ var __disposeResources = (function(SuppressedError) {
 	var e = new Error(message);
 	return e.name = "SuppressedError", e.error = error, e.suppressed = suppressed, e;
 });
+/**
+* Extract the Session resource from an ID or a history address.
+*
+* Registers as the `session` kind default, so it applies to every Remote method of
+* every namespace: a top-level `sessionId` parameter, otherwise the first object
+* parameter carrying `sessionId` or an `address`. A new request type whose first
+* object parameter has an unrelated `address` field would be read as an address.
+* @param input - validated wire arguments and their ordered parameter descriptions.
+* @returns the named Session identity, otherwise the first object's Session identity or history address.
+* @throws Error when the request object supplies both sessionId and address.
+*/
+function resolveSessionResource({ args, parameters }) {
+	const sessionParameter = parameters.find((parameter) => parameter.name === "sessionId" || parameter.wire === "sessionId");
+	if (sessionParameter !== void 0) return args[sessionParameter.wire];
+	for (const parameter of parameters) {
+		const value = args[parameter.wire];
+		if (typeof value !== "object" || value === null || Array.isArray(value)) continue;
+		const request = value;
+		const address = request.address;
+		if (request.sessionId !== void 0 && address !== void 0) throw new Error("Session resource request must not contain both sessionId and address");
+		return request.sessionId ?? (address === void 0 ? void 0 : address.kind === "session" ? address.sessionId : address.childSessionId);
+	}
+}
 /** Host service backing the generated `ctx.remote.session` namespace. */
 let SessionController = (() => {
 	let _classSuper = TypertRemoteService;
@@ -2502,9 +3519,11 @@ let SessionController = (() => {
 	let _search_decorators;
 	let _create_decorators;
 	let _selectModel_decorators;
+	let _initializeDefaultModel_decorators;
 	let _modelCatalog_decorators;
 	let _canOpenWorkspacePath_decorators;
 	let _openWorkspacePath_decorators;
+	let _workspacePathApplications_decorators;
 	let _rename_decorators;
 	let _fork_decorators;
 	let _prompt_decorators;
@@ -2512,7 +3531,14 @@ let SessionController = (() => {
 	let _updateQueue_decorators;
 	let _cancel_decorators;
 	let _page_decorators;
+	let _events_decorators;
+	let _observeEvent_decorators;
+	let _observeProjections_decorators;
+	let _state_decorators;
+	let _observeState_decorators;
+	let _wait_decorators;
 	let _follow_decorators;
+	let _projections_decorators;
 	let _control_decorators;
 	return class SessionController extends _classSuper {
 		static {
@@ -2521,9 +3547,11 @@ let SessionController = (() => {
 			_search_decorators = [Remote("search")];
 			_create_decorators = [Remote("create")];
 			_selectModel_decorators = [Remote("selectModel")];
+			_initializeDefaultModel_decorators = [Remote];
 			_modelCatalog_decorators = [Remote("modelCatalog")];
 			_canOpenWorkspacePath_decorators = [Remote];
 			_openWorkspacePath_decorators = [Remote("openWorkspacePath")];
+			_workspacePathApplications_decorators = [Remote("workspacePathApplications")];
 			_rename_decorators = [Remote("rename")];
 			_fork_decorators = [Remote("fork")];
 			_prompt_decorators = [Remote("prompt")];
@@ -2531,7 +3559,14 @@ let SessionController = (() => {
 			_updateQueue_decorators = [Remote("updateQueue")];
 			_cancel_decorators = [Remote("cancel")];
 			_page_decorators = [Remote("page")];
+			_events_decorators = [Remote];
+			_observeEvent_decorators = [Remote({ mode: "stream" })];
+			_observeProjections_decorators = [Remote({ mode: "stream" })];
+			_state_decorators = [Remote];
+			_observeState_decorators = [Remote({ mode: "stream" })];
+			_wait_decorators = [Remote];
 			_follow_decorators = [Remote({ mode: "stream" })];
+			_projections_decorators = [Remote("projections")];
 			_control_decorators = [Remote({ mode: "stream" })];
 			__esDecorate(this, null, _list_decorators, {
 				kind: "method",
@@ -2577,6 +3612,17 @@ let SessionController = (() => {
 				},
 				metadata: _metadata
 			}, null, _instanceExtraInitializers);
+			__esDecorate(this, null, _initializeDefaultModel_decorators, {
+				kind: "method",
+				name: "initializeDefaultModel",
+				static: false,
+				private: false,
+				access: {
+					has: (obj) => "initializeDefaultModel" in obj,
+					get: (obj) => obj.initializeDefaultModel
+				},
+				metadata: _metadata
+			}, null, _instanceExtraInitializers);
 			__esDecorate(this, null, _modelCatalog_decorators, {
 				kind: "method",
 				name: "modelCatalog",
@@ -2607,6 +3653,17 @@ let SessionController = (() => {
 				access: {
 					has: (obj) => "openWorkspacePath" in obj,
 					get: (obj) => obj.openWorkspacePath
+				},
+				metadata: _metadata
+			}, null, _instanceExtraInitializers);
+			__esDecorate(this, null, _workspacePathApplications_decorators, {
+				kind: "method",
+				name: "workspacePathApplications",
+				static: false,
+				private: false,
+				access: {
+					has: (obj) => "workspacePathApplications" in obj,
+					get: (obj) => obj.workspacePathApplications
 				},
 				metadata: _metadata
 			}, null, _instanceExtraInitializers);
@@ -2687,6 +3744,72 @@ let SessionController = (() => {
 				},
 				metadata: _metadata
 			}, null, _instanceExtraInitializers);
+			__esDecorate(this, null, _events_decorators, {
+				kind: "method",
+				name: "events",
+				static: false,
+				private: false,
+				access: {
+					has: (obj) => "events" in obj,
+					get: (obj) => obj.events
+				},
+				metadata: _metadata
+			}, null, _instanceExtraInitializers);
+			__esDecorate(this, null, _observeEvent_decorators, {
+				kind: "method",
+				name: "observeEvent",
+				static: false,
+				private: false,
+				access: {
+					has: (obj) => "observeEvent" in obj,
+					get: (obj) => obj.observeEvent
+				},
+				metadata: _metadata
+			}, null, _instanceExtraInitializers);
+			__esDecorate(this, null, _observeProjections_decorators, {
+				kind: "method",
+				name: "observeProjections",
+				static: false,
+				private: false,
+				access: {
+					has: (obj) => "observeProjections" in obj,
+					get: (obj) => obj.observeProjections
+				},
+				metadata: _metadata
+			}, null, _instanceExtraInitializers);
+			__esDecorate(this, null, _state_decorators, {
+				kind: "method",
+				name: "state",
+				static: false,
+				private: false,
+				access: {
+					has: (obj) => "state" in obj,
+					get: (obj) => obj.state
+				},
+				metadata: _metadata
+			}, null, _instanceExtraInitializers);
+			__esDecorate(this, null, _observeState_decorators, {
+				kind: "method",
+				name: "observeState",
+				static: false,
+				private: false,
+				access: {
+					has: (obj) => "observeState" in obj,
+					get: (obj) => obj.observeState
+				},
+				metadata: _metadata
+			}, null, _instanceExtraInitializers);
+			__esDecorate(this, null, _wait_decorators, {
+				kind: "method",
+				name: "wait",
+				static: false,
+				private: false,
+				access: {
+					has: (obj) => "wait" in obj,
+					get: (obj) => obj.wait
+				},
+				metadata: _metadata
+			}, null, _instanceExtraInitializers);
 			__esDecorate(this, null, _follow_decorators, {
 				kind: "method",
 				name: "follow",
@@ -2695,6 +3818,17 @@ let SessionController = (() => {
 				access: {
 					has: (obj) => "follow" in obj,
 					get: (obj) => obj.follow
+				},
+				metadata: _metadata
+			}, null, _instanceExtraInitializers);
+			__esDecorate(this, null, _projections_decorators, {
+				kind: "method",
+				name: "projections",
+				static: false,
+				private: false,
+				access: {
+					has: (obj) => "projections" in obj,
+					get: (obj) => obj.projections
 				},
 				metadata: _metadata
 			}, null, _instanceExtraInitializers);
@@ -2721,32 +3855,53 @@ let SessionController = (() => {
 			"agents",
 			"attachments",
 			"fileUploads",
+			"fs",
 			"llm",
+			"remoteAccess",
 			"sessions",
 			"sessionProjections",
 			"sessionQuery",
 			"typert",
+			"typertGateway",
 			"workspaceRegistry"
 		];
-		static Config = z.object({ nativeOpen: z.boolean() });
-		agents = __runInitializers(this, _instanceExtraInitializers);
+		static Config = z.object({
+			nativeOpen: z.boolean(),
+			listWorkSliceMs: z.natural().min(1).default(16)
+		});
+		historyController = __runInitializers(this, _instanceExtraInitializers);
+		stateController;
+		webController;
+		agents;
 		commands;
 		controlState;
-		history;
 		listState;
 		openPath;
+		fileApplications;
+		openFileApplication;
 		revealPath;
 		canOpenPath;
+		listWorkSliceMs;
 		promotions = /* @__PURE__ */ new Set();
 		/**
 		* @param ctx - Host context containing the Session capability assembly.
-		* @param config - native-opener deployment policy.
+		* @param config - native-opener and list-scheduling deployment policy.
 		* @param internals - host integrations replaceable by direct unit tests.
 		*/
 		constructor(ctx, config, internals = {}) {
 			super(ctx, "sessionController", { namespace: "session" });
-			installModelSelectionProjection(ctx);
+			this.listWorkSliceMs = SessionController.Config(config).listWorkSliceMs;
+			this.fileApplications = internals.fileApplications ?? nativeFileApplications;
+			this.openFileApplication = internals.openFileApplication ?? openNativeFileApplication;
+			this.openPath = internals.openPath ?? openNativeAssociatedPath;
+			this.revealPath = internals.revealPath ?? revealNativePath;
+			this.canOpenPath = internals.canOpenPath ?? (() => config.nativeOpen ?? (internals.openPath !== void 0 || canOpenNativePath()));
+		}
+		async [Service.init]() {
+			const ctx = this.ctx;
+			ctx.typert.resources.register("session", { resolve: resolveSessionResource });
 			this.agents = new ApiSessionAgentController(ctx);
+			this.agents.initialize();
 			this.commands = new SessionCommandController(ctx, this.agents, process.cwd());
 			ctx.effect(() => ctx.fileUploads.registerAgentResolver(async (sessionId) => {
 				const result = await this.agents.resolveAgent(sessionId);
@@ -2757,22 +3912,31 @@ let SessionController = (() => {
 			ctx.effect(() => async () => {
 				await Promise.allSettled([...this.promotions]);
 			}, "session-controller.promotions");
-			this.history = new SessionHistoryController(ctx, (observation) => {
+			this.historyController = new HistoryController(ctx);
+			this.stateController = new StateController(ctx, this.historyController);
+			this.webController = new WebController(ctx, this.historyController, (observation) => {
 				this.promote(observation);
 			});
-			this.listState = new ApiSessionList(ctx);
-			this.openPath = internals.openPath ?? openNativePath;
-			this.revealPath = internals.revealPath ?? revealNativePath;
-			this.canOpenPath = internals.canOpenPath ?? (() => config.nativeOpen ?? (internals.openPath !== void 0 || canOpenNativePath()));
+			this.listState = new ApiSessionList(ctx, this.listWorkSliceMs);
+			await this.commands.initialize();
+			ctx.fiber.assertActive();
+			await this.listState.initialize();
+			ctx.fiber.assertActive();
 			ctx.plugin(SessionFileReferences);
 			ctx.plugin(SessionMediaReferences);
 			ctx.plugin(SessionSkillCatalog);
+			ctx.plugin(ArchivedSessionGate);
 			ctx.on("session/created", (session) => {
 				ctx.emit("api-session/added", this.listState.summaryFor(session));
 			});
 			ctx.on("session/disposed", (session) => {
 				ctx.emit("api-session/removed", session.id);
 			});
+			const publishAgentAvailability = ({ agent }) => {
+				if (ctx.sessions.get(agent.id) === agent.session) ctx.emit("api-session/added", this.listState.summaryFor(agent.session));
+			};
+			ctx.on("agent/created", publishAgentAvailability);
+			ctx.on("agent/disposed", publishAgentAvailability);
 			ctx.on("agent/status", ({ agent, status }) => {
 				ctx.emit("api-session/status", agent.id, status === "running");
 			});
@@ -2780,14 +3944,14 @@ let SessionController = (() => {
 				ctx.emit("api-session/error", agent.id, errorChain(error));
 			});
 			ctx.on("session/event", (session, event) => {
-				if (event.type === "request/header") {
-					const agent = ctx.agents.get(session.id);
-					if (agent?.session === session) this.agents.consumeSelection(agent, event.data.header.config.provider, event.data.header.config.model, event.data.header.config.reasoningEffort);
-				}
 				if (event.type !== "user/message" || event.data.source.kind !== "user") return;
 				ctx.emit("api-session/activity", session.id, event.time);
 			});
 		}
+		/**
+		* Request background activation through the existing Session Agent controller.
+		* @param observation - owned lease disposed by the background task; callers retain their own lease separately.
+		*/
 		promote(observation) {
 			const sessionId = observation.header.id;
 			const task = (async () => {
@@ -2823,53 +3987,66 @@ let SessionController = (() => {
 			return this.agents.resolveAgent(sessionId);
 		}
 		/**
-		* Inspect one attached or persisted Session without activating its Agent.
-		* @param sessionId - durable Session identity.
-		* @param signal - optional caller cancellation for persistence reads.
-		* @returns the current attached state or persisted header and event prefix.
-		*/
-		inspect(sessionId, signal) {
-			const attached = this.ctx.sessions.get(sessionId);
-			if (attached !== void 0) return Promise.resolve({
-				meta: attached.header,
-				inheritedEventCount: attached.inheritedEventCount,
-				events: attached.snapshotEvents()
-			});
-			return inspectApiSession(this.ctx, sessionId, signal);
-		}
-		/**
 		* Read all visible Session rows without resuming an Agent.
 		* @param _request - reserved empty list request.
-		* @param signal - cancellation for persistence reads.
+		* @param signal - cancellation for persistence reads and summary generation.
 		* @returns visible Session summaries ordered by activity.
 		*/
 		async list(_request, signal) {
-			return { items: await this.listState.list(signal) };
+			return { items: (await this.listState.list(signal)).filter((item) => this.ctx.remoteAccess.allows({
+				kind: "session",
+				id: item.sessionId
+			})) };
 		}
 		/**
-		* Search visible Session content without resuming an Agent.
+		* Search visible Session content without resuming an Agent. A non-owner
+		* receives only the hits whose Session `allows()` admits; `hasMore`
+		* describes the bounded result before that filtering.
 		* @param request - literal message-content query.
 		* @param signal - cancellation for list and search reads.
 		* @returns authorized bounded Session search results.
 		*/
-		search(request, signal) {
-			return this.listState.search(request.query, signal);
+		async search(request, signal) {
+			const result = await this.listState.search(request.query, signal);
+			return {
+				...result,
+				items: result.items.filter((item) => this.ctx.remoteAccess.allows({
+					kind: "session",
+					id: item.sessionId
+				}))
+			};
 		}
 		/**
-		* Create or idempotently adopt one ordinary Session.
-		* @param request - requested identity, location, and Agent preset.
-		* @returns the Session identity and resolved preset when configured.
+		* Create one ordinary Session for a new conversation, reusing the named blank Session while it is reusable.
+		* @param request - optional blank Session to reuse, location, and Agent preset.
+		* @returns the created or reused Session identity and its preset when configured.
 		*/
 		create(request) {
 			return this.commands.create(request);
 		}
 		/**
-		* Select one Session-local model after explicitly resuming the Session.
+		* Select one Session-local model after explicitly resuming the Session; save the default in the background.
 		* @param request - Session identity and requested model selection.
-		* @returns the normalized selection installed for the Session.
+		* @returns the normalized selection installed for the Session, without waiting for default persistence.
 		*/
 		selectModel(request) {
 			return this.commands.selectModel(request);
+		}
+		/**
+		* Select the first available account model after login when no provider API key is configured.
+		* @returns after saving the first available model or retaining the existing default.
+		*/
+		async initializeDefaultModel() {
+			const provider = "deepseek-account";
+			if (await hasProviderApiKey(this.ctx)) return;
+			const model = (await buildModelCatalog(this.ctx)).groups.find((group) => group.id === provider)?.models[0];
+			if (model === void 0) throw new RemoteError("session/provider-models-unavailable", `provider "${provider}" has no available models`, { provider });
+			const selection = {
+				provider,
+				model: model.id,
+				...model.reasoning?.defaultEffort === void 0 ? {} : { reasoningEffort: ReasoningEffortId(model.reasoning.defaultEffort) }
+			};
+			await this.ctx.agentDefaultModel.saveSelection(selection);
 		}
 		/**
 		* Describe every currently routable model for Host-generation selectors.
@@ -2898,23 +4075,52 @@ let SessionController = (() => {
 			};
 		}
 		/**
-		* Open one path prepared by a Session-aware caller on the Host desktop.
+		* Verify one path through the composed filesystem and open it on the Host desktop.
 		* @param request - path after best-effort Session workspace resolution.
 		* @param signal - caller lifetime; abort terminates the native command.
 		* @returns confirmation after the native opener accepts the path.
-		* @throws RemoteError when the request is invalid, cancelled, or the opener fails.
+		* @throws RemoteError when the request is invalid, has no verified Host mapping, is cancelled, or the opener fails.
 		*/
 		async openWorkspacePath(request, signal) {
-			if (request.path.length === 0) throw new RemoteError("gateway/bad-request", "session.openWorkspacePath requires a non-empty path", {});
-			signal.throwIfAborted();
 			try {
-				if (request.action === "reveal") await this.revealPath(request.path, signal);
-				else await this.openPath(request.path, signal);
+				const path = await this.verifyDesktopPath(request.path, signal);
+				if (request.action === "reveal") await this.revealPath(path, signal);
+				else if (request.application !== void 0) await this.openFileApplication(path, request.application, signal);
+				else await this.openPath(path, signal);
 				return { opened: true };
 			} catch (error) {
 				if (signal.aborted) throw new RemoteError("gateway/cancelled", "path open was aborted", {});
-				throw new RemoteError("gateway/internal", `path open failed: ${error instanceof Error ? error.message : String(error)}`, {});
+				if (error instanceof RemoteError) throw error;
+				throw new RemoteError("gateway/internal", "path open failed", {}, { cause: error });
 			}
+		}
+		/**
+		* Query current file handlers on the serving desktop without activating an Agent.
+		* @param request - file path in Host filesystem syntax.
+		* @param signal - caller lifetime, propagated to filesystem and desktop queries.
+		* @returns OS application names, icons, and default selection; empty when desktop opening is unavailable.
+		* @throws RemoteError when the path is invalid, the query is cancelled, or native discovery fails.
+		*/
+		async workspacePathApplications(request, signal) {
+			if (!this.canOpenPath()) return [];
+			try {
+				const path = await this.verifyDesktopPath(request.path, signal);
+				return await this.fileApplications(path, signal);
+			} catch (error) {
+				if (signal.aborted) throw new RemoteError("gateway/cancelled", "application query was aborted", {});
+				if (error instanceof RemoteError) throw error;
+				throw new RemoteError("gateway/internal", "file application query failed", {}, { cause: error });
+			}
+		}
+		async verifyDesktopPath(path, signal) {
+			if (path.length === 0) throw new RemoteError("gateway/bad-request", "A non-empty file path is required", {});
+			signal.throwIfAborted();
+			const hostPath = resolve(path);
+			const { fs } = this.ctx;
+			const mapped = fs.processPathFromHostPath(hostPath);
+			if (mapped === void 0 || fs.processPath(await fs.resolve(mapped, { signal })) !== hostPath) throw new RemoteError("gateway/bad-request", "Path has no verified Host path", {});
+			signal.throwIfAborted();
+			return hostPath;
 		}
 		/**
 		* Rename one Session after explicitly resuming it.
@@ -2925,11 +4131,16 @@ let SessionController = (() => {
 			return this.commands.rename(request);
 		}
 		/**
-		* Fork one cold-readable completed-turn prefix into a new Session.
-		* @param request - source Session and optional event anchor.
+		* Fork one cold-readable exact event prefix into a new Session. An omitted
+		* boundary selects the latest completed-turn prefix; an open cut receives
+		* synthetic fork closers.
+		* @param request - source Session, optional exact inclusive event boundary, and migration preflight choice.
 		* @returns the new Session identity.
 		*/
-		fork(request) {
+		async fork(request) {
+			if (request.allowMigration === false && this.ctx.sessions.get(request.sessionId) === void 0) {
+				if ((await this.ctx.get("sessionPersistence")?.stat(request.sessionId))?.formatStatus === "migration-required" && this.ctx.sessions.get(request.sessionId) === void 0) throw new RemoteError("session/migration-required", "Open the source Session to complete migration before forking", { sessionId: request.sessionId });
+			}
 			return this.commands.fork(request);
 		}
 		/**
@@ -2938,20 +4149,30 @@ let SessionController = (() => {
 		* @param signal - caller cancellation before prompt admission begins.
 		* @returns acknowledgement that the Agent accepted the prompt.
 		*/
-		prompt(request, signal) {
+		async prompt(request, signal) {
 			signal.throwIfAborted();
-			return this.commands.prompt(request);
+			if (request.content.length > 0 && !hasPromptContent(request.content)) throw new RemoteError("gateway/bad-request", "prompt content must include non-whitespace text or an attachment", {});
+			const clientTimeZone = request.clientTimeZone === void 0 ? void 0 : canonicalClientTimeZone(request.clientTimeZone);
+			if (request.clientTimeZone !== void 0 && clientTimeZone === void 0) throw new RemoteError("session/invalid-time-zone", "clientTimeZone must be UTC or a valid IANA Area/Location name", { value: request.clientTimeZone });
+			const principal = principalOf(this.ctx.invocation);
+			const source = {
+				kind: request.content.length === 0 ? "retry" : "user",
+				rpcId: request.requestId,
+				...clientTimeZone === void 0 ? {} : { clientTimeZone },
+				...principal === void 0 ? {} : { principal }
+			};
+			return this.commands.prompt(request, source);
 		}
 		/**
-		* Read one image proven reachable from the addressed Session log.
-		* @param request - Session and attachment identities used for authorization.
+		* Read one image from the attachment store after gateway authorization.
+		* @param request - image reference and gateway permission scope; Session existence is not checked.
 		* @returns the durable attachment reference and base64-encoded bytes.
 		*/
 		attachment(request) {
 			return this.commands.attachment(request);
 		}
 		/**
-		* Mutate one still-pending queue occurrence on a live Agent.
+		* Mutate one still-pending queue occurrence, resuming a cold Agent first.
 		* @param request - Session, queue item, and requested mutation.
 		* @returns acknowledgement that the queue mutation was applied.
 		*/
@@ -2968,12 +4189,67 @@ let SessionController = (() => {
 		}
 		/**
 		* Read one cold-safe, message-aligned Session history page.
-		* @param request - durable address, backward cursor, and page budget.
+		* @deprecated Use `events`; this entry point remains for existing Web callers.
+		* @param request - durable address, optional fixed cut, backward cursor, and page budget.
 		* @param signal - cancellation for persistence reads.
-		* @returns one chronological page.
+		* @returns one chronological page with its inclusive cursor; an omitted `throughSeq` selects the observed log end.
 		*/
 		page(request, signal) {
-			return this.history.page(request, signal);
+			return this.historyController.events(request, signal);
+		}
+		/**
+		* Read one cold-safe, message-aligned Session history page.
+		* @param request - durable address, optional fixed cut, backward cursor, and page budget.
+		* @param signal - cancellation for persistence reads.
+		* @returns one chronological page with its inclusive cursor.
+		*/
+		events(request, signal) {
+			return this.historyController.events(request, signal);
+		}
+		/**
+		* Subscribe to Session events without reading a snapshot.
+		* @param request - Session address.
+		* @param signal - subscription cancellation.
+		* @returns readiness and subsequent events, without a snapshot.
+		*/
+		observeEvent(request, signal) {
+			return this.historyController.observeEvent(request, signal);
+		}
+		/**
+		* Subscribe to Session projection changes.
+		* @param request - target Session.
+		* @param signal - subscription cancellation.
+		* @returns readiness followed by one projection change frame per committed event.
+		*/
+		observeProjections(request, signal) {
+			return this.historyController.observeProjections(request, signal);
+		}
+		/**
+		* Read passive Session state.
+		* @param request - target Session.
+		* @param signal - read cancellation.
+		* @returns current passive state.
+		*/
+		state(request, signal) {
+			return this.stateController.state(request, signal);
+		}
+		/**
+		* Subscribe to complete Session state replacements.
+		* @param request - target Session.
+		* @param signal - subscription cancellation.
+		* @returns complete passive state replacements.
+		*/
+		observeState(request, signal) {
+			return this.stateController.observeState(request, signal);
+		}
+		/**
+		* Wait for Session quiescence or pending input with bounded assistant output.
+		* @param request - Session, wait bounds and output window.
+		* @param signal - caller cancellation.
+		* @returns stopping state and bounded assistant output.
+		*/
+		wait(request, signal) {
+			return this.stateController.wait(request, signal);
 		}
 		/**
 		* Follow one Session log from its opening or resume cursor.
@@ -2983,17 +4259,49 @@ let SessionController = (() => {
 		*   frames and optional cursorless assistant-stream frames.
 		*/
 		follow(request, signal) {
-			return this.history.follow(request, signal);
+			return this.webController.follow(request, signal);
+		}
+		/**
+		* Read exact projections, returning cached hints only when migration is required.
+		* @param request - Session whose current values are required.
+		* @param signal - cancellation for the Session read.
+		* @returns a sequenced baseline, cached hints when migration is deferred, or null when absent.
+		*/
+		projections(request, signal) {
+			return this.historyController.projections(request, signal);
 		}
 		/**
 		* Stream a complete live-control baseline followed by replacement frames.
 		* @param signal - cancellation owned by the Remote stream carrier.
 		* @returns one complete baseline followed by live replacement frames.
 		*/
-		control(signal) {
-			return this.controlState.control(signal);
+		async *control(signal) {
+			for await (const frame of this.controlState.control(signal)) switch (frame.type) {
+				case "baseline": {
+					const projections = Object.fromEntries(Object.entries(frame.value.projections).filter(([sessionId]) => this.ctx.remoteAccess.allows({
+						kind: "session",
+						id: sessionId
+					})));
+					yield {
+						type: "baseline",
+						value: {
+							...frame.value,
+							projections
+						}
+					};
+					break;
+				}
+				case "projection":
+					if (this.ctx.remoteAccess.allows({
+						kind: "session",
+						id: frame.sessionId
+					})) yield frame;
+					break;
+				/* v8 ignore next -- closed control-frame union. */
+				default: assertNever(frame);
+			}
 		}
 	};
 })();
 //#endregion
-export { ApiSessionNotFound, SessionController, SessionController as default, SessionFileReferences, SessionSkillCatalog, buildModelCatalog };
+export { ApiSessionNotFound, SessionController, SessionController as default, SessionFileReferences, SessionSkillCatalog };

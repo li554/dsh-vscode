@@ -105,12 +105,6 @@ export declare function projectRemoteEventRejection(reason: unknown): RemoteEven
  */
 export declare function restoreRemoteEventRejection(rejection: RemoteEventRejection): Error;
 /**
- * Test whether a value crosses JSON transport without coercion or omission.
- * @param value - candidate boundary value.
- * @returns whether the value is losslessly JSON-compatible.
- */
-export declare function isRemoteJsonValue(value: unknown): boolean;
-/**
  * Recognize a non-empty Remote Event correlation id at a wire boundary.
  * @param value - untrusted wire value.
  * @returns whether the value is a valid Remote Event id.
@@ -128,12 +122,19 @@ export declare function isRemoteEventClientId(value: unknown): value is RemoteEv
  * @returns whether the value is a non-empty Agent identity.
  */
 export declare function isRemoteEventAgentId(value: unknown): value is RemoteEventAgentId;
-/** One logical stream request sent from the browser. */
+/** One logical stream request sent from the browser: open, one uplink item, uplink half-close, or cancel. */
 export type RemoteStreamClientMessage = {
     readonly type: 'open';
     readonly streamId: string;
     readonly endpoint: string;
     readonly payload: unknown;
+} | {
+    readonly type: 'item';
+    readonly streamId: string;
+    readonly value?: unknown;
+} | {
+    readonly type: 'end';
+    readonly streamId: string;
 } | {
     readonly type: 'cancel';
     readonly streamId: string;

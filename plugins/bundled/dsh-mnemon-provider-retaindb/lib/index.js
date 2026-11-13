@@ -17,6 +17,17 @@ function insight(value) {
 		...createdAt === void 0 ? {} : { createdAt }
 	};
 }
+/**
+* Whether a request failed because this deployment does not serve the endpoint.
+*
+* RetainDB exposes a current and a legacy surface, and only a missing endpoint
+* may fall through to the legacy one. Everything else - a 5xx, a timeout, or a
+* caller abort - must reach the caller untouched: the timeout in particular is
+* ambiguous, so retrying `remember`'s POST on it can store the memory twice.
+*/
+function isEndpointMissing(error) {
+	return error instanceof Error && /HTTP 404\b/u.test(error.message);
+}
 var RetainDbProvider = class extends HttpMemoryProvider {
 	id = "retaindb";
 	scoreSemantics = NORMALIZED_RELEVANCE_SCORE;
@@ -80,14 +91,20 @@ var RetainDbProvider = class extends HttpMemoryProvider {
 			include_pending: "true"
 		});
 		let payload;
-		try {
-			if (String(connection.userId) === "*") throw new Error("project-wide scope uses the collection endpoint");
+		if (String(connection.userId) === "*") {
+			params.set("limit", String(Math.min(Math.max(request.limit ?? 200, 1), 200)));
+			payload = await this.request(body, `/v1/memories?${params}`, {
+				headers: this.headers(connection, "/v1/memories"),
+				signal
+			});
+		} else try {
 			payload = await this.request(body, `/v1/memory/profile/${encodeURIComponent(String(connection.userId))}?${params}`, {
 				headers: this.headers(connection, "/v1/memory/profile"),
 				signal
 			});
-		} catch {
-			if (String(connection.userId) !== "*") params.set("user_id", String(connection.userId));
+		} catch (error) {
+			if (!isEndpointMissing(error)) throw error;
+			params.set("user_id", String(connection.userId));
 			params.set("limit", String(Math.min(Math.max(request.limit ?? 200, 1), 200)));
 			payload = await this.request(body, `/v1/memories?${params}`, {
 				headers: this.headers(connection, "/v1/memories"),
@@ -114,7 +131,8 @@ var RetainDbProvider = class extends HttpMemoryProvider {
 				json,
 				signal
 			});
-		} catch {
+		} catch (error) {
+			if (!isEndpointMissing(error)) throw error;
 			const { write_mode: _writeMode, ...legacy } = json;
 			payload = await this.request(body, "/v1/memories", {
 				headers: this.headers(connection, "/v1/memories"),
@@ -138,7 +156,8 @@ var RetainDbProvider = class extends HttpMemoryProvider {
 				headers: this.headers(connection, "/v1/memory"),
 				signal
 			});
-		} catch {
+		} catch (error) {
+			if (!isEndpointMissing(error)) throw error;
 			await this.request(body, `/v1/memories/${encodeURIComponent(id)}`, {
 				method: "DELETE",
 				headers: this.headers(connection, "/v1/memories"),
@@ -168,7 +187,7 @@ const definition = defineMemorySpaceProviderDefinition({
 		kind: "provider",
 		typeId: descriptor.id,
 		packageName: "dsh-mnemon-provider-retaindb",
-		version: "0.5.4",
+		version: "0.5.6",
 		label: descriptor.label,
 		icon: descriptor.icon,
 		summary: descriptor.summary,

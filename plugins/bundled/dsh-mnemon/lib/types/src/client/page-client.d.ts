@@ -10,6 +10,8 @@ export declare function MemorySourcePageFrame(props: {
 export declare function createMemorySourcePageClient(management: MnemonSourceManagementClient): {
     canAssist: (operation: string) => boolean;
     assist: <T>(operation: string, input: MemoryJsonValue, confirmed: boolean) => Promise<T>;
-    read: <T>(operation: string, input?: MemoryJsonValue) => Promise<T>;
+    read: <T>(operation: string, input?: MemoryJsonValue, options?: {
+        coalesce?: boolean;
+    }) => Promise<T>;
     mutate: <T>(operation: string, input: MemoryJsonValue, confirmed: true) => Promise<T>;
 };

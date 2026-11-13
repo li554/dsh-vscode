@@ -31,12 +31,19 @@ export declare class SshEngine {
      * @param options - engine knobs (defaults applied).
      */
     constructor(store: HostStore, options?: EngineOptions);
+    /**
+     * Change the pre-ready ceiling (TCP connect + key exchange + user
+     * authentication) for connections opened from now on. A pooled connection
+     * keeps serving until it reconnects, because the ceiling governs the
+     * connect path only.
+     */
+    setConnectTimeout(timeoutMs: number): void;
     /** Secret-free host list (filtered by the optional query). */
     list(query?: string): SshHostSummary[];
     /** One host summary by alias. */
     find(alias: string): SshHostSummary | undefined;
     /** Run one command on `alias` (reusing the pooled connection). */
-    exec(alias: string, command: string, timeoutMs?: number): Promise<ExecResult>;
+    exec(alias: string, command: string, timeoutMs?: number, signal?: AbortSignal): Promise<ExecResult>;
     /** Run one command against many hosts concurrently. */
     cluster(options: {
         command: string;
@@ -45,6 +52,7 @@ export declare class SshEngine {
         tags?: string[];
         timeoutMs?: number;
         maxWorkers?: number;
+        signal?: AbortSignal;
     }): Promise<ClusterResult[]>;
     /** Open a PTY shell session for the web terminal (standalone connection). */
     openShell(alias: string, size: {

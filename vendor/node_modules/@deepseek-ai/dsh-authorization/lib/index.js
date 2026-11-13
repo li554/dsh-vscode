@@ -78,7 +78,7 @@ var AuthorizationService = class extends Service {
 			this.flows.set(flow.key, flow);
 			yield () => {
 				this.flows.delete(flow.key);
-				this.running.get(flow.key)?.controller.abort();
+				this.cancel(flow.key);
 			};
 		}.bind(this), "authorization.registerFlow()");
 		return () => void dispose();
@@ -115,7 +115,8 @@ var AuthorizationService = class extends Service {
 	* @param key - the credential record whose attempt should stop.
 	*/
 	cancel(key) {
-		this.running.get(key)?.controller.abort();
+		const running = this.running.get(key);
+		if (running !== void 0 && !running.committing) running.controller.abort();
 	}
 	/**
 	* Run one attempt to authorize a key, and report how it ended.
@@ -144,10 +145,14 @@ var AuthorizationService = class extends Service {
 		if (request.signal?.aborted === true) return { status: "cancelled" };
 		const controller = new AbortController();
 		const withdraw = () => {
-			controller.abort(request.signal?.reason);
+			const running = this.running.get(key);
+			if (running !== void 0 && !running.committing) controller.abort(request.signal?.reason);
 		};
 		request.signal?.addEventListener("abort", withdraw, { once: true });
-		this.running.set(key, { controller });
+		this.running.set(key, {
+			controller,
+			committing: false
+		});
 		let settlement = "failed";
 		try {
 			const outcome = await this.attempt(flow, method, controller.signal, request.interaction);
@@ -162,14 +167,12 @@ var AuthorizationService = class extends Service {
 	/**
 	* Fan `authorization/settled` out with contained listener failures: every
 	* listener runs, and a sync throw or async rejection is logged without
-	* changing the finished attempt's own outcome — except `INVARIANT`-coded
-	* failures, which rethrow after every listener ran. The attempt is already
+	* changing the finished attempt's own outcome. The attempt is already
 	* over and its key released when this fires, so a broken watcher (that
 	* second browser tab) can never turn the caller's settled result into a
 	* failure of its own.
 	*/
 	settle(key, settlement) {
-		let invariantFailure;
 		const args = [
 			"authorization/settled",
 			key,
@@ -181,13 +184,8 @@ var AuthorizationService = class extends Service {
 				this.warnSettledListenerFailure(key, error);
 			});
 		} catch (error) {
-			if (error?.code === "INVARIANT") {
-				invariantFailure ??= error;
-				continue;
-			}
 			this.warnSettledListenerFailure(key, error);
 		}
-		if (invariantFailure !== void 0) throw invariantFailure;
 	}
 	/** Contained-listener diagnostic shared by the sync and async failure paths. */
 	warnSettledListenerFailure(key, error) {
@@ -212,6 +210,13 @@ var AuthorizationService = class extends Service {
 			const running = flow.run({
 				method,
 				signal,
+				commit: async (record) => {
+					signal.throwIfAborted();
+					const attempt = this.running.get(flow.key);
+					if (attempt === void 0 || attempt.controller.signal !== signal) throw new AuthorizationError("authorization attempt is no longer active", "CANCELLED");
+					attempt.committing = true;
+					await this.ctx.credentials.modifyRecord(flow.key, () => Promise.resolve(record));
+				},
 				notify: (notice) => {
 					try {
 						interaction.notify(notice);

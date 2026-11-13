@@ -1,10 +1,10 @@
 {
     "name": "@liustack/modlens",
-    "version": "3.26.1",
+    "version": "3.27.3",
     "description": "Plug-in vision for text-only LLMs, powered by the free Antigravity CLI",
     "type": "module",
     "bin": {
-        "modlens": "./dist/main.js"
+        "modlens": "dist/main.js"
     },
     "scripts": {
         "dev": "vite build --watch",

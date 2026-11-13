@@ -5891,7 +5891,11 @@ window.__ModuleLoader__.load({
 							engine.actions.setUrl(normalized);
 							engine.actions.setTitle("");
 							engine.actions.clearPicks();
-							ctx.layout.closeDetails();
+							// dsh-vscode: 0.2.2's ILayout no longer exposes closeDetails()
+							// (layout service = panelInfo/selectPanel/beginNavigation/
+							// toggleSidebar/openRightbar/closeRightbar); optional-call so the
+							// dock's preview affordance cannot throw on this runtime.
+							ctx.layout.closeDetails?.();
 							activateConversationTab(document, t("view.tab"));
 						}
 					};

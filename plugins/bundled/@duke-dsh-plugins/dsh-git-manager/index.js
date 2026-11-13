@@ -7,9 +7,14 @@
  * methods to the browser Client half under the `gitManager` Remote namespace.
  *
  * Responsibilities:
- *   - 29 Remote methods (§5 of plan): probe / overview / status / diff / log /
- *     branches / worktrees / conflictContent + all mutations (含 hunkApply 逐块操作、
- *     cherryPick 单提交拣选).
+ *   - 63 Remote methods（30 个 v1 + v2 §2.1/§2.2/§2.3 的 21 个 + P3-A §8.1/§8.3
+ *     的 5 个：rebasePlan/rebaseRun/fixupCommit/rebaseBranch/lineApply，子仓库
+ *     支持的 repoTree（P0 仓库树发现）与 revExists（P1 sha 存在性门控），以及
+ *     子仓库支持 P2 的 submoduleInit/submoduleUpdate/submoduleSync/
+ *     submoduleDeinit/submoduleAdd 五个 submodule 管理方法）：
+ *     probe / overview / status / diff / log / branches / worktrees /
+ *     conflictContent + 全部变更类（含 hunkApply 逐块操作、cherryPick 单提交
+ *     拣选、stageHunk 逐块暂存、lineApply 行级暂存/撤销）。
  *   - Path validation (fs.stat) + envelope wrapping (`{ok, value}` / `{ok, error}`).
  *   - GitError → user-friendly error code mapping (not-a-repo / dubious-ownership
  *     / auth-failed / timeout / too-large / git-missing / git-failed).
@@ -33,6 +38,14 @@ import {
   GitError,
   probeRepo,
   getStatus,
+  listSubRepos,
+  revExists,
+  submoduleInit,
+  submoduleUpdate,
+  submoduleSync,
+  submoduleDeinit,
+  submoduleAdd,
+  safeJoin,
   getBranches,
   getRemotes,
   getLog,
@@ -43,6 +56,7 @@ import {
   unstageFiles,
   discardFiles,
   applyHunk,
+  stageHunkFile,
   commitStaged,
   createBranch,
   switchBranch,
@@ -52,6 +66,7 @@ import {
   abortMerge,
   continueMerge,
   cherryPickCommit,
+  revertCommit,
   resolveConflictFile,
   fetchRemote,
   pullBranch,
@@ -60,6 +75,30 @@ import {
   removeWorktree,
   pruneWorktrees,
   initRepo,
+  getStashes,
+  stashPush,
+  stashPop,
+  stashApply,
+  stashDrop,
+  stashClear,
+  getTags,
+  createTag,
+  deleteTag,
+  resetRepo,
+  getBlame,
+  getDiffRange,
+  getReflog,
+  addRemote,
+  removeRemote,
+  renameRemote,
+  getConfig,
+  setConfig,
+  unsetConfig,
+  rebasePlan,
+  rebaseRun,
+  fixupCommit,
+  rebaseBranch,
+  applyLine,
 } from "./git-core.mjs";
 import { computeGraph } from "./git-graph.mjs";
 
@@ -170,6 +209,48 @@ export class GitManagerService extends TypertRemoteService {
     markRemoteMethod(this, "worktreeRemove", "worktreeRemove");
     markRemoteMethod(this, "worktreePrune", "worktreePrune");
     markRemoteMethod(this, "init", "init");
+    // v2 §2.1 stageHunk + §2.2 P1
+    markRemoteMethod(this, "stageHunk", "stageHunk");
+    markRemoteMethod(this, "stashList", "stashList");
+    markRemoteMethod(this, "stashPush", "stashPush");
+    markRemoteMethod(this, "stashPop", "stashPop");
+    markRemoteMethod(this, "stashApply", "stashApply");
+    markRemoteMethod(this, "stashDrop", "stashDrop");
+    markRemoteMethod(this, "stashClear", "stashClear");
+    markRemoteMethod(this, "tags", "tags");
+    markRemoteMethod(this, "tagCreate", "tagCreate");
+    markRemoteMethod(this, "tagDelete", "tagDelete");
+    markRemoteMethod(this, "reset", "reset");
+    markRemoteMethod(this, "revert", "revert");
+    markRemoteMethod(this, "blame", "blame");
+    markRemoteMethod(this, "diffRange", "diffRange");
+    markRemoteMethod(this, "reflog", "reflog");
+    // v2 §2.3 P2
+    markRemoteMethod(this, "remoteAdd", "remoteAdd");
+    markRemoteMethod(this, "remoteRemove", "remoteRemove");
+    markRemoteMethod(this, "remoteRename", "remoteRename");
+    markRemoteMethod(this, "configList", "configList");
+    markRemoteMethod(this, "configSet", "configSet");
+    markRemoteMethod(this, "configUnset", "configUnset");
+    // P3-A §8.1/§8.3（51 → 56）
+    markRemoteMethod(this, "rebasePlan", "rebasePlan");
+    markRemoteMethod(this, "rebaseRun", "rebaseRun");
+    markRemoteMethod(this, "fixupCommit", "fixupCommit");
+    markRemoteMethod(this, "rebaseBranch", "rebaseBranch");
+    markRemoteMethod(this, "lineApply", "lineApply");
+    // 子仓库支持（2026-10-13 P0）：仓库树发现。必须与 typert.host.js 的
+    // METHODS 数组同名同序（self-test 静态守卫比对两个列表）。
+    markRemoteMethod(this, "repoTree", "repoTree");
+    // 子仓库支持 P1：子仓库历史跳转的可用性门控（sha 是否在该仓库对象库里）
+    markRemoteMethod(this, "revExists", "revExists");
+    // 子仓库支持 P2：submodule 管理五方法（58 → 63）。位置参数是仓库内路径
+    // （subPath，相对 toplevel），不是 .gitmodules 注册名——只有 submoduleAdd 的
+    // name 是注册名。
+    markRemoteMethod(this, "submoduleInit", "submoduleInit");
+    markRemoteMethod(this, "submoduleUpdate", "submoduleUpdate");
+    markRemoteMethod(this, "submoduleSync", "submoduleSync");
+    markRemoteMethod(this, "submoduleDeinit", "submoduleDeinit");
+    markRemoteMethod(this, "submoduleAdd", "submoduleAdd");
   }
 
   // === query ===
@@ -239,7 +320,22 @@ export class GitManagerService extends TypertRemoteService {
 
   // === mutations (all return fresh status/worktrees in value) ===
   async stage(request) {
-    try { validatePath(request.path); return { ok: true, value: { status: await stageFiles(request.path, request.files || [], !!request.all) } }; }
+    try {
+      validatePath(request.path);
+      // exclude（子仓库支持 §5.1）：「暂存全部」时把嵌套独立仓库目录排掉，避免
+      // `git add dir/` 把它折成意外 gitlink。每个条目先过 safeJoin（与 discard
+      // 同款防护）：拒绝绝对路径与 .. 越界。
+      let exclude;
+      if (Array.isArray(request.exclude) && request.exclude.length > 0) {
+        const probe = await probeRepo(request.path);
+        if (!probe.isRepo) throw new GitError("exit", "stage：仓库不可用：" + request.path);
+        exclude = request.exclude.map((p) => {
+          safeJoin(probe.toplevel, p);
+          return p;
+        });
+      }
+      return { ok: true, value: { status: await stageFiles(request.path, request.files || [], !!request.all, exclude) } };
+    }
     catch (e) { return { ok: false, error: mapGitError(e) }; }
   }
 
@@ -249,7 +345,17 @@ export class GitManagerService extends TypertRemoteService {
   }
 
   async discard(request) {
-    try { validatePath(request.path); return { ok: true, value: { status: await discardFiles(request.path, request.files || [], !!request.includeUntracked) } }; }
+    try {
+      validatePath(request.path);
+      const raw = await discardFiles(request.path, request.files || [], !!request.includeUntracked);
+      // discardFiles 把「因含 .git 被跳过、不删除」的路径挂在 status.skipped 上，
+      // 这里提到 envelope 的 { status, skipped? }——status 自身严格对齐 statusSchema
+      // （不认识的 key 会被 zod 剥掉，客户端就拿不到了）。
+      const value = { status: Object.assign({}, raw) };
+      if (Array.isArray(raw.skipped) && raw.skipped.length > 0) value.skipped = raw.skipped;
+      delete value.status.skipped;
+      return { ok: true, value };
+    }
     catch (e) { return { ok: false, error: mapGitError(e) }; }
   }
 
@@ -351,6 +457,251 @@ export class GitManagerService extends TypertRemoteService {
       }
       return { ok: true, value: { probe: await initRepo(path) } };
     } catch (e) { return { ok: false, error: mapGitError(e) }; }
+  }
+
+  // === v2 §2.1/§2.2：stageHunk + stash 全家 + tag 全家 + reset/revert/blame/diffRange/reflog ===
+
+  // IDEA 式「暂存此块」：unstaged diff 的第 hunkIndex 块正向进 index（非危险，无确认）
+  async stageHunk(request) {
+    try { validatePath(request.path); return { ok: true, value: { status: await stageHunkFile(request.path, request) } }; }
+    catch (e) { return { ok: false, error: mapGitError(e) }; }
+  }
+
+  async stashList(request) {
+    try { validatePath(request.path); return { ok: true, value: await getStashes(request.path) }; }
+    catch (e) { return { ok: false, error: mapGitError(e) }; }
+  }
+
+  async stashPush(request) {
+    try { validatePath(request.path); return { ok: true, value: await stashPush(request.path, request.message, !!request.includeUntracked) }; }
+    catch (e) { return { ok: false, error: mapGitError(e) }; }
+  }
+
+  // pop/apply 冲突不抛错（git-core 契约）：返回 {status}，status.conflicted 非空即
+  // 交冲突页处理；stash 条目保留，中止走 abortMerge 兜底（Lead 裁决 2026-09-29）。
+  async stashPop(request) {
+    try { validatePath(request.path); return { ok: true, value: { status: await stashPop(request.path, request.index) } }; }
+    catch (e) { return { ok: false, error: mapGitError(e) }; }
+  }
+
+  async stashApply(request) {
+    try { validatePath(request.path); return { ok: true, value: { status: await stashApply(request.path, request.index) } }; }
+    catch (e) { return { ok: false, error: mapGitError(e) }; }
+  }
+
+  async stashDrop(request) {
+    try { validatePath(request.path); return { ok: true, value: await stashDrop(request.path, request.index) }; }
+    catch (e) { return { ok: false, error: mapGitError(e) }; }
+  }
+
+  async stashClear(request) {
+    try { validatePath(request.path); return { ok: true, value: await stashClear(request.path) }; }
+    catch (e) { return { ok: false, error: mapGitError(e) }; }
+  }
+
+  async tags(request) {
+    try { validatePath(request.path); return { ok: true, value: await getTags(request.path) }; }
+    catch (e) { return { ok: false, error: mapGitError(e) }; }
+  }
+
+  // message 非空 → annotated tag；name/sha 走白名单校验（防选项注入）
+  async tagCreate(request) {
+    try { validatePath(request.path); return { ok: true, value: await createTag(request.path, request.name, request.sha, request.message, !!request.force) }; }
+    catch (e) { return { ok: false, error: mapGitError(e) }; }
+  }
+
+  async tagDelete(request) {
+    try { validatePath(request.path); return { ok: true, value: await deleteTag(request.path, request.name) }; }
+    catch (e) { return { ok: false, error: mapGitError(e) }; }
+  }
+
+  // mode∈soft|mixed|hard、target 走白名单（sha/HEAD/HEAD~n/@{...}）；
+  // hard 不做 UI 确认（确认是 client 职责）
+  async reset(request) {
+    try { validatePath(request.path); return { ok: true, value: { status: await resetRepo(request.path, request.mode, request.target) } }; }
+    catch (e) { return { ok: false, error: mapGitError(e) }; }
+  }
+
+  // 冲突不抛错：reverted=false + status，仓库进 REVERT_HEAD 态（与 cherryPick 同款）
+  async revert(request) {
+    try { validatePath(request.path); return { ok: true, value: await revertCommit(request.path, request.sha) }; }
+    catch (e) { return { ok: false, error: mapGitError(e) }; }
+  }
+
+  async blame(request) {
+    try { validatePath(request.path); return { ok: true, value: await getBlame(request.path, request) }; }
+    catch (e) { return { ok: false, error: mapGitError(e) }; }
+  }
+
+  async diffRange(request) {
+    try { validatePath(request.path); return { ok: true, value: await getDiffRange(request.path, request) }; }
+    catch (e) { return { ok: false, error: mapGitError(e) }; }
+  }
+
+  async reflog(request) {
+    try { validatePath(request.path); return { ok: true, value: await getReflog(request.path, request) }; }
+    catch (e) { return { ok: false, error: mapGitError(e) }; }
+  }
+
+  // === v2 §2.3 P2：remote 增删改 + config 读写（返回新列表，便于客户端刷新） ===
+
+  async remoteAdd(request) {
+    try { validatePath(request.path); return { ok: true, value: await addRemote(request.path, request.name, request.url, request.pushUrl) }; }
+    catch (e) { return { ok: false, error: mapGitError(e) }; }
+  }
+
+  async remoteRemove(request) {
+    try { validatePath(request.path); return { ok: true, value: await removeRemote(request.path, request.name) }; }
+    catch (e) { return { ok: false, error: mapGitError(e) }; }
+  }
+
+  async remoteRename(request) {
+    try { validatePath(request.path); return { ok: true, value: await renameRemote(request.path, request.oldName, request.newName) }; }
+    catch (e) { return { ok: false, error: mapGitError(e) }; }
+  }
+
+  async configList(request) {
+    try { validatePath(request.path); return { ok: true, value: await getConfig(request.path, !!request.global) }; }
+    catch (e) { return { ok: false, error: mapGitError(e) }; }
+  }
+
+  async configSet(request) {
+    try { validatePath(request.path); return { ok: true, value: await setConfig(request.path, request.key, request.value, !!request.global) }; }
+    catch (e) { return { ok: false, error: mapGitError(e) }; }
+  }
+
+  async configUnset(request) {
+    try { validatePath(request.path); return { ok: true, value: await unsetConfig(request.path, request.key, !!request.global) }; }
+    catch (e) { return { ok: false, error: mapGitError(e) }; }
+  }
+
+  // === P3-A §8.1/§8.3：rebase 全家 + 行级暂存/撤销 ===
+
+  // todo 候选：base..HEAD（不含 base），最旧在前（rebase todo 应用顺序）
+  async rebasePlan(request) {
+    try { validatePath(request.path); return { ok: true, value: await rebasePlan(request.path, request.base) }; }
+    catch (e) { return { ok: false, error: mapGitError(e) }; }
+  }
+
+  // entries 条目 action 枚举 + sha 白名单校验（防 todo 注入）；
+  // 冲突/ edit 停驻不抛错：done=false + status，进 rebase 态
+  async rebaseRun(request) {
+    try { validatePath(request.path); return { ok: true, value: await rebaseRun(request.path, request.base, request.entries) }; }
+    catch (e) { return { ok: false, error: mapGitError(e) }; }
+  }
+
+  // 用暂存改动修正任意历史提交（改写历史，UI 二次确认）；squash+message 替换合并信息
+  async fixupCommit(request) {
+    try { validatePath(request.path); return { ok: true, value: await fixupCommit(request.path, request.sha, request.mode, request.message) }; }
+    catch (e) { return { ok: false, error: mapGitError(e) }; }
+  }
+
+  // 当前分支 rebase 到 branch 之上（二次确认同 merge 级；冲突走冲突页）
+  async rebaseBranch(request) {
+    try { validatePath(request.path); return { ok: true, value: await rebaseBranch(request.path, request.branch) }; }
+    catch (e) { return { ok: false, error: mapGitError(e) }; }
+  }
+
+  // 行级操作：scope/mode 组合白名单（unstaged/stage、staged/unstage、unstaged/discard）
+  async lineApply(request) {
+    try { validatePath(request.path); return { ok: true, value: { status: await applyLine(request.path, request) } }; }
+    catch (e) { return { ok: false, error: mapGitError(e) }; }
+  }
+
+  // === 子仓库支持 P0：仓库树发现 ===
+
+  // 主仓库 + 全部 submodule（含未初始化）+ 直接子目录里的嵌套独立仓库。
+  // 必须在 root toplevel 跑（git submodule status 对 cwd 敏感）——这里先 probeRepo
+  // 拿 toplevel 再传下去，client 传子目录 cwd 也能得到「主仓库视角」的树。
+  // 返回 { repos: RepoNode[] }，root 恒在 [0]，其余按 relPath 字典序。
+  async repoTree(request) {
+    try {
+      validatePath(request.path);
+      const probe = await probeRepo(request.path);
+      if (!probe.isRepo) throw new GitError("exit", "path 不是 git 仓库：" + request.path);
+      return { ok: true, value: await listSubRepos(probe.toplevel) };
+    }
+    catch (e) { return { ok: false, error: mapGitError(e) }; }
+  }
+
+  // === 子仓库支持 P1：sha 存在性门控 ===
+  // 历史 Tab 的 gitlink 变更（指针 a→b）在跳进子仓库前先问一句「a、b 在这个
+  // 子仓库的本地对象库里吗」。入参只接受纯十六进制 sha（git-core 内部再拼
+  // ^{commit}），非法形态直接抛错——不吞成 ok:false，否则客户端会把「参数写错」
+  // 误读成「提交不可用」而静默禁用跳转。
+  async revExists(request) {
+    try {
+      validatePath(request.path);
+      return { ok: true, value: await revExists(request.path, request.revs) };
+    }
+    catch (e) { return { ok: false, error: mapGitError(e) }; }
+  }
+
+  // === 子仓库支持 P2：submodule 管理五方法 ===
+  // 入参 subPath 一律是「相对仓库根的路径」（git 的 submodule 子命令收的是路径，
+  // 不是 .gitmodules 注册名），git-core 侧过 safeJoin 防护；deinit 必填 subPath
+  // （缺省会清空全部子模块，core 层抛错）。返回值形状与现有 mutation 一致：
+  // 前四个 { status }，submoduleAdd 额外带新子仓库的 probe。
+
+  // 注册子模块（把 .gitmodules 条目落到本地 config，checkout 出工作副本）
+  async submoduleInit(request) {
+    try {
+      validatePath(request.path);
+      return { ok: true, value: await submoduleInit(request.path, request.subPath) };
+    }
+    catch (e) { return { ok: false, error: mapGitError(e) }; }
+  }
+
+  // 拉取/检出子模块内容；首次会 clone（走网络，core 侧用 runGitNet）
+  async submoduleUpdate(request) {
+    try {
+      validatePath(request.path);
+      return {
+        ok: true,
+        value: await submoduleUpdate(request.path, {
+          subPath: request.subPath,
+          init: !!request.init,
+          recursive: !!request.recursive,
+        }),
+      };
+    }
+    catch (e) { return { ok: false, error: mapGitError(e) }; }
+  }
+
+  // 把 .gitmodules 里的 url 同步回本地 submodule.<name>.url
+  async submoduleSync(request) {
+    try {
+      validatePath(request.path);
+      return { ok: true, value: await submoduleSync(request.path, request.subPath) };
+    }
+    catch (e) { return { ok: false, error: mapGitError(e) }; }
+  }
+
+  // 危险操作（清空子模块工作区目录 + 注销本地注册，.gitmodules 保留）：UI 二次确认，
+  // git 对有改动的子模块在不带 force 时会拒绝，这里照常把 GitError 映射出去。
+  async submoduleDeinit(request) {
+    try {
+      validatePath(request.path);
+      return { ok: true, value: await submoduleDeinit(request.path, request.subPath, !!request.force) };
+    }
+    catch (e) { return { ok: false, error: mapGitError(e) }; }
+  }
+
+  // 新增子模块（写 .gitmodules + 暂存 gitlink + clone）；返回父仓库 status 与
+  // 新子仓库 probe，客户端可直接把新节点插进仓库树。
+  async submoduleAdd(request) {
+    try {
+      validatePath(request.path);
+      return {
+        ok: true,
+        value: await submoduleAdd(request.path, {
+          url: request.url,
+          subPath: request.subPath,
+          name: request.name,
+        }),
+      };
+    }
+    catch (e) { return { ok: false, error: mapGitError(e) }; }
   }
 }
 

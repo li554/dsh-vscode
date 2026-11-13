@@ -26,7 +26,7 @@ export type IndexInjection =
 /**
  * External classic script, executed in table order: a parser-blocking tag
  * when served, an awaited fetch-and-execute in the worker form (whose
- * loader resolves worker-only URLs such as `/plugins/...`).
+ * loader resolves worker-only references such as `plugins/...`).
  */
  | {
     kind: 'script-src';

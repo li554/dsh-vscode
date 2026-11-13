@@ -1,2 +1,2 @@
-import { t as descriptor } from "./descriptor-OAMVgT8m.js";
+import { t as descriptor } from "./descriptor-1h1ZrvkP.js";
 export { descriptor };

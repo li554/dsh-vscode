@@ -8,7 +8,7 @@ export declare const MNEMON_SOURCE_CONFIGURATION_MUTATE: "configuration";
 export type MemorySourcePageComponent = (props: MemorySourcePageProps) => ReactNode;
 /** The existing DSH Slot capability narrowed to this one child Slot. */
 export interface MemorySourceUIContext {
-    locale?: {
+    locale: {
         bind(namespace: 'mnemon'): import('./locales.ts').MnemonTranslate;
     };
     slots: {
@@ -23,7 +23,7 @@ export interface MemorySourceUIContext {
     };
 }
 interface MemorySourcePageDirectoryContext {
-    locale?: {
+    locale: {
         getSnapshot(): unknown;
         subscribe(listener: () => void): () => void;
     };

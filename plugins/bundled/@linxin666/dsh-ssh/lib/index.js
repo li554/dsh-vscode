@@ -1,3 +1,4 @@
+import z from "@deepseek-ai/schemastery";
 import { closeSync, createReadStream, createWriteStream, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { Client } from "ssh2";
 import { homedir, tmpdir } from "node:os";
@@ -10,1022 +11,7 @@ import { unlink } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import { WebSocket, WebSocketServer } from "ws";
 import { defineTool } from "@deepseek-ai/dsh-tools";
-//#region \0rolldown/runtime.js
-var __create = Object.create;
-var __defProp = Object.defineProperty;
-var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
-var __getOwnPropNames = Object.getOwnPropertyNames;
-var __getProtoOf = Object.getPrototypeOf;
-var __hasOwnProp = Object.prototype.hasOwnProperty;
-var __commonJSMin = (cb, mod) => () => (mod || (cb((mod = { exports: {} }).exports, mod), cb = null), mod.exports);
-var __copyProps = (to, from, except, desc) => {
-	if (from && typeof from === "object" || typeof from === "function") for (var keys = __getOwnPropNames(from), i = 0, n = keys.length, key; i < n; i++) {
-		key = keys[i];
-		if (!__hasOwnProp.call(to, key) && key !== except) __defProp(to, key, {
-			get: ((k) => from[k]).bind(null, key),
-			enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable
-		});
-	}
-	return to;
-};
-var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", {
-	value: mod,
-	enumerable: true
-}) : target, mod));
-//#endregion
-//#region ../../node_modules/.pnpm/cosmokit@1.8.1/node_modules/cosmokit/lib/index.cjs
-var require_lib$1 = /* @__PURE__ */ __commonJSMin(((exports, module) => {
-	var __defProp = Object.defineProperty;
-	var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
-	var __getOwnPropNames = Object.getOwnPropertyNames;
-	var __hasOwnProp = Object.prototype.hasOwnProperty;
-	var __export = (target, all) => {
-		for (var name in all) __defProp(target, name, {
-			get: all[name],
-			enumerable: true
-		});
-	};
-	var __copyProps = (to, from, except, desc) => {
-		if (from && typeof from === "object" || typeof from === "function") {
-			for (let key of __getOwnPropNames(from)) if (!__hasOwnProp.call(to, key) && key !== except) __defProp(to, key, {
-				get: () => from[key],
-				enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable
-			});
-		}
-		return to;
-	};
-	var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-	var index_exports = {};
-	__export(index_exports, {
-		Binary: () => Binary,
-		Time: () => Time,
-		arrayBufferToBase64: () => arrayBufferToBase64,
-		arrayBufferToHex: () => arrayBufferToHex,
-		base64ToArrayBuffer: () => base64ToArrayBuffer,
-		camelCase: () => camelCase,
-		camelize: () => camelize,
-		capitalize: () => capitalize,
-		clone: () => clone,
-		contain: () => contain,
-		deduplicate: () => deduplicate,
-		deepEqual: () => deepEqual,
-		defineProperty: () => defineProperty,
-		difference: () => difference,
-		filterKeys: () => filterKeys,
-		formatProperty: () => formatProperty,
-		hexToArrayBuffer: () => hexToArrayBuffer,
-		hyphenate: () => hyphenate,
-		intersection: () => intersection,
-		is: () => is,
-		isNonNullable: () => isNonNullable,
-		isNullable: () => isNullable,
-		isPlainObject: () => isPlainObject,
-		makeArray: () => makeArray,
-		mapValues: () => mapValues,
-		noop: () => noop,
-		omit: () => omit,
-		paramCase: () => paramCase,
-		pick: () => pick,
-		remove: () => remove,
-		sanitize: () => sanitize,
-		snakeCase: () => snakeCase,
-		trimSlash: () => trimSlash,
-		uncapitalize: () => uncapitalize,
-		union: () => union,
-		valueMap: () => mapValues
-	});
-	module.exports = __toCommonJS(index_exports);
-	function noop() {}
-	function isNullable(value) {
-		return value === null || value === void 0;
-	}
-	function isNonNullable(value) {
-		return !isNullable(value);
-	}
-	function isPlainObject(data) {
-		return data && typeof data === "object" && !Array.isArray(data);
-	}
-	function filterKeys(object, filter) {
-		return Object.fromEntries(Object.entries(object).filter(([key, value]) => filter(key, value)));
-	}
-	function mapValues(object, transform) {
-		return Object.fromEntries(Object.entries(object).map(([key, value]) => [key, transform(value, key)]));
-	}
-	function pick(source, keys, forced) {
-		if (!keys) return { ...source };
-		const result = {};
-		for (const key of keys) if (forced || source[key] !== void 0) result[key] = source[key];
-		return result;
-	}
-	function omit(source, keys) {
-		if (!keys) return { ...source };
-		const result = { ...source };
-		for (const key of keys) Reflect.deleteProperty(result, key);
-		return result;
-	}
-	function defineProperty(object, key, value) {
-		return Object.defineProperty(object, key, {
-			writable: true,
-			value,
-			enumerable: false
-		});
-	}
-	function contain(array1, array2) {
-		return array2.every((item) => array1.includes(item));
-	}
-	function intersection(array1, array2) {
-		return array1.filter((item) => array2.includes(item));
-	}
-	function difference(array1, array2) {
-		return array1.filter((item) => !array2.includes(item));
-	}
-	function union(array1, array2) {
-		return Array.from(/* @__PURE__ */ new Set([...array1, ...array2]));
-	}
-	function deduplicate(array) {
-		return [...new Set(array)];
-	}
-	function remove(list, item) {
-		const index = list?.indexOf(item);
-		if (index >= 0) {
-			list.splice(index, 1);
-			return true;
-		} else return false;
-	}
-	function makeArray(source) {
-		return Array.isArray(source) ? source : isNullable(source) ? [] : [source];
-	}
-	function is(type, value) {
-		if (arguments.length === 1) return (value2) => is(type, value2);
-		return type in globalThis && value instanceof globalThis[type] || Object.prototype.toString.call(value).slice(8, -1) === type;
-	}
-	function isArrayBufferLike(value) {
-		return is("ArrayBuffer", value) || is("SharedArrayBuffer", value);
-	}
-	function isArrayBufferSource(value) {
-		return isArrayBufferLike(value) || ArrayBuffer.isView(value);
-	}
-	var Binary;
-	((Binary2) => {
-		Binary2.is = isArrayBufferLike;
-		Binary2.isSource = isArrayBufferSource;
-		function fromSource(source) {
-			if (ArrayBuffer.isView(source)) return source.buffer.slice(source.byteOffset, source.byteOffset + source.byteLength);
-			else return source;
-		}
-		Binary2.fromSource = fromSource;
-		function toBase64(source) {
-			source = fromSource(source);
-			if (typeof Buffer !== "undefined") return Buffer.from(source).toString("base64");
-			let binary = "";
-			const bytes = new Uint8Array(source);
-			for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-			return btoa(binary);
-		}
-		Binary2.toBase64 = toBase64;
-		function fromBase64(source) {
-			if (typeof Buffer !== "undefined") return fromSource(Buffer.from(source, "base64"));
-			return Uint8Array.from(atob(source), (c) => c.charCodeAt(0));
-		}
-		Binary2.fromBase64 = fromBase64;
-		function toHex(source) {
-			source = fromSource(source);
-			if (typeof Buffer !== "undefined") return Buffer.from(source).toString("hex");
-			return Array.from(new Uint8Array(source), (byte) => byte.toString(16).padStart(2, "0")).join("");
-		}
-		Binary2.toHex = toHex;
-		function fromHex(source) {
-			if (typeof Buffer !== "undefined") return fromSource(Buffer.from(source, "hex"));
-			const hex = source.length % 2 === 0 ? source : source.slice(0, source.length - 1);
-			const buffer = [];
-			for (let i = 0; i < hex.length; i += 2) buffer.push(parseInt(`${hex[i]}${hex[i + 1]}`, 16));
-			return Uint8Array.from(buffer).buffer;
-		}
-		Binary2.fromHex = fromHex;
-	})(Binary || (Binary = {}));
-	var base64ToArrayBuffer = Binary.fromBase64;
-	var arrayBufferToBase64 = Binary.toBase64;
-	var hexToArrayBuffer = Binary.fromHex;
-	var arrayBufferToHex = Binary.toHex;
-	function clone(source, refs = /* @__PURE__ */ new Map()) {
-		if (!source || typeof source !== "object") return source;
-		if (is("Date", source)) return new Date(source.valueOf());
-		if (is("RegExp", source)) return new RegExp(source.source, source.flags);
-		if (isArrayBufferLike(source)) return source.slice(0);
-		if (ArrayBuffer.isView(source)) return source.buffer.slice(source.byteOffset, source.byteOffset + source.byteLength);
-		const cached = refs.get(source);
-		if (cached) return cached;
-		if (Array.isArray(source)) {
-			const result2 = [];
-			refs.set(source, result2);
-			source.forEach((value, index) => {
-				result2[index] = Reflect.apply(clone, null, [value, refs]);
-			});
-			return result2;
-		}
-		const result = Object.create(Object.getPrototypeOf(source));
-		refs.set(source, result);
-		for (const key of Reflect.ownKeys(source)) {
-			const descriptor = { ...Reflect.getOwnPropertyDescriptor(source, key) };
-			if ("value" in descriptor) descriptor.value = Reflect.apply(clone, null, [descriptor.value, refs]);
-			Reflect.defineProperty(result, key, descriptor);
-		}
-		return result;
-	}
-	function deepEqual(a, b, strict) {
-		if (a === b) return true;
-		if (!strict && isNullable(a) && isNullable(b)) return true;
-		if (typeof a !== typeof b) return false;
-		if (typeof a !== "object") return false;
-		if (!a || !b) return false;
-		function check(test, then) {
-			return test(a) ? test(b) ? then(a, b) : false : test(b) ? false : void 0;
-		}
-		return check(Array.isArray, (a2, b2) => a2.length === b2.length && a2.every((item, index) => deepEqual(item, b2[index]))) ?? check(is("Date"), (a2, b2) => a2.valueOf() === b2.valueOf()) ?? check(is("RegExp"), (a2, b2) => a2.source === b2.source && a2.flags === b2.flags) ?? check(isArrayBufferLike, (a2, b2) => {
-			if (a2.byteLength !== b2.byteLength) return false;
-			const viewA = new Uint8Array(a2);
-			const viewB = new Uint8Array(b2);
-			for (let i = 0; i < viewA.length; i++) if (viewA[i] !== viewB[i]) return false;
-			return true;
-		}) ?? Object.keys({
-			...a,
-			...b
-		}).every((key) => deepEqual(a[key], b[key], strict));
-	}
-	function capitalize(source) {
-		return source.charAt(0).toUpperCase() + source.slice(1);
-	}
-	function uncapitalize(source) {
-		return source.charAt(0).toLowerCase() + source.slice(1);
-	}
-	function camelCase(source) {
-		return source.replace(/[_-][a-z]/g, (str) => str.slice(1).toUpperCase());
-	}
-	function tokenize(source, delimiters, delimiter) {
-		const output = [];
-		let state = 0;
-		for (let i = 0; i < source.length; i++) {
-			const code = source.charCodeAt(i);
-			if (code >= 65 && code <= 90) {
-				if (state === 1) {
-					const next = source.charCodeAt(i + 1);
-					if (next >= 97 && next <= 122) output.push(delimiter);
-					output.push(code + 32);
-				} else {
-					if (state !== 0) output.push(delimiter);
-					output.push(code + 32);
-				}
-				state = 1;
-			} else if (code >= 97 && code <= 122) {
-				output.push(code);
-				state = 2;
-			} else if (delimiters.includes(code)) {
-				if (state !== 0) output.push(delimiter);
-				state = 0;
-			} else output.push(code);
-		}
-		return String.fromCharCode(...output);
-	}
-	function paramCase(source) {
-		return tokenize(source, [45, 95], 45);
-	}
-	function snakeCase(source) {
-		return tokenize(source, [45, 95], 95);
-	}
-	var camelize = camelCase;
-	var hyphenate = paramCase;
-	function formatProperty(key) {
-		if (typeof key !== "string") return `[${key.toString()}]`;
-		return /^[a-z_$][\w$]*$/i.test(key) ? `.${key}` : `[${JSON.stringify(key)}]`;
-	}
-	function trimSlash(source) {
-		return source.replace(/\/$/, "");
-	}
-	function sanitize(source) {
-		if (!source.startsWith("/")) source = "/" + source;
-		return trimSlash(source);
-	}
-	var Time;
-	((Time2) => {
-		Time2.millisecond = 1;
-		Time2.second = 1e3;
-		Time2.minute = Time2.second * 60;
-		Time2.hour = Time2.minute * 60;
-		Time2.day = Time2.hour * 24;
-		Time2.week = Time2.day * 7;
-		let timezoneOffset = (/* @__PURE__ */ new Date()).getTimezoneOffset();
-		function setTimezoneOffset(offset) {
-			timezoneOffset = offset;
-		}
-		Time2.setTimezoneOffset = setTimezoneOffset;
-		function getTimezoneOffset() {
-			return timezoneOffset;
-		}
-		Time2.getTimezoneOffset = getTimezoneOffset;
-		function getDateNumber(date = /* @__PURE__ */ new Date(), offset) {
-			if (typeof date === "number") date = new Date(date);
-			if (offset === void 0) offset = timezoneOffset;
-			return Math.floor((date.valueOf() / Time2.minute - offset) / 1440);
-		}
-		Time2.getDateNumber = getDateNumber;
-		function fromDateNumber(value, offset) {
-			const date = new Date(value * Time2.day);
-			if (offset === void 0) offset = timezoneOffset;
-			return new Date(+date + offset * Time2.minute);
-		}
-		Time2.fromDateNumber = fromDateNumber;
-		const numeric = /\d+(?:\.\d+)?/.source;
-		const timeRegExp = new RegExp(`^${[
-			"w(?:eek(?:s)?)?",
-			"d(?:ay(?:s)?)?",
-			"h(?:our(?:s)?)?",
-			"m(?:in(?:ute)?(?:s)?)?",
-			"s(?:ec(?:ond)?(?:s)?)?"
-		].map((unit) => `(${numeric}${unit})?`).join("")}$`);
-		function parseTime(source) {
-			const capture = timeRegExp.exec(source);
-			if (!capture) return 0;
-			return (parseFloat(capture[1]) * Time2.week || 0) + (parseFloat(capture[2]) * Time2.day || 0) + (parseFloat(capture[3]) * Time2.hour || 0) + (parseFloat(capture[4]) * Time2.minute || 0) + (parseFloat(capture[5]) * Time2.second || 0);
-		}
-		Time2.parseTime = parseTime;
-		function parseDate(date) {
-			const parsed = parseTime(date);
-			if (parsed) date = Date.now() + parsed;
-			else if (/^\d{1,2}(:\d{1,2}){1,2}$/.test(date)) date = `${(/* @__PURE__ */ new Date()).toLocaleDateString()}-${date}`;
-			else if (/^\d{1,2}-\d{1,2}-\d{1,2}(:\d{1,2}){1,2}$/.test(date)) date = `${(/* @__PURE__ */ new Date()).getFullYear()}-${date}`;
-			return date ? new Date(date) : /* @__PURE__ */ new Date();
-		}
-		Time2.parseDate = parseDate;
-		function format(ms) {
-			const abs = Math.abs(ms);
-			if (abs >= Time2.day - Time2.hour / 2) return Math.round(ms / Time2.day) + "d";
-			else if (abs >= Time2.hour - Time2.minute / 2) return Math.round(ms / Time2.hour) + "h";
-			else if (abs >= Time2.minute - Time2.second / 2) return Math.round(ms / Time2.minute) + "m";
-			else if (abs >= Time2.second) return Math.round(ms / Time2.second) + "s";
-			return ms + "ms";
-		}
-		Time2.format = format;
-		function toDigits(source, length = 2) {
-			return source.toString().padStart(length, "0");
-		}
-		Time2.toDigits = toDigits;
-		function template(template2, time = /* @__PURE__ */ new Date()) {
-			return template2.replace("yyyy", time.getFullYear().toString()).replace("yy", time.getFullYear().toString().slice(2)).replace("MM", toDigits(time.getMonth() + 1)).replace("dd", toDigits(time.getDate())).replace("hh", toDigits(time.getHours())).replace("mm", toDigits(time.getMinutes())).replace("ss", toDigits(time.getSeconds())).replace("SSS", toDigits(time.getMilliseconds(), 3));
-		}
-		Time2.template = template;
-	})(Time || (Time = {}));
-	0 && (module.exports = {
-		Binary,
-		Time,
-		arrayBufferToBase64,
-		arrayBufferToHex,
-		base64ToArrayBuffer,
-		camelCase,
-		camelize,
-		capitalize,
-		clone,
-		contain,
-		deduplicate,
-		deepEqual,
-		defineProperty,
-		difference,
-		filterKeys,
-		formatProperty,
-		hexToArrayBuffer,
-		hyphenate,
-		intersection,
-		is,
-		isNonNullable,
-		isNullable,
-		isPlainObject,
-		makeArray,
-		mapValues,
-		noop,
-		omit,
-		paramCase,
-		pick,
-		remove,
-		sanitize,
-		snakeCase,
-		trimSlash,
-		uncapitalize,
-		union,
-		valueMap
-	});
-}));
-//#endregion
 //#region src/dsh-home.ts
-var import_lib = /* @__PURE__ */ __toESM((/* @__PURE__ */ __commonJSMin(((exports, module) => {
-	var __defProp = Object.defineProperty;
-	var __name = (target, value) => __defProp(target, "name", {
-		value,
-		configurable: true
-	});
-	var import_cosmokit = require_lib$1();
-	var kSchema = Symbol.for("schemastery");
-	var kValidationError = Symbol.for("ValidationError");
-	globalThis.__schemastery_index__ ??= 0;
-	globalThis.__schemastery_refs__ = void 0;
-	var ValidationError = class extends TypeError {
-		constructor(message, options) {
-			let prefix = "$";
-			for (const segment of options.path || []) if (typeof segment === "string") prefix += "." + segment;
-			else if (typeof segment === "number") prefix += "[" + segment + "]";
-			else if (typeof segment === "symbol") prefix += `[Symbol(${segment.toString()})]`;
-			if (prefix.startsWith(".")) prefix = prefix.slice(1);
-			super((prefix === "$" ? "" : `${prefix} `) + message);
-			this.options = options;
-		}
-		static {
-			__name(this, "ValidationError");
-		}
-		name = "ValidationError";
-		static is(error) {
-			return !!error?.[kValidationError];
-		}
-	};
-	Object.defineProperty(ValidationError.prototype, kValidationError, { value: true });
-	var Schema = /* @__PURE__ */ __name(function(options) {
-		const schema = /* @__PURE__ */ __name(function(data, options2 = {}) {
-			return Schema.resolve(data, schema, options2)[0];
-		}, "schema");
-		if (options.refs) {
-			const refs = (0, import_cosmokit.valueMap)(options.refs, (options2) => new Schema(options2));
-			const getRef = /* @__PURE__ */ __name((uid) => refs[uid], "getRef");
-			for (const key in refs) {
-				const options2 = refs[key];
-				options2.sKey = getRef(options2.sKey);
-				options2.inner = getRef(options2.inner);
-				options2.list = options2.list && options2.list.map(getRef);
-				options2.dict = options2.dict && (0, import_cosmokit.valueMap)(options2.dict, getRef);
-			}
-			return refs[options.uid];
-		}
-		Object.assign(schema, options);
-		if (typeof schema.callback === "string") try {
-			schema.callback = new Function("return " + schema.callback)();
-		} catch {}
-		Object.defineProperty(schema, "uid", { value: globalThis.__schemastery_index__++ });
-		Object.setPrototypeOf(schema, Schema.prototype);
-		schema.meta ||= {};
-		schema.toString = schema.toString.bind(schema);
-		return schema;
-	}, "Schema");
-	Schema.prototype = Object.create(Function.prototype);
-	Schema.prototype[kSchema] = true;
-	Object.defineProperty(Schema.prototype, "~standard", { get() {
-		return {
-			version: 1,
-			vendor: "schemastery",
-			validate: /* @__PURE__ */ __name((value) => {
-				try {
-					return { value: Schema.resolve(value, this, {})[0] };
-				} catch (error) {
-					if (ValidationError.is(error)) return { issues: [{
-						message: error.message,
-						path: error.options.path
-					}] };
-					throw error;
-				}
-			}, "validate")
-		};
-	} });
-	Schema.ValidationError = ValidationError;
-	Schema.prototype.toJSON = /* @__PURE__ */ __name(function toJSON() {
-		if (globalThis.__schemastery_refs__) {
-			globalThis.__schemastery_refs__[this.uid] ??= JSON.parse(JSON.stringify({ ...this }));
-			return this.uid;
-		}
-		globalThis.__schemastery_refs__ = { [this.uid]: { ...this } };
-		globalThis.__schemastery_refs__[this.uid] = JSON.parse(JSON.stringify({ ...this }));
-		const result = {
-			uid: this.uid,
-			refs: globalThis.__schemastery_refs__
-		};
-		globalThis.__schemastery_refs__ = void 0;
-		return result;
-	}, "toJSON");
-	Schema.prototype.set = /* @__PURE__ */ __name(function set(key, value) {
-		this.dict[key] = value;
-		return this;
-	}, "set");
-	Schema.prototype.push = /* @__PURE__ */ __name(function push(value) {
-		this.list.push(value);
-		return this;
-	}, "push");
-	function mergeDesc(original, messages) {
-		const result = typeof original === "string" ? { "": original } : { ...original };
-		for (const locale in messages) {
-			const value = messages[locale];
-			if (value?.$description || value?.$desc) result[locale] = value.$description || value.$desc;
-			else if (typeof value === "string") result[locale] = value;
-		}
-		return result;
-	}
-	__name(mergeDesc, "mergeDesc");
-	function getInner(value) {
-		return value?.$value ?? value?.$inner;
-	}
-	__name(getInner, "getInner");
-	function extractKeys(data) {
-		return (0, import_cosmokit.filterKeys)(data ?? {}, (key) => !key.startsWith("$"));
-	}
-	__name(extractKeys, "extractKeys");
-	Schema.prototype.i18n = /* @__PURE__ */ __name(function i18n(messages) {
-		const schema = Schema(this);
-		const desc = mergeDesc(schema.meta.description, messages);
-		if (Object.keys(desc).length) schema.meta.description = desc;
-		if (schema.dict) schema.dict = (0, import_cosmokit.valueMap)(schema.dict, (inner, key) => {
-			return inner.i18n((0, import_cosmokit.valueMap)(messages, (data) => getInner(data)?.[key] ?? data?.[key]));
-		});
-		if (schema.list) schema.list = schema.list.map((inner, index) => {
-			return inner.i18n((0, import_cosmokit.valueMap)(messages, (data = {}) => {
-				if (Array.isArray(getInner(data))) return getInner(data)[index];
-				if (Array.isArray(data)) return data[index];
-				return extractKeys(data);
-			}));
-		});
-		if (schema.inner) schema.inner = schema.inner.i18n((0, import_cosmokit.valueMap)(messages, (data) => {
-			if (getInner(data)) return getInner(data);
-			return extractKeys(data);
-		}));
-		if (schema.sKey) schema.sKey = schema.sKey.i18n((0, import_cosmokit.valueMap)(messages, (data) => data?.$key));
-		return schema;
-	}, "i18n");
-	Schema.prototype.extra = /* @__PURE__ */ __name(function extra(key, value) {
-		const schema = Schema(this);
-		schema.meta = {
-			...schema.meta,
-			[key]: value
-		};
-		return schema;
-	}, "extra");
-	for (const key of [
-		"required",
-		"disabled",
-		"collapse",
-		"hidden",
-		"loose"
-	]) Object.assign(Schema.prototype, { [key](value = true) {
-		const schema = Schema(this);
-		schema.meta = {
-			...schema.meta,
-			[key]: value
-		};
-		return schema;
-	} });
-	Schema.prototype.deprecated = /* @__PURE__ */ __name(function deprecated() {
-		const schema = Schema(this);
-		schema.meta.badges ||= [];
-		schema.meta.badges.push({
-			text: "deprecated",
-			type: "danger"
-		});
-		return schema;
-	}, "deprecated");
-	Schema.prototype.experimental = /* @__PURE__ */ __name(function experimental() {
-		const schema = Schema(this);
-		schema.meta.badges ||= [];
-		schema.meta.badges.push({
-			text: "experimental",
-			type: "warning"
-		});
-		return schema;
-	}, "experimental");
-	Schema.prototype.pattern = /* @__PURE__ */ __name(function pattern(regexp) {
-		const schema = Schema(this);
-		const pattern2 = (0, import_cosmokit.pick)(regexp, ["source", "flags"]);
-		schema.meta = {
-			...schema.meta,
-			pattern: pattern2
-		};
-		return schema;
-	}, "pattern");
-	Schema.prototype.simplify = /* @__PURE__ */ __name(function simplify(value) {
-		if ((0, import_cosmokit.deepEqual)(value, this.meta.default, this.type === "dict")) return null;
-		if ((0, import_cosmokit.isNullable)(value)) return value;
-		if (this.type === "object" || this.type === "dict") {
-			const result = {};
-			for (const key in value) {
-				const item = (this.type === "object" ? this.dict[key] : this.inner)?.simplify(value[key]);
-				if (this.type === "dict" || !(0, import_cosmokit.isNullable)(item)) result[key] = item;
-			}
-			if ((0, import_cosmokit.deepEqual)(result, this.meta.default, this.type === "dict")) return null;
-			return result;
-		} else if (this.type === "array" || this.type === "tuple") {
-			const result = [];
-			value.forEach((value2, index) => {
-				const schema = this.type === "array" ? this.inner : this.list[index];
-				const item = schema ? schema.simplify(value2) : value2;
-				result.push(item);
-			});
-			return result;
-		} else if (this.type === "intersect") {
-			const result = {};
-			for (const item of this.list) Object.assign(result, item.simplify(value));
-			return result;
-		} else if (this.type === "union") for (const schema of this.list) try {
-			Schema.resolve(value, schema, {});
-			return schema.simplify(value);
-		} catch {}
-		return value;
-	}, "simplify");
-	Schema.prototype.toString = /* @__PURE__ */ __name(function toString(inline) {
-		return formatters[this.type]?.(this, inline) ?? `Schema<${this.type}>`;
-	}, "toString");
-	Schema.prototype.role = /* @__PURE__ */ __name(function role(role, extra2) {
-		const schema = Schema(this);
-		schema.meta = {
-			...schema.meta,
-			role,
-			extra: extra2
-		};
-		return schema;
-	}, "role");
-	for (const key of [
-		"default",
-		"link",
-		"comment",
-		"description",
-		"max",
-		"min",
-		"step"
-	]) Object.assign(Schema.prototype, { [key](value) {
-		const schema = Schema(this);
-		schema.meta = {
-			...schema.meta,
-			[key]: value
-		};
-		return schema;
-	} });
-	var resolvers = {};
-	Schema.extend = /* @__PURE__ */ __name(function extend(type, resolve2) {
-		resolvers[type] = resolve2;
-	}, "extend");
-	Schema.resolve = /* @__PURE__ */ __name(function resolve(data, schema, options = {}, strict = false) {
-		if (!schema) return [data];
-		if (options.ignore?.(data, schema)) return [data];
-		if ((0, import_cosmokit.isNullable)(data) && schema.type !== "lazy") {
-			if (schema.meta.required) throw new ValidationError(`missing required value`, options);
-			let current = schema;
-			let fallback = schema.meta.default;
-			while (current?.type === "intersect" && (0, import_cosmokit.isNullable)(fallback)) {
-				current = current.list[0];
-				fallback = current?.meta.default;
-			}
-			if ((0, import_cosmokit.isNullable)(fallback)) return [data];
-			data = (0, import_cosmokit.clone)(fallback);
-		}
-		const callback = resolvers[schema.type];
-		if (!callback) throw new ValidationError(`unsupported type "${schema.type}"`, options);
-		try {
-			return callback(data, schema, options, strict);
-		} catch (error) {
-			if (!schema.meta.loose) throw error;
-			return [schema.meta.default];
-		}
-	}, "resolve");
-	Schema.from = /* @__PURE__ */ __name(function from(source) {
-		if ((0, import_cosmokit.isNullable)(source)) return Schema.any();
-		else if ([
-			"string",
-			"number",
-			"boolean"
-		].includes(typeof source)) return Schema.const(source).required();
-		else if (source[kSchema]) return source;
-		else if (typeof source === "function") switch (source) {
-			case String: return Schema.string().required();
-			case Number: return Schema.number().required();
-			case Boolean: return Schema.boolean().required();
-			case Function: return Schema.function().required();
-			default: return Schema.is(source).required();
-		}
-		else throw new TypeError(`cannot infer schema from ${source}`);
-	}, "from");
-	Schema.lazy = /* @__PURE__ */ __name(function lazy(builder) {
-		const schema = new Schema({
-			type: "lazy",
-			builder,
-			inner: { toJSON: /* @__PURE__ */ __name(() => {
-				if (!schema.inner[kSchema]) {
-					schema.inner = schema.builder();
-					schema.inner.meta = {
-						...schema.meta,
-						...schema.inner.meta
-					};
-				}
-				return schema.inner.toJSON();
-			}, "toJSON") }
-		});
-		return schema;
-	}, "lazy");
-	Schema.natural = /* @__PURE__ */ __name(function natural() {
-		return Schema.number().step(1).min(0);
-	}, "natural");
-	Schema.percent = /* @__PURE__ */ __name(function percent() {
-		return Schema.number().step(.01).min(0).max(1).role("slider");
-	}, "percent");
-	Schema.date = /* @__PURE__ */ __name(function date() {
-		return Schema.union([Schema.is(Date), Schema.transform(Schema.string().role("datetime"), (value, options) => {
-			const date2 = new Date(value);
-			if (isNaN(+date2)) throw new ValidationError(`invalid date "${value}"`, options);
-			return date2;
-		}, true)]);
-	}, "date");
-	Schema.regExp = /* @__PURE__ */ __name(function regExp(flag = "") {
-		return Schema.union([Schema.is(RegExp), Schema.transform(Schema.string().role("regexp", { flag }), (value, options) => {
-			try {
-				return new RegExp(value, flag);
-			} catch (e) {
-				throw new ValidationError(e.message, options);
-			}
-		}, true)]);
-	}, "regExp");
-	Schema.arrayBuffer = /* @__PURE__ */ __name(function arrayBuffer(encoding) {
-		return Schema.union([
-			Schema.is(ArrayBuffer),
-			Schema.is(SharedArrayBuffer),
-			Schema.transform(Schema.any(), (value, options) => {
-				if (import_cosmokit.Binary.isSource(value)) return import_cosmokit.Binary.fromSource(value);
-				throw new ValidationError(`expected ArrayBufferSource but got ${value}`, options);
-			}, true),
-			...encoding ? [Schema.transform(Schema.string(), (value, options) => {
-				try {
-					return encoding === "base64" ? import_cosmokit.Binary.fromBase64(value) : import_cosmokit.Binary.fromHex(value);
-				} catch (e) {
-					throw new ValidationError(e.message, options);
-				}
-			}, true)] : []
-		]);
-	}, "arrayBuffer");
-	Schema.extend("lazy", (data, schema, options, strict) => {
-		if (!schema.inner[kSchema]) {
-			schema.inner = schema.builder();
-			schema.inner.meta = {
-				...schema.meta,
-				...schema.inner.meta
-			};
-		}
-		return Schema.resolve(data, schema.inner, options, strict);
-	});
-	Schema.extend("any", (data) => {
-		return [data];
-	});
-	Schema.extend("never", (data, _, options) => {
-		throw new ValidationError(`expected nullable but got ${data}`, options);
-	});
-	Schema.extend("const", (data, { value }, options) => {
-		if ((0, import_cosmokit.deepEqual)(data, value)) return [value];
-		throw new ValidationError(`expected ${value} but got ${data}`, options);
-	});
-	function checkWithinRange(data, meta, description, options, skipMin = false) {
-		const { max = Infinity, min = -Infinity } = meta;
-		if (data > max) throw new ValidationError(`expected ${description} <= ${max} but got ${data}`, options);
-		if (data < min && !skipMin) throw new ValidationError(`expected ${description} >= ${min} but got ${data}`, options);
-	}
-	__name(checkWithinRange, "checkWithinRange");
-	Schema.extend("string", (data, { meta }, options) => {
-		if (typeof data !== "string") throw new ValidationError(`expected string but got ${data}`, options);
-		if (meta.pattern) {
-			const regexp = new RegExp(meta.pattern.source, meta.pattern.flags);
-			if (!regexp.test(data)) throw new ValidationError(`expect string to match regexp ${regexp}`, options);
-		}
-		checkWithinRange(data.length, meta, "string length", options);
-		return [data];
-	});
-	function decimalShift(data, digits) {
-		const str = data.toString();
-		if (str.includes("e")) return data * Math.pow(10, digits);
-		const index = str.indexOf(".");
-		if (index === -1) return data * Math.pow(10, digits);
-		const frac = str.slice(index + 1);
-		const integer = str.slice(0, index);
-		if (frac.length <= digits) return +(integer + frac.padEnd(digits, "0"));
-		return +(integer + frac.slice(0, digits) + "." + frac.slice(digits));
-	}
-	__name(decimalShift, "decimalShift");
-	function isMultipleOf(data, min, step) {
-		step = Math.abs(step);
-		if (!/^\d+\.\d+$/.test(step.toString())) return (data - min) % step === 0;
-		const index = step.toString().indexOf(".");
-		const digits = step.toString().slice(index + 1).length;
-		return Math.abs(decimalShift(data, digits) - decimalShift(min, digits)) % decimalShift(step, digits) === 0;
-	}
-	__name(isMultipleOf, "isMultipleOf");
-	Schema.extend("number", (data, { meta }, options) => {
-		if (typeof data !== "number") throw new ValidationError(`expected number but got ${data}`, options);
-		checkWithinRange(data, meta, "number", options);
-		const { step } = meta;
-		if (step && !isMultipleOf(data, meta.min ?? 0, step)) throw new ValidationError(`expected number multiple of ${step} but got ${data}`, options);
-		return [data];
-	});
-	Schema.extend("boolean", (data, _, options) => {
-		if (typeof data === "boolean") return [data];
-		throw new ValidationError(`expected boolean but got ${data}`, options);
-	});
-	Schema.extend("bitset", (data, { bits, meta }, options) => {
-		let value = 0, keys = [];
-		if (typeof data === "number") {
-			value = data;
-			for (const key in bits) if (data & bits[key]) keys.push(key);
-		} else if (Array.isArray(data)) {
-			keys = data;
-			for (const key of keys) {
-				if (typeof key !== "string") throw new ValidationError(`expected string but got ${key}`, options);
-				if (key in bits) value |= bits[key];
-			}
-		} else throw new ValidationError(`expected number or array but got ${data}`, options);
-		if (value === meta.default) return [value];
-		return [value, keys];
-	});
-	Schema.extend("function", (data, _, options) => {
-		if (typeof data === "function") return [data];
-		throw new ValidationError(`expected function but got ${data}`, options);
-	});
-	Schema.extend("is", (data, { constructor }, options) => {
-		if (typeof constructor === "function") {
-			if (data instanceof constructor) return [data];
-			throw new ValidationError(`expected ${constructor.name} but got ${data}`, options);
-		} else {
-			if ((0, import_cosmokit.isNullable)(data)) throw new ValidationError(`expected ${constructor} but got ${data}`, options);
-			let prototype = Object.getPrototypeOf(data);
-			while (prototype) {
-				if (prototype.constructor?.name === constructor) return [data];
-				prototype = Object.getPrototypeOf(prototype);
-			}
-			throw new ValidationError(`expected ${constructor} but got ${data}`, options);
-		}
-	});
-	function property(data, key, schema, options) {
-		try {
-			const [value, adapted] = Schema.resolve(data[key], schema, {
-				...options,
-				path: [...options.path || [], key]
-			});
-			if (adapted !== void 0) data[key] = adapted;
-			return value;
-		} catch (e) {
-			if (!options?.autofix) throw e;
-			delete data[key];
-			return schema.meta.default;
-		}
-	}
-	__name(property, "property");
-	Schema.extend("array", (data, { inner, meta }, options) => {
-		if (!Array.isArray(data)) throw new ValidationError(`expected array but got ${data}`, options);
-		checkWithinRange(data.length, meta, "array length", options, !(0, import_cosmokit.isNullable)(inner.meta.default));
-		return [data.map((_, index) => property(data, index, inner, options))];
-	});
-	Schema.extend("dict", (data, { inner, sKey }, options, strict) => {
-		if (!(0, import_cosmokit.isPlainObject)(data)) throw new ValidationError(`expected object but got ${data}`, options);
-		const result = {};
-		for (const key in data) {
-			let rKey;
-			try {
-				rKey = Schema.resolve(key, sKey, options)[0];
-			} catch (error) {
-				if (strict) continue;
-				throw error;
-			}
-			result[rKey] = property(data, key, inner, options);
-			data[rKey] = data[key];
-			if (key !== rKey) delete data[key];
-		}
-		return [result];
-	});
-	Schema.extend("tuple", (data, { list }, options, strict) => {
-		if (!Array.isArray(data)) throw new ValidationError(`expected array but got ${data}`, options);
-		const result = list.map((inner, index) => property(data, index, inner, options));
-		if (strict) return [result];
-		result.push(...data.slice(list.length));
-		return [result];
-	});
-	function merge(result, data) {
-		for (const key in data) {
-			if (key in result) continue;
-			result[key] = data[key];
-		}
-	}
-	__name(merge, "merge");
-	Schema.extend("object", (data, { dict }, options, strict) => {
-		if (!(0, import_cosmokit.isPlainObject)(data)) throw new ValidationError(`expected object but got ${data}`, options);
-		const result = {};
-		for (const key in dict) {
-			const value = property(data, key, dict[key], options);
-			if (!(0, import_cosmokit.isNullable)(value) || key in data) result[key] = value;
-		}
-		if (!strict) merge(result, data);
-		return [result];
-	});
-	Schema.extend("union", (data, { list, toString: toString2 }, options, strict) => {
-		const messages = [];
-		for (const inner of list) try {
-			return Schema.resolve(data, inner, options, strict);
-		} catch (error) {
-			messages.push(error);
-		}
-		throw new ValidationError(`expected ${toString2()} but got ${JSON.stringify(data)}`, options);
-	});
-	Schema.extend("intersect", (data, { list, toString: toString2 }, options, strict) => {
-		if (!list.length) return [data];
-		let result;
-		for (const inner of list) {
-			const value = Schema.resolve(data, inner, options, true)[0];
-			if ((0, import_cosmokit.isNullable)(value)) continue;
-			if ((0, import_cosmokit.isNullable)(result)) result = value;
-			else if (typeof result !== typeof value) throw new ValidationError(`expected ${toString2()} but got ${JSON.stringify(data)}`, options);
-			else if (typeof value === "object") merge(result ??= {}, value);
-			else if (result !== value) throw new ValidationError(`expected ${toString2()} but got ${JSON.stringify(data)}`, options);
-		}
-		if (!strict && (0, import_cosmokit.isPlainObject)(data)) merge(result, data);
-		return [result];
-	});
-	Schema.extend("transform", (data, { inner, callback, preserve }, options) => {
-		const [result, adapted = data] = Schema.resolve(data, inner, options, true);
-		if (preserve) return [callback(result)];
-		else return [callback(result), callback(adapted)];
-	});
-	var formatters = {};
-	function defineMethod(name, keys, format) {
-		formatters[name] = format;
-		Object.assign(Schema, { [name](...args) {
-			const schema = new Schema({ type: name });
-			keys.forEach((key, index) => {
-				switch (key) {
-					case "sKey":
-						schema.sKey = args[index] ?? Schema.string();
-						break;
-					case "inner":
-						schema.inner = Schema.from(args[index]);
-						break;
-					case "list":
-						schema.list = args[index].map(Schema.from);
-						break;
-					case "dict":
-						schema.dict = (0, import_cosmokit.valueMap)(args[index], Schema.from);
-						break;
-					case "bits":
-						schema.bits = {};
-						for (const key2 in args[index]) {
-							if (typeof args[index][key2] !== "number") continue;
-							schema.bits[key2] = args[index][key2];
-						}
-						break;
-					case "callback": {
-						const callback = schema.callback = args[index];
-						callback["toJSON"] ||= () => callback.toString();
-						break;
-					}
-					case "constructor": {
-						const constructor = schema.constructor = args[index];
-						if (typeof constructor === "function") constructor["toJSON"] ||= () => constructor["name"];
-						break;
-					}
-					default: schema[key] = args[index];
-				}
-			});
-			if (name === "object" || name === "dict") schema.meta.default = {};
-			else if (name === "array" || name === "tuple") schema.meta.default = [];
-			else if (name === "bitset") schema.meta.default = 0;
-			return schema;
-		} });
-	}
-	__name(defineMethod, "defineMethod");
-	defineMethod("is", ["constructor"], ({ constructor }) => {
-		if (typeof constructor === "function") return constructor.name;
-		else return constructor;
-	});
-	defineMethod("any", [], () => "any");
-	defineMethod("never", [], () => "never");
-	defineMethod("const", ["value"], ({ value }) => typeof value === "string" ? JSON.stringify(value) : value);
-	defineMethod("string", [], () => "string");
-	defineMethod("number", [], () => "number");
-	defineMethod("boolean", [], () => "boolean");
-	defineMethod("bitset", ["bits"], () => "bitset");
-	defineMethod("function", [], () => "function");
-	defineMethod("array", ["inner"], ({ inner }) => `${inner.toString(true)}[]`);
-	defineMethod("dict", ["inner", "sKey"], ({ inner, sKey }) => `{ [key: ${sKey.toString()}]: ${inner.toString()} }`);
-	defineMethod("tuple", ["list"], ({ list }) => `[${list.map((inner) => inner.toString()).join(", ")}]`);
-	defineMethod("object", ["dict"], ({ dict }) => {
-		if (Object.keys(dict).length === 0) return "{}";
-		return `{ ${Object.entries(dict).map(([key, inner]) => {
-			return `${key}${inner.meta.required ? "" : "?"}: ${inner.toString()}`;
-		}).join(", ")} }`;
-	});
-	defineMethod("union", ["list"], ({ list }, inline) => {
-		const result = list.map(({ toString: format }) => format()).join(" | ");
-		return inline ? `(${result})` : result;
-	});
-	defineMethod("intersect", ["list"], ({ list }) => {
-		return `${list.map((inner) => inner.toString(true)).join(" & ")}`;
-	});
-	defineMethod("transform", [
-		"inner",
-		"callback",
-		"preserve"
-	], ({ inner }, isInner) => inner.toString(isInner));
-	module.exports = Schema;
-})))(), 1);
 /**
 * DSH_HOME resolution shared by the plugin family's Host halves: the
 * environment override wins, the platform home fallback follows. Mirrors
@@ -1230,6 +216,7 @@ function validateHostPayload(payload) {
 	const proxyJump = Array.isArray(p.proxyJump) ? p.proxyJump : [];
 	if (proxyCommand !== void 0 && proxyJump.length > 0) return "proxyCommand and proxyJump cannot be combined — pick one transport per host";
 	if (p.tags !== void 0 && (!Array.isArray(p.tags) || p.tags.some((x) => typeof x !== "string"))) return "tags must be an array of strings";
+	if (p.forwardAgent !== void 0 && typeof p.forwardAgent !== "boolean") return "forwardAgent must be a boolean";
 }
 /** Alias grammar: letters/digits plus dots, hyphens, underscores (IP/domain aliases included). */
 const ALIAS_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
@@ -1279,6 +266,7 @@ var HostStore = class {
 			...entry.environment !== void 0 ? { environment: entry.environment } : {},
 			tags: [...entry.tags],
 			...entry.location !== void 0 ? { location: entry.location } : {},
+			forwardAgent: entry.forwardAgent === true,
 			createdAt: entry.createdAt,
 			updatedAt: entry.updatedAt
 		};
@@ -1313,6 +301,7 @@ var HostStore = class {
 			environment: payload.environment?.trim() || void 0,
 			tags: [...payload.tags ?? []].map((tag) => tag.trim()).filter((tag) => tag !== ""),
 			location: payload.location?.trim() || void 0,
+			forwardAgent: payload.forwardAgent === true ? true : void 0,
 			createdAt: now,
 			updatedAt: now
 		};
@@ -1330,6 +319,7 @@ var HostStore = class {
 		if (patch.port !== void 0 && (typeof patch.port !== "number" || !Number.isInteger(patch.port) || patch.port < 1 || patch.port > 65535)) throw new Error("port must be an integer in 1..65535");
 		if (patch.proxyJump !== void 0 && (!Array.isArray(patch.proxyJump) || patch.proxyJump.some((x) => typeof x !== "string" || x === ""))) throw new Error("proxyJump must be an array of alias strings");
 		if (patch.proxyCommand !== void 0 && typeof patch.proxyCommand !== "string") throw new Error("proxyCommand must be a string when provided");
+		if (patch.forwardAgent !== void 0 && typeof patch.forwardAgent !== "boolean") throw new Error("forwardAgent must be a boolean");
 		const mergedProxyCommand = patch.proxyCommand !== void 0 ? normalizeProxyCommand(patch.proxyCommand) : entry.proxyCommand;
 		if (mergedProxyCommand !== void 0 && (patch.proxyJump ?? entry.proxyJump).length > 0) throw new Error("proxyCommand and proxyJump cannot be combined — pick one transport per host");
 		if (patch.tags !== void 0 && (!Array.isArray(patch.tags) || patch.tags.some((x) => typeof x !== "string"))) throw new Error("tags must be an array of strings");
@@ -1357,6 +347,7 @@ var HostStore = class {
 		if (patch.environment !== void 0) entry.environment = patch.environment.trim() || void 0;
 		if (patch.tags !== void 0) entry.tags = [...patch.tags].map((tag) => tag.trim()).filter((tag) => tag !== "");
 		if (patch.location !== void 0) entry.location = patch.location.trim() || void 0;
+		if (patch.forwardAgent !== void 0) entry.forwardAgent = patch.forwardAgent === true ? true : void 0;
 		entry.updatedAt = Date.now();
 		this.save(file);
 		return entry;
@@ -1424,7 +415,8 @@ var HostStore = class {
 				description: block.props.description,
 				environment: block.props.environment,
 				tags: (block.props.tags ?? "").split(",").map((tag) => tag.trim()).filter((tag) => tag !== ""),
-				location: block.props.location
+				location: block.props.location,
+				forwardAgent: parseForwardAgentValue(block.props.forwardagent)
 			};
 			try {
 				this.create(payload);
@@ -1513,6 +505,16 @@ function normalizeProxyCommand(raw) {
 	if (trimmed === void 0 || trimmed === "") return void 0;
 	if (trimmed.toLowerCase() === "none") return void 0;
 	return trimmed;
+}
+/**
+* Read an ssh_config `ForwardAgent` value into the stored boolean flag. Only
+* an explicit yes/true/on enables forwarding; an absent value, no/false/off,
+* and anything unrecognized leave it off instead of failing the import — an
+* unknown keyword must never cost the user the whole Host block.
+*/
+function parseForwardAgentValue(raw) {
+	const value = raw?.trim().toLowerCase();
+	return value === "yes" || value === "true" || value === "on";
 }
 /** Expand a leading `~` in a filesystem path. */
 function expandHome(path) {
@@ -1727,10 +729,16 @@ function startProxyCommand(rawCommand, target) {
 * Connection pool: per-alias persistent ssh2 connections with multi-hop jump
 * support, the acquire / dispose / sweep lifecycle, and the pooled exec path.
 */
+/**
+* Default ceiling for TCP connect, SSH key exchange and user authentication
+* together (ms). Password authentication behind PAM / LDAP can outlast the
+* previous 15 s ceiling while the server still eventually accepts it.
+*/
+const DEFAULT_CONNECT_TIMEOUT_MS = 3e4;
 /** Default engine knobs (applied when an option is omitted). */
 const DEFAULTS = {
 	idleTimeoutMs: 30 * 6e4,
-	connectTimeoutMs: 15e3,
+	connectTimeoutMs: DEFAULT_CONNECT_TIMEOUT_MS,
 	keepaliveIntervalMs: 15e3,
 	maxOutputBytes: 2 * 1024 * 1024,
 	defaultExecTimeoutMs: 6e4,
@@ -1760,21 +768,71 @@ function buildConnectConfig(entry, sock, opts) {
 		config.privateKey = readFileSync(keyPath, "utf8");
 		if (entry.auth.passphrase !== void 0 && entry.auth.passphrase !== "") config.passphrase = entry.auth.passphrase;
 	}
+	if (entry.forwardAgent === true) {
+		const agentPath = typeof config.agent === "string" ? config.agent : resolveForwardAgentPath(entry.auth.agentPath);
+		if (agentPath === void 0) throw new Error("agent forwarding is enabled for this host but no ssh-agent endpoint is available: set SSH_AUTH_SOCK, start Pageant on Windows, or configure an agent path");
+		config.agent = agentPath;
+		config.agentForward = true;
+	}
 	return config;
 }
+/**
+* The default ssh-agent endpoint on Windows: the named pipe the native
+* OpenSSH ssh-agent service listens on. ssh2 connects to a named pipe for any
+* path matching its Windows pipe form, so the default is a real endpoint
+* rather than a protocol name (#1910). PuTTY Pageant is still reachable — it
+* is what the literal `pageant` agent path selects — but it is no longer the
+* assumption.
+*/
+const WINDOWS_AGENT_PIPE = "\\\\.\\pipe\\openssh-ssh-agent";
 /** Resolve the ssh2 agent path for 'agent' auth. */
 function resolveAgentPath(agentPath) {
 	const explicit = normalizeAgentPath(agentPath);
 	if (explicit !== void 0) return explicit;
 	const sock = process.env.SSH_AUTH_SOCK;
 	if (sock !== void 0 && sock !== "") return sock;
-	if (process.platform === "win32") return "pageant";
+	if (process.platform === "win32") return WINDOWS_AGENT_PIPE;
+}
+/**
+* Resolve the ssh-agent endpoint that forwarding brokers signatures through:
+* an explicitly configured agent path wins, then SSH_AUTH_SOCK, then the
+* native OpenSSH named pipe on Windows. Undefined means no endpoint exists on
+* this machine.
+*
+* Forwarding shares the auth resolution on purpose — the endpoint a host
+* signs through is the same one it authenticates with — but it is a separate
+* name so the forwarding path can evolve without touching auth.
+*/
+function resolveForwardAgentPath(agentPath) {
+	return resolveAgentPath(agentPath);
+}
+/**
+* Name the phase that actually stalled. ssh2 reports every pre-ready timeout
+* as "Timed out while waiting for handshake", including one that expires
+* during user authentication after a completed key exchange.
+*
+* @param timeoutMs - the configured `readyTimeout` (0 disables it).
+* @param handshakeComplete - whether ssh2 completed the key exchange.
+* @returns the operator-facing timeout message.
+*/
+function readyTimeoutMessage(timeoutMs, handshakeComplete) {
+	const budget = typeof timeoutMs === "number" && timeoutMs > 0 ? " after " + timeoutMs + " ms" : "";
+	return handshakeComplete ? "SSH authentication timed out" + budget + ": TCP connect and key exchange completed, but the server did not finish authenticating the user - raise the dsh-ssh connectTimeoutMs setting if this host is slow" : "SSH connection timed out" + budget + " before key exchange completed: TCP connect or the SSH key exchange did not finish - raise the dsh-ssh connectTimeoutMs setting if this host is slow";
+}
+/**
+* Whether ssh2 ended the attempt with its pre-ready timeout. The level is the
+* stable discriminator; the message is reused for connect, key exchange and
+* authentication alike.
+*/
+function isReadyTimeout(error) {
+	return error.level === "client-timeout";
 }
 /** Connect one ssh2 client (resolve on ready, reject on error/close). */
 function connectClient(config, onKeyboardInteractive) {
 	return new Promise((resolve, reject) => {
 		const client = new Client();
 		let settled = false;
+		let handshakeComplete = false;
 		const fail = (error) => {
 			if (settled) return;
 			settled = true;
@@ -1785,8 +843,12 @@ function connectClient(config, onKeyboardInteractive) {
 			try {
 				client.destroy();
 			} catch {}
-			reject(error instanceof Error ? error : new Error(String(error)));
+			const cause = error instanceof Error ? error : new Error(String(error));
+			reject(isReadyTimeout(cause) ? new Error(readyTimeoutMessage(config.readyTimeout, handshakeComplete)) : cause);
 		};
+		client.once("handshake", () => {
+			handshakeComplete = true;
+		});
 		client.once("ready", () => {
 			if (settled) return;
 			settled = true;
@@ -1879,6 +941,12 @@ function parseJumpSpec(spec) {
 * Resolve one ProxyJump spec: an alias configured in this plugin wins, and any
 * other value is read as an OpenSSH address whose credentials come from the
 * target entry (an ad-hoc hop has no stored auth of its own).
+*
+* An address hop deliberately carries no forwardAgent flag: OpenSSH's
+* ForwardAgent is a per-Host setting and an ad-hoc address was never
+* configured, so it must never inherit the target's opt-in. A hop written as
+* an alias uses that alias's own entry, which is how a user forwards on a
+* bastion on purpose.
 */
 function resolveHop(engine, entry, spec) {
 	const configured = engine.store.find(spec);
@@ -1929,7 +997,7 @@ async function connectChain(engine, entry, onKeyboardInteractive) {
 			try {
 				hopClient = await connectClient(buildConnectConfig(hop, hopSock, engine.opts), onKeyboardInteractive);
 			} catch (error) {
-				throw new Error("proxyJump hop '" + spec + "' (" + hop.user + "@" + hop.host + ":" + hop.port + "): " + (error instanceof Error ? error.message : String(error)));
+				throw new Error("proxyJump hop '" + spec + "' (" + hop.user + "@" + hop.host + ":" + hop.port + "): " + (error instanceof Error ? error.message : String(error)), { cause: error });
 			}
 			hops.push(hopClient);
 			const next = index + 1 < chain.length ? resolveHop(engine, entry, chain[index + 1]) : void 0;
@@ -2030,7 +1098,7 @@ function sweepPool(engine) {
 * Run `fn` with a live client for `alias`, reconnecting (up to the
 * attempt budget) when the connection broke mid-flight.
 */
-async function withClient(engine, alias, fn, attempts = 3) {
+async function withClient(engine, alias, fn, attempts = 3, signal) {
 	let lastError;
 	for (let attempt = 1; attempt <= attempts; attempt += 1) {
 		let record = engine.pool.get(alias);
@@ -2046,6 +1114,7 @@ async function withClient(engine, alias, fn, attempts = 3) {
 			return result;
 		} catch (error) {
 			lastError = error;
+			if (signal?.aborted === true) throw error;
 			if (!record.broken) throw error;
 			disposeRecord(engine, alias, record);
 		} finally {
@@ -2055,16 +1124,33 @@ async function withClient(engine, alias, fn, attempts = 3) {
 	throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 /** Run one command on `alias` (reusing the pooled connection). */
-async function execCommand(engine, alias, command, timeoutMs) {
+async function execCommand(engine, alias, command, timeoutMs, signal) {
 	const started = Date.now();
 	const budget = timeoutMs !== void 0 && timeoutMs > 0 ? timeoutMs : engine.opts.defaultExecTimeoutMs;
 	return withClient(engine, alias, async (client) => {
 		return await new Promise((resolve, reject) => {
+			let aborted = signal !== void 0 && signal.aborted;
+			let kill = () => {};
+			const onAbort = () => {
+				aborted = true;
+				kill();
+			};
+			if (signal !== void 0 && !signal.aborted) signal.addEventListener("abort", onAbort, { once: true });
 			client.exec(command, (error, stream) => {
 				if (error !== void 0) {
+					signal?.removeEventListener("abort", onAbort);
 					reject(error);
 					return;
 				}
+				kill = () => {
+					try {
+						stream.signal("KILL");
+					} catch {}
+					try {
+						stream.close();
+					} catch {}
+				};
+				if (aborted) kill();
 				const stdout = {
 					text: "",
 					truncated: false
@@ -2075,10 +1161,21 @@ async function execCommand(engine, alias, command, timeoutMs) {
 				};
 				let timedOut = false;
 				let settled = false;
+				/** One cancelled outcome: the remote channel was killed on caller request. */
+				const cancelledResult = () => ({
+					success: false,
+					exitCode: null,
+					timedOut: false,
+					stdout: stdout.text,
+					stderr: stderr.text,
+					durationMs: Date.now() - started,
+					error: "command cancelled by the caller"
+				});
 				const finish = () => {
 					if (settled) return;
 					settled = true;
 					clearTimeout(timer);
+					signal?.removeEventListener("abort", onAbort);
 					resolve({
 						success: false,
 						exitCode: null,
@@ -2105,6 +1202,11 @@ async function execCommand(engine, alias, command, timeoutMs) {
 					if (settled) return;
 					settled = true;
 					clearTimeout(timer);
+					signal?.removeEventListener("abort", onAbort);
+					if (aborted) {
+						resolve(cancelledResult());
+						return;
+					}
 					if (typeof code !== "number" && !timedOut) {
 						reject(/* @__PURE__ */ new Error("ssh: connection lost mid-flight (channel closed without an exit status)"));
 						return;
@@ -2122,6 +1224,11 @@ async function execCommand(engine, alias, command, timeoutMs) {
 					if (settled) return;
 					settled = true;
 					clearTimeout(timer);
+					signal?.removeEventListener("abort", onAbort);
+					if (aborted) {
+						resolve(cancelledResult());
+						return;
+					}
 					reject(streamError);
 				});
 			});
@@ -2427,6 +1534,24 @@ function fastGet(sftp, src, dst, concurrency, onProgress) {
 * to a pooled connection so an idle sweep never closes it, with per-tunnel
 * socket tracking and stop (single / alias-scoped / all).
 */
+/** Destroy one socket or channel stream, tolerating an already-dead peer. */
+function destroyQuietly(target) {
+	try {
+		target.destroy();
+	} catch {}
+}
+/**
+* Tear down one tunnel because the SSH link behind it is gone. Idempotent: the
+* tunnel registry is the guard, so a socket callback or a link-death hook that
+* arrives after a manual stop does nothing instead of tearing down twice, and
+* no teardown error can escape into the net connection handler — an exception
+* there terminates the whole host process.
+*/
+function abortTunnel(engine, id) {
+	try {
+		stopTunnel(engine, id);
+	} catch {}
+}
 /** Start a local port-forward tunnel (listens on 127.0.0.1 only). */
 async function startTunnel(engine, alias, options) {
 	if (!Number.isInteger(options.remotePort) || options.remotePort < 1 || options.remotePort > 65535) throw new Error("remotePort must be an integer in 1..65535");
@@ -2449,30 +1574,44 @@ async function startTunnel(engine, alias, options) {
 	const record = engine.pool.get(alias) ?? await acquire(engine, alias);
 	const client = record.client;
 	const sockets = /* @__PURE__ */ new Set();
+	const onLinkClosed = () => {
+		abortTunnel(engine, id);
+	};
+	const detachLink = () => {
+		client.off("close", onLinkClosed);
+	};
 	const server = createServer((socket) => {
 		sockets.add(socket);
 		socket.on("close", () => {
 			sockets.delete(socket);
 		});
-		client.forwardOut("127.0.0.1", 0, remoteHost, options.remotePort, (error, stream) => {
-			if (error !== void 0) {
-				socket.destroy();
-				return;
-			}
-			const destroy = () => {
-				try {
-					socket.destroy();
-				} catch {}
-				try {
-					stream.close();
-				} catch {}
-			};
-			stream.on("error", destroy);
-			socket.on("error", destroy);
-			stream.on("close", destroy);
-			socket.on("close", destroy);
-			stream.pipe(socket).pipe(stream);
-		});
+		if (record.broken) {
+			destroyQuietly(socket);
+			abortTunnel(engine, id);
+			return;
+		}
+		try {
+			client.forwardOut("127.0.0.1", 0, remoteHost, options.remotePort, (error, stream) => {
+				if (error !== void 0) {
+					destroyQuietly(socket);
+					return;
+				}
+				const destroy = () => {
+					destroyQuietly(socket);
+					try {
+						stream.close();
+					} catch {}
+				};
+				stream.on("error", destroy);
+				socket.on("error", destroy);
+				stream.on("close", destroy);
+				socket.on("close", destroy);
+				stream.pipe(socket).pipe(stream);
+			});
+		} catch {
+			destroyQuietly(socket);
+			abortTunnel(engine, id);
+		}
 	});
 	try {
 		await new Promise((resolve, reject) => {
@@ -2495,8 +1634,15 @@ async function startTunnel(engine, alias, options) {
 		server,
 		alias,
 		record,
-		sockets
+		sockets,
+		detachLink
 	});
+	client.once("close", onLinkClosed);
+	if (record.broken) {
+		info.state = "failed";
+		info.error = "ssh link closed while the tunnel was starting";
+		abortTunnel(engine, id);
+	}
 	return info;
 }
 /** All active tunnels. */
@@ -2509,11 +1655,12 @@ function stopTunnel(engine, id) {
 	if (tunnel === void 0) return false;
 	engine.tunnels.delete(id);
 	try {
+		tunnel.detachLink?.();
+	} catch {}
+	try {
 		tunnel.server.close();
 	} catch {}
-	for (const socket of tunnel.sockets) try {
-		socket.destroy();
-	} catch {}
+	for (const socket of tunnel.sockets) destroyQuietly(socket);
 	tunnel.sockets.clear();
 	if (![...engine.tunnels.values()].some((candidate) => candidate.record === tunnel.record)) if (engine.pool.get(tunnel.alias) === tunnel.record) disposeRecord(engine, tunnel.alias, tunnel.record);
 	else endRecordChain(tunnel.record);
@@ -2549,7 +1696,7 @@ async function cluster(engine, options) {
 		while (queue.length > 0) {
 			const entry = queue.shift();
 			try {
-				const result = await execCommand(engine, entry.alias, options.command, options.timeoutMs);
+				const result = await execCommand(engine, entry.alias, options.command, options.timeoutMs, options.signal);
 				results.push({
 					alias: entry.alias,
 					ok: result.success,
@@ -2598,6 +1745,15 @@ var SshEngine = class {
 		this.sweepTimer = setInterval(() => sweepPool(this), Math.max(1e4, this.opts.idleTimeoutMs / 4));
 		this.sweepTimer.unref?.();
 	}
+	/**
+	* Change the pre-ready ceiling (TCP connect + key exchange + user
+	* authentication) for connections opened from now on. A pooled connection
+	* keeps serving until it reconnects, because the ceiling governs the
+	* connect path only.
+	*/
+	setConnectTimeout(timeoutMs) {
+		this.opts.connectTimeoutMs = timeoutMs;
+	}
 	/** Secret-free host list (filtered by the optional query). */
 	list(query) {
 		const needle = query?.trim().toLowerCase();
@@ -2609,8 +1765,8 @@ var SshEngine = class {
 		return entry === void 0 ? void 0 : this.store.summarize(entry);
 	}
 	/** Run one command on `alias` (reusing the pooled connection). */
-	async exec(alias, command, timeoutMs) {
-		return execCommand(this, alias, command, timeoutMs);
+	async exec(alias, command, timeoutMs, signal) {
+		return execCommand(this, alias, command, timeoutMs, signal);
 	}
 	/** Run one command against many hosts concurrently. */
 	async cluster(options) {
@@ -2684,6 +1840,265 @@ var SshEngine = class {
 		if (this.sweepTimer !== void 0) clearInterval(this.sweepTimer);
 		for (const id of [...this.tunnels.keys()]) stopTunnel(this, id);
 		for (const alias of [...this.pool.keys()]) disposeRecord(this, alias);
+	}
+};
+//#endregion
+//#region src/engine/terminal-sessions.ts
+/**
+* Host-side terminal sessions for the web terminal.
+*
+* The PTY shell is owned here, not by the browser view: a view can detach
+* (panel switch, page unmount, a dropped socket) and reattach by session id
+* without tearing the remote shell down, which is what makes the terminal
+* survival property the old DOM takeover used to provide. A session with no
+* attached socket is reaped after an idle window, and an exited one is kept
+* for a short grace window so a reattaching view still sees the final screen.
+*/
+/** Pause the shell when an attached socket's send buffer exceeds this… */
+const BACKPRESSURE_HIGH_WATER = 1024 * 1024;
+/** …and resume once every attached socket drains below this. */
+const BACKPRESSURE_LOW_WATER = 512 * 1024;
+/** Scrollback retained for a reattaching view (bytes of UTF-8 output). */
+const DEFAULT_MAX_BUFFER_BYTES = 256 * 1024;
+/** A detached session is reaped after this long. */
+const DEFAULT_IDLE_MS = 600 * 1e3;
+/** An exited session is kept this long for a reattaching view. */
+const DEFAULT_EXIT_GRACE_MS = 60 * 1e3;
+/**
+* The host's terminal session table: open one session per connect, attach any
+* number of sockets, and keep the shell alive across detach.
+*/
+var TerminalSessionRegistry = class {
+	sessions = /* @__PURE__ */ new Map();
+	deps;
+	maxBufferBytes;
+	idleMs;
+	exitGraceMs;
+	constructor(deps) {
+		this.deps = deps;
+		this.maxBufferBytes = deps.maxBufferBytes ?? DEFAULT_MAX_BUFFER_BYTES;
+		this.idleMs = deps.idleMs ?? DEFAULT_IDLE_MS;
+		this.exitGraceMs = deps.exitGraceMs ?? DEFAULT_EXIT_GRACE_MS;
+	}
+	/** Open a new session for the alias and attach the requesting socket to it. */
+	async open(ws, alias, size) {
+		const session = {
+			id: randomBytes(9).toString("hex"),
+			alias,
+			sockets: /* @__PURE__ */ new Set(),
+			buffer: [],
+			bufferBytes: 0,
+			exited: false
+		};
+		this.sessions.set(session.id, session);
+		this.bind(ws, session);
+		try {
+			const shell = await this.deps.openShell(alias, size, this.keyboardInteractive(session));
+			if (!this.sessions.has(session.id)) {
+				shell.close();
+				return;
+			}
+			session.shell = shell;
+			shell.onData = (data) => {
+				this.pushOutput(session, data.toString("utf8"));
+			};
+			shell.onExit = (code, error) => {
+				this.finish(session, code, error);
+			};
+			this.send(session, {
+				type: "ready",
+				alias,
+				sessionId: session.id
+			});
+		} catch (error) {
+			this.sessions.delete(session.id);
+			this.send(session, {
+				type: "exit",
+				code: null,
+				error: error instanceof Error ? error.message : String(error)
+			});
+		}
+	}
+	/**
+	* Attach a socket to an existing session, replaying its scrollback first.
+	* @returns false when the session is unknown (expired or already reaped).
+	*/
+	attach(ws, sessionId, size) {
+		const session = this.sessions.get(sessionId);
+		if (session === void 0) return false;
+		this.bind(ws, session);
+		this.clearReap(session);
+		for (const chunk of session.buffer) this.sendTo(session, ws, {
+			type: "output",
+			data: chunk
+		});
+		this.sendTo(session, ws, {
+			type: "ready",
+			alias: session.alias,
+			sessionId: session.id
+		});
+		if (session.exited) {
+			this.sendTo(session, ws, {
+				type: "exit",
+				code: session.exit?.code ?? null,
+				error: session.exit?.error
+			});
+			this.scheduleReap(session, this.exitGraceMs);
+		} else {
+			session.shell?.resize(Math.max(2, size.cols), Math.max(1, size.rows));
+			session.shell?.resume();
+		}
+		return true;
+	}
+	/** End every session (host teardown, plugin dispose). */
+	dispose() {
+		for (const session of [...this.sessions.values()]) this.end(session, false);
+		this.sessions.clear();
+	}
+	/** Number of live sessions (introspection for tests and diagnostics). */
+	size() {
+		return this.sessions.size;
+	}
+	/** Wire one socket's frames and lifecycle onto a session. */
+	bind(ws, session) {
+		session.sockets.add(ws);
+		ws.on("message", (data) => {
+			let frame;
+			try {
+				frame = JSON.parse(String(data));
+			} catch {
+				return;
+			}
+			if (frame.type === "input") session.shell?.send(frame.data ?? "");
+			else if (frame.type === "resize") session.shell?.resize(Math.max(2, frame.cols ?? 80), Math.max(1, frame.rows ?? 24));
+			else if (frame.type === "auth_response") {
+				const finish = session.pendingAuthFinish;
+				session.pendingAuthFinish = void 0;
+				try {
+					finish?.(frame.responses ?? []);
+				} catch {}
+			} else if (frame.type === "close") this.end(session, true);
+			else if (frame.type === "detach") this.detach(ws);
+		});
+		ws.on("close", () => {
+			this.detach(ws);
+		});
+		ws.on("error", () => {
+			this.detach(ws);
+		});
+	}
+	/** Remove a socket from its session, keeping the shell alive. */
+	detach(ws) {
+		for (const session of this.sessions.values()) {
+			if (!session.sockets.delete(ws)) continue;
+			if (session.sockets.size === 0) this.scheduleReap(session, session.exited ? this.exitGraceMs : this.idleMs);
+			return;
+		}
+	}
+	/** End the session a socket is attached to (explicit close from the view). */
+	end(session, notify) {
+		this.clearReap(session);
+		if (this.sessions.delete(session.id) && notify) {
+			if (session.pendingAuthFinish !== void 0) {
+				const finish = session.pendingAuthFinish;
+				session.pendingAuthFinish = void 0;
+				try {
+					finish([]);
+				} catch {}
+			}
+		}
+		try {
+			session.shell?.close();
+		} catch {}
+	}
+	/** Mark a session exited and keep it briefly so a reattaching view sees it. */
+	finish(session, code, error) {
+		if (session.exited) return;
+		session.exited = true;
+		session.exit = {
+			code,
+			error
+		};
+		this.send(session, {
+			type: "exit",
+			code,
+			error
+		});
+		for (const ws of [...session.sockets]) {
+			session.sockets.delete(ws);
+			try {
+				ws.close(1e3);
+			} catch {}
+		}
+		this.scheduleReap(session, this.exitGraceMs);
+	}
+	/** Append output to the replay buffer, trimmed to the byte cap. */
+	pushOutput(session, data) {
+		session.buffer.push(data);
+		session.bufferBytes += Buffer.byteLength(data);
+		while (session.bufferBytes > this.maxBufferBytes && session.buffer.length > 1) {
+			const dropped = session.buffer.shift();
+			session.bufferBytes -= Buffer.byteLength(dropped ?? "");
+		}
+		this.send(session, {
+			type: "output",
+			data
+		});
+	}
+	/** Broadcast one frame to every attached socket, honoring backpressure. */
+	send(session, frame) {
+		for (const ws of session.sockets) this.sendTo(session, ws, frame);
+		this.applyBackpressure(session);
+	}
+	sendTo(session, ws, frame) {
+		if (ws.readyState !== WebSocket.OPEN) return;
+		try {
+			ws.send(JSON.stringify(frame));
+		} catch {}
+	}
+	/** Pause while any attached socket is backed up; resume once all drained. */
+	applyBackpressure(session) {
+		const shell = session.shell;
+		if (shell === void 0) return;
+		let high = false;
+		let low = true;
+		for (const ws of session.sockets) {
+			if (ws.bufferedAmount > BACKPRESSURE_HIGH_WATER) high = true;
+			if (ws.bufferedAmount > BACKPRESSURE_LOW_WATER) low = false;
+		}
+		if (high) shell.pause();
+		else if (low) shell.resume();
+	}
+	/** Answer a keyboard-interactive challenge through whoever is attached. */
+	keyboardInteractive(session) {
+		return (name, instructions, _lang, prompts, finish) => {
+			session.pendingAuthFinish = finish;
+			this.send(session, {
+				type: "auth_prompt",
+				name,
+				instructions,
+				prompts: prompts.map((p) => ({
+					prompt: p.prompt,
+					echo: p.echo
+				}))
+			});
+		};
+	}
+	scheduleReap(session, delayMs) {
+		this.clearReap(session);
+		const timer = setTimeout(() => {
+			session.reapTimer = void 0;
+			if (session.sockets.size > 0) return;
+			this.end(session, false);
+		}, delayMs);
+		timer.unref?.();
+		session.reapTimer = timer;
+	}
+	clearReap(session) {
+		if (session.reapTimer !== void 0) {
+			clearTimeout(session.reapTimer);
+			session.reapTimer = void 0;
+		}
 	}
 };
 //#endregion
@@ -2764,12 +2179,26 @@ function isLoopbackHostname(hostname) {
 	return isIPv4Loopback(hostname);
 }
 /**
+* Whether a reverse proxy stood between the client and this host: the request
+* carries CF-Connecting-IP or X-Forwarded-For. Either header is stamped by a
+* hop that forwards traffic, so the request did not originate on this machine.
+* @param request - node HTTP request.
+* @returns true when a forwarding header is present.
+*/
+function isProxiedRequest(request) {
+	return request.headers["cf-connecting-ip"] !== void 0 || request.headers["x-forwarded-for"] !== void 0;
+}
+/**
 * Request-level trust fence: a loopback socket address AND a loopback Host
 * header, plus browser same-origin markers. The socket address is
-* authoritative; X-Forwarded-For is never trusted.
+* authoritative for a direct connection; a request that carries a forwarding
+* header is refused outright, because a proxy in front of the host makes both
+* the socket address and the Host header describe the proxy rather than the
+* client. X-Forwarded-For is therefore never evidence *for* loopback.
 */
 function isLoopbackRequest(request) {
 	if (!isLoopbackAddress(request.socket.remoteAddress)) return false;
+	if (isProxiedRequest(request)) return false;
 	const host = request.headers.host;
 	if (typeof host !== "string") return false;
 	let hostUrl;
@@ -2820,10 +2249,6 @@ const MAX_UPLOAD_BYTES = 4 * 1024 * 1024 * 1024;
 * frames (the webserver hands us the raw upgraded socket).
 */
 const terminalWss = new WebSocketServer({ noServer: true });
-/** Pause the shell when the socket's send buffer exceeds this… */
-const BACKPRESSURE_HIGH_WATER = 1024 * 1024;
-/** …and resume once it drains below this. */
-const BACKPRESSURE_LOW_WATER = 512 * 1024;
 /** URL query helper (first value, decoded). */
 function queryParam(url, name) {
 	const value = url.searchParams.get(name);
@@ -2854,391 +2279,394 @@ function makeRoutes(deps) {
 		}
 		return true;
 	};
-	return {
-		routes: [
-			{
-				kind: "exact",
-				path: SSH_API.hosts,
-				handler: async (req, res) => {
-					const method = req.method ?? "GET";
-					if (!isLoopbackRequest(req)) {
-						writeJson(res, 403, { error: "forbidden: loopback-only" });
+	const routes = [
+		{
+			kind: "exact",
+			path: SSH_API.hosts,
+			handler: async (req, res) => {
+				const method = req.method ?? "GET";
+				if (!isLoopbackRequest(req)) {
+					writeJson(res, 403, { error: "forbidden: loopback-only" });
+					return;
+				}
+				const url = new URL(req.url ?? "/", "http://localhost");
+				if (method === "GET") {
+					writeJson(res, 200, { hosts: engine.list(queryParam(url, "query")) });
+					return;
+				}
+				if (method === "POST") {
+					const body = await readJsonBody(req);
+					if (body === null) {
+						writeJson(res, 400, { error: "invalid JSON body" });
 						return;
 					}
-					const url = new URL(req.url ?? "/", "http://localhost");
-					if (method === "GET") {
-						writeJson(res, 200, { hosts: engine.list(queryParam(url, "query")) });
-						return;
+					try {
+						const entry = store.create(body);
+						writeJson(res, 201, { host: store.summarize(entry) });
+					} catch (error) {
+						writeJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
 					}
-					if (method === "POST") {
-						const body = await readJsonBody(req);
-						if (body === null) {
-							writeJson(res, 400, { error: "invalid JSON body" });
-							return;
-						}
-						try {
-							const entry = store.create(body);
-							writeJson(res, 201, { host: store.summarize(entry) });
-						} catch (error) {
-							writeJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
-						}
-						return;
-					}
-					if (method !== "PATCH" && method !== "DELETE") {
-						writeJson(res, 405, { error: `method not allowed: ${method}` });
-						return;
-					}
-					const alias = queryParam(url, "alias");
-					if (alias === void 0 || alias === "") {
-						writeJson(res, 400, { error: "alias query parameter is required" });
-						return;
-					}
-					if (method === "PATCH") {
-						const body = await readJsonBody(req);
-						if (body === null) {
-							writeJson(res, 400, { error: "invalid JSON body" });
-							return;
-						}
-						try {
-							const entry = store.update(alias, body);
-							const patch = body;
-							if ([
-								"host",
-								"port",
-								"user",
-								"auth",
-								"proxyJump",
-								"proxyCommand"
-							].some((key) => patch[key] !== void 0)) engine.dropAlias(alias);
-							writeJson(res, 200, { host: store.summarize(entry) });
-						} catch (error) {
-							writeJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
-						}
-						return;
-					}
-					if (method === "DELETE") {
-						try {
-							engine.dropAlias(alias);
-							store.delete(alias);
-							writeJson(res, 200, { ok: true });
-						} catch (error) {
-							writeJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
-						}
-						return;
-					}
+					return;
+				}
+				if (method !== "PATCH" && method !== "DELETE") {
 					writeJson(res, 405, { error: `method not allowed: ${method}` });
+					return;
 				}
-			},
-			{
-				kind: "exact",
-				path: SSH_API.importSshConfig,
-				handler: async (req, res) => {
-					if (!guard(req, res, "POST")) return;
-					try {
-						writeJson(res, 200, { result: store.importFromSshConfig() });
-					} catch (error) {
-						writeJson(res, 500, { error: error instanceof Error ? error.message : String(error) });
-					}
+				const alias = queryParam(url, "alias");
+				if (alias === void 0 || alias === "") {
+					writeJson(res, 400, { error: "alias query parameter is required" });
+					return;
 				}
-			},
-			{
-				kind: "exact",
-				path: SSH_API.test,
-				handler: async (req, res) => {
-					if (!guard(req, res, "POST")) return;
+				if (method === "PATCH") {
 					const body = await readJsonBody(req);
+					if (body === null) {
+						writeJson(res, 400, { error: "invalid JSON body" });
+						return;
+					}
+					try {
+						const entry = store.update(alias, body);
+						const patch = body;
+						if ([
+							"host",
+							"port",
+							"user",
+							"auth",
+							"proxyJump",
+							"proxyCommand",
+							"forwardAgent"
+						].some((key) => patch[key] !== void 0)) engine.dropAlias(alias);
+						writeJson(res, 200, { host: store.summarize(entry) });
+					} catch (error) {
+						writeJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
+					}
+					return;
+				}
+				if (method === "DELETE") {
+					try {
+						engine.dropAlias(alias);
+						store.delete(alias);
+						writeJson(res, 200, { ok: true });
+					} catch (error) {
+						writeJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
+					}
+					return;
+				}
+				writeJson(res, 405, { error: `method not allowed: ${method}` });
+			}
+		},
+		{
+			kind: "exact",
+			path: SSH_API.importSshConfig,
+			handler: async (req, res) => {
+				if (!guard(req, res, "POST")) return;
+				try {
+					writeJson(res, 200, { result: store.importFromSshConfig() });
+				} catch (error) {
+					writeJson(res, 500, { error: error instanceof Error ? error.message : String(error) });
+				}
+			}
+		},
+		{
+			kind: "exact",
+			path: SSH_API.test,
+			handler: async (req, res) => {
+				if (!guard(req, res, "POST")) return;
+				const body = await readJsonBody(req);
+				const alias = typeof body?.alias === "string" ? body.alias : "";
+				if (alias === "") {
+					writeJson(res, 400, { error: "alias is required" });
+					return;
+				}
+				try {
+					writeJson(res, 200, { result: await engine.test(alias) });
+				} catch (error) {
+					writeJson(res, 500, { error: error instanceof Error ? error.message : String(error) });
+				}
+			}
+		},
+		{
+			kind: "exact",
+			path: SSH_API.exec,
+			handler: async (req, res) => {
+				if (!guard(req, res, "POST")) return;
+				const body = await readJsonBody(req);
+				const alias = typeof body?.alias === "string" ? body.alias : "";
+				const command = typeof body?.command === "string" ? body.command : "";
+				if (alias === "" || command === "") {
+					writeJson(res, 400, { error: "alias and command are required" });
+					return;
+				}
+				const timeoutMs = typeof body?.timeoutMs === "number" ? body.timeoutMs : void 0;
+				try {
+					writeJson(res, 200, { result: await engine.exec(alias, command, timeoutMs) });
+				} catch (error) {
+					writeJson(res, 500, { error: error instanceof Error ? error.message : String(error) });
+				}
+			}
+		},
+		{
+			kind: "exact",
+			path: SSH_API.cluster,
+			handler: async (req, res) => {
+				if (!guard(req, res, "POST")) return;
+				const body = await readJsonBody(req);
+				const command = typeof body?.command === "string" ? body.command : "";
+				if (command === "") {
+					writeJson(res, 400, { error: "command is required" });
+					return;
+				}
+				const aliases = Array.isArray(body?.aliases) ? body.aliases.filter((x) => typeof x === "string") : void 0;
+				const tags = Array.isArray(body?.tags) ? body.tags.filter((x) => typeof x === "string") : void 0;
+				const environment = typeof body?.environment === "string" ? body.environment : void 0;
+				const timeoutMs = typeof body?.timeoutMs === "number" ? body.timeoutMs : void 0;
+				const maxWorkers = typeof body?.maxWorkers === "number" ? body.maxWorkers : void 0;
+				const hasAliases = aliases?.some((alias) => alias.trim() !== "") === true;
+				const hasEnvironment = typeof environment === "string" && environment.trim() !== "";
+				const hasTags = tags?.some((tag) => tag.trim() !== "") === true;
+				if (!hasAliases && !hasEnvironment && !hasTags) {
+					writeJson(res, 400, { error: "ssh_cluster requires aliases, environment, or tags to limit the target set" });
+					return;
+				}
+				try {
+					writeJson(res, 200, { results: await engine.cluster({
+						command,
+						aliases,
+						environment,
+						tags,
+						timeoutMs,
+						maxWorkers
+					}) });
+				} catch (error) {
+					writeJson(res, 500, { error: error instanceof Error ? error.message : String(error) });
+				}
+			}
+		},
+		{
+			kind: "exact",
+			path: SSH_API.ls,
+			handler: async (req, res) => {
+				if (!guard(req, res, "GET")) return;
+				const url = new URL(req.url ?? "/", "http://localhost");
+				const alias = queryParam(url, "alias");
+				const path = queryParam(url, "path") ?? "/";
+				if (alias === void 0 || alias === "") {
+					writeJson(res, 400, { error: "alias query parameter is required" });
+					return;
+				}
+				try {
+					writeJson(res, 200, { entries: await engine.ls(alias, path) });
+				} catch (error) {
+					writeJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
+				}
+			}
+		},
+		{
+			kind: "exact",
+			path: SSH_API.tunnel,
+			handler: async (req, res) => {
+				if (!guard(req, res, "POST")) return;
+				const body = await readJsonBody(req);
+				const action = typeof body?.action === "string" ? body.action : "";
+				if (action === "list") {
+					writeJson(res, 200, { tunnels: engine.listTunnels() });
+					return;
+				}
+				if (action === "start") {
 					const alias = typeof body?.alias === "string" ? body.alias : "";
-					if (alias === "") {
-						writeJson(res, 400, { error: "alias is required" });
+					const remotePort = typeof body?.remotePort === "number" ? body.remotePort : void 0;
+					if (alias === "" || remotePort === void 0) {
+						writeJson(res, 400, { error: "alias and remotePort are required" });
 						return;
 					}
 					try {
-						writeJson(res, 200, { result: await engine.test(alias) });
-					} catch (error) {
-						writeJson(res, 500, { error: error instanceof Error ? error.message : String(error) });
-					}
-				}
-			},
-			{
-				kind: "exact",
-				path: SSH_API.exec,
-				handler: async (req, res) => {
-					if (!guard(req, res, "POST")) return;
-					const body = await readJsonBody(req);
-					const alias = typeof body?.alias === "string" ? body.alias : "";
-					const command = typeof body?.command === "string" ? body.command : "";
-					if (alias === "" || command === "") {
-						writeJson(res, 400, { error: "alias and command are required" });
-						return;
-					}
-					const timeoutMs = typeof body?.timeoutMs === "number" ? body.timeoutMs : void 0;
-					try {
-						writeJson(res, 200, { result: await engine.exec(alias, command, timeoutMs) });
-					} catch (error) {
-						writeJson(res, 500, { error: error instanceof Error ? error.message : String(error) });
-					}
-				}
-			},
-			{
-				kind: "exact",
-				path: SSH_API.cluster,
-				handler: async (req, res) => {
-					if (!guard(req, res, "POST")) return;
-					const body = await readJsonBody(req);
-					const command = typeof body?.command === "string" ? body.command : "";
-					if (command === "") {
-						writeJson(res, 400, { error: "command is required" });
-						return;
-					}
-					const aliases = Array.isArray(body?.aliases) ? body.aliases.filter((x) => typeof x === "string") : void 0;
-					const tags = Array.isArray(body?.tags) ? body.tags.filter((x) => typeof x === "string") : void 0;
-					const environment = typeof body?.environment === "string" ? body.environment : void 0;
-					const timeoutMs = typeof body?.timeoutMs === "number" ? body.timeoutMs : void 0;
-					const maxWorkers = typeof body?.maxWorkers === "number" ? body.maxWorkers : void 0;
-					const hasAliases = aliases?.some((alias) => alias.trim() !== "") === true;
-					const hasEnvironment = typeof environment === "string" && environment.trim() !== "";
-					const hasTags = tags?.some((tag) => tag.trim() !== "") === true;
-					if (!hasAliases && !hasEnvironment && !hasTags) {
-						writeJson(res, 400, { error: "ssh_cluster requires aliases, environment, or tags to limit the target set" });
-						return;
-					}
-					try {
-						writeJson(res, 200, { results: await engine.cluster({
-							command,
-							aliases,
-							environment,
-							tags,
-							timeoutMs,
-							maxWorkers
+						writeJson(res, 200, { tunnel: await engine.startTunnel(alias, {
+							remotePort,
+							remoteHost: typeof body?.remoteHost === "string" && body.remoteHost !== "" ? body.remoteHost : void 0,
+							localPort: typeof body?.localPort === "number" ? body.localPort : void 0
 						}) });
 					} catch (error) {
 						writeJson(res, 500, { error: error instanceof Error ? error.message : String(error) });
 					}
+					return;
 				}
-			},
-			{
-				kind: "exact",
-				path: SSH_API.ls,
-				handler: async (req, res) => {
-					if (!guard(req, res, "GET")) return;
-					const url = new URL(req.url ?? "/", "http://localhost");
-					const alias = queryParam(url, "alias");
-					const path = queryParam(url, "path") ?? "/";
-					if (alias === void 0 || alias === "") {
-						writeJson(res, 400, { error: "alias query parameter is required" });
+				if (action === "stop") {
+					const id = typeof body?.tunnelId === "string" ? body.tunnelId : "";
+					if (id === "") {
+						writeJson(res, 400, { error: "tunnelId is required" });
 						return;
 					}
+					writeJson(res, 200, { ok: engine.stopTunnel(id) });
+					return;
+				}
+				if (action === "stop-all") {
+					const alias = typeof body?.alias === "string" ? body.alias : void 0;
+					writeJson(res, 200, { stopped: engine.stopAllTunnels(alias === "" ? void 0 : alias) });
+					return;
+				}
+				writeJson(res, 400, { error: `unknown action '${action}'` });
+			}
+		},
+		{
+			kind: "exact",
+			path: SSH_API.upload,
+			handler: async (req, res) => {
+				if (!guard(req, res, "POST")) return;
+				const url = new URL(req.url ?? "/", "http://localhost");
+				const alias = queryParam(url, "alias");
+				const remotePath = queryParam(url, "remotePath");
+				if (alias === void 0 || remotePath === void 0) {
+					writeJson(res, 400, { error: "alias and remotePath query parameters are required" });
+					return;
+				}
+				const declared = Number(req.headers["content-length"]);
+				if (Number.isFinite(declared) && declared > maxUploadBytes) {
+					writeJson(res, 413, { error: "upload body too large" });
+					return;
+				}
+				res.writeHead(200, {
+					"content-type": "application/x-ndjson; charset=utf-8",
+					"cache-control": "no-cache",
+					"referrer-policy": "no-referrer"
+				});
+				const emit = (line) => {
 					try {
-						writeJson(res, 200, { entries: await engine.ls(alias, path) });
-					} catch (error) {
-						writeJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
-					}
-				}
-			},
-			{
-				kind: "exact",
-				path: SSH_API.tunnel,
-				handler: async (req, res) => {
-					if (!guard(req, res, "POST")) return;
-					const body = await readJsonBody(req);
-					const action = typeof body?.action === "string" ? body.action : "";
-					if (action === "list") {
-						writeJson(res, 200, { tunnels: engine.listTunnels() });
-						return;
-					}
-					if (action === "start") {
-						const alias = typeof body?.alias === "string" ? body.alias : "";
-						const remotePort = typeof body?.remotePort === "number" ? body.remotePort : void 0;
-						if (alias === "" || remotePort === void 0) {
-							writeJson(res, 400, { error: "alias and remotePort are required" });
-							return;
-						}
+						res.write(JSON.stringify(line) + "\n");
+					} catch {}
+				};
+				const tmp = join(staging, `upload-${randomBytes(6).toString("hex")}`);
+				const sink = createWriteStream(tmp, { mode: 384 });
+				let settled = false;
+				const cleanup = () => {
+					unlink(tmp).catch(() => void 0).finally(() => {
 						try {
-							writeJson(res, 200, { tunnel: await engine.startTunnel(alias, {
-								remotePort,
-								remoteHost: typeof body?.remoteHost === "string" && body.remoteHost !== "" ? body.remoteHost : void 0,
-								localPort: typeof body?.localPort === "number" ? body.localPort : void 0
-							}) });
-						} catch (error) {
-							writeJson(res, 500, { error: error instanceof Error ? error.message : String(error) });
-						}
-						return;
-					}
-					if (action === "stop") {
-						const id = typeof body?.tunnelId === "string" ? body.tunnelId : "";
-						if (id === "") {
-							writeJson(res, 400, { error: "tunnelId is required" });
-							return;
-						}
-						writeJson(res, 200, { ok: engine.stopTunnel(id) });
-						return;
-					}
-					if (action === "stop-all") {
-						const alias = typeof body?.alias === "string" ? body.alias : void 0;
-						writeJson(res, 200, { stopped: engine.stopAllTunnels(alias === "" ? void 0 : alias) });
-						return;
-					}
-					writeJson(res, 400, { error: `unknown action '${action}'` });
-				}
-			},
-			{
-				kind: "exact",
-				path: SSH_API.upload,
-				handler: async (req, res) => {
-					if (!guard(req, res, "POST")) return;
-					const url = new URL(req.url ?? "/", "http://localhost");
-					const alias = queryParam(url, "alias");
-					const remotePath = queryParam(url, "remotePath");
-					if (alias === void 0 || remotePath === void 0) {
-						writeJson(res, 400, { error: "alias and remotePath query parameters are required" });
-						return;
-					}
-					const declared = Number(req.headers["content-length"]);
-					if (Number.isFinite(declared) && declared > maxUploadBytes) {
-						writeJson(res, 413, { error: "upload body too large" });
-						return;
-					}
-					res.writeHead(200, {
-						"content-type": "application/x-ndjson; charset=utf-8",
-						"cache-control": "no-cache",
-						"referrer-policy": "no-referrer"
-					});
-					const emit = (line) => {
-						try {
-							res.write(JSON.stringify(line) + "\n");
+							res.end();
 						} catch {}
-					};
-					const tmp = join(staging, `upload-${randomBytes(6).toString("hex")}`);
-					const sink = createWriteStream(tmp, { mode: 384 });
-					let settled = false;
-					const fail = (error) => {
-						if (settled) return;
-						settled = true;
+					});
+				};
+				const fail = (error) => {
+					if (settled) return;
+					settled = true;
+					emit({
+						type: "result",
+						ok: false,
+						error: error instanceof Error ? error.message : String(error)
+					});
+					if (sink.destroyed) cleanup();
+					else {
+						sink.once("close", cleanup);
+						try {
+							sink.destroy();
+						} catch {
+							cleanup();
+						}
+					}
+				};
+				const done = () => {
+					if (settled) return;
+					settled = true;
+					try {
+						res.end();
+					} catch {}
+				};
+				sink.on("error", (error) => fail(error));
+				req.on("error", (error) => fail(error));
+				req.on("aborted", () => fail("upload aborted by the client"));
+				res.on("error", () => fail("response stream closed"));
+				res.on("close", () => {
+					if (!res.writableEnded) fail("connection closed");
+				});
+				let received = 0;
+				let capped = false;
+				req.on("data", (chunk) => {
+					received += chunk.byteLength;
+					if (received > maxUploadBytes && !capped) {
+						capped = true;
+						fail("upload body too large");
+						res.on("finish", () => {
+							try {
+								req.destroy();
+							} catch {}
+						});
+						req.resume();
+					}
+				});
+				req.pipe(sink);
+				sink.on("finish", async () => {
+					if (settled) return;
+					emit({
+						type: "progress",
+						progress: {
+							phase: "connecting",
+							file: remotePath,
+							transferred: 0,
+							total: 0,
+							percent: 0
+						}
+					});
+					try {
+						const outcome = await engine.upload(alias, tmp, remotePath, false, (progress) => emit({
+							type: "progress",
+							progress
+						}));
+						emit({
+							type: "result",
+							ok: true,
+							transferredBytes: outcome.bytes
+						});
+					} catch (error) {
 						emit({
 							type: "result",
 							ok: false,
 							error: error instanceof Error ? error.message : String(error)
 						});
-						const cleanup = () => {
-							unlink(tmp).catch(() => void 0).finally(() => {
-								try {
-									res.end();
-								} catch {}
-							});
-						};
-						if (sink.destroyed) cleanup();
-						else {
-							sink.once("close", cleanup);
-							try {
-								sink.destroy();
-							} catch {
-								cleanup();
-							}
-						}
-					};
-					const done = () => {
-						if (settled) return;
-						settled = true;
-						try {
-							res.end();
-						} catch {}
-					};
-					sink.on("error", (error) => fail(error));
-					req.on("error", (error) => fail(error));
-					req.on("aborted", () => fail("upload aborted by the client"));
-					res.on("error", () => fail("response stream closed"));
-					res.on("close", () => {
-						if (!res.writableEnded) fail("connection closed");
-					});
-					let received = 0;
-					let capped = false;
-					req.on("data", (chunk) => {
-						received += chunk.byteLength;
-						if (received > maxUploadBytes && !capped) {
-							capped = true;
-							fail("upload body too large");
-							res.on("finish", () => {
-								try {
-									req.destroy();
-								} catch {}
-							});
-							req.resume();
-						}
-					});
-					req.pipe(sink);
-					sink.on("finish", async () => {
-						if (settled) return;
-						emit({
-							type: "progress",
-							progress: {
-								phase: "connecting",
-								file: remotePath,
-								transferred: 0,
-								total: 0,
-								percent: 0
-							}
-						});
-						try {
-							const outcome = await engine.upload(alias, tmp, remotePath, false, (progress) => emit({
-								type: "progress",
-								progress
-							}));
-							emit({
-								type: "result",
-								ok: true,
-								transferredBytes: outcome.bytes
-							});
-						} catch (error) {
-							emit({
-								type: "result",
-								ok: false,
-								error: error instanceof Error ? error.message : String(error)
-							});
-						} finally {
-							await unlink(tmp).catch(() => void 0);
-							done();
-						}
-					});
-				}
-			},
-			{
-				kind: "exact",
-				path: SSH_API.download,
-				handler: async (req, res) => {
-					if (!guard(req, res, "GET")) return;
-					const url = new URL(req.url ?? "/", "http://localhost");
-					const alias = queryParam(url, "alias");
-					const remotePath = queryParam(url, "remotePath");
-					if (alias === void 0 || remotePath === void 0) {
-						writeJson(res, 400, { error: "alias and remotePath query parameters are required" });
-						return;
-					}
-					const tmp = join(staging, `download-${randomBytes(6).toString("hex")}`);
-					try {
-						closeSync(openSync(tmp, "w", 384));
-						const outcome = await engine.download(alias, remotePath, tmp);
-						res.writeHead(200, {
-							"content-type": "application/octet-stream",
-							"content-length": String(outcome.bytes),
-							"content-disposition": `attachment; filename="${basename(remotePath).replace(/"/g, "")}"`,
-							"referrer-policy": "no-referrer"
-						});
-						await new Promise((resolve, reject) => {
-							const source = createReadStream(tmp);
-							source.on("error", reject);
-							res.on("error", reject);
-							source.pipe(res);
-							source.on("end", resolve);
-						});
-					} catch (error) {
-						if (!res.headersSent) writeJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
-						else res.destroy();
 					} finally {
 						await unlink(tmp).catch(() => void 0);
+						done();
 					}
+				});
+			}
+		},
+		{
+			kind: "exact",
+			path: SSH_API.download,
+			handler: async (req, res) => {
+				if (!guard(req, res, "GET")) return;
+				const url = new URL(req.url ?? "/", "http://localhost");
+				const alias = queryParam(url, "alias");
+				const remotePath = queryParam(url, "remotePath");
+				if (alias === void 0 || remotePath === void 0) {
+					writeJson(res, 400, { error: "alias and remotePath query parameters are required" });
+					return;
+				}
+				const tmp = join(staging, `download-${randomBytes(6).toString("hex")}`);
+				try {
+					closeSync(openSync(tmp, "w", 384));
+					const outcome = await engine.download(alias, remotePath, tmp);
+					res.writeHead(200, {
+						"content-type": "application/octet-stream",
+						"content-length": String(outcome.bytes),
+						"content-disposition": `attachment; filename="${basename(remotePath).replace(/"/g, "")}"`,
+						"referrer-policy": "no-referrer"
+					});
+					await new Promise((resolve, reject) => {
+						const source = createReadStream(tmp);
+						source.on("error", reject);
+						res.on("error", reject);
+						source.pipe(res);
+						source.on("end", resolve);
+					});
+				} catch (error) {
+					if (!res.headersSent) writeJson(res, 400, { error: error instanceof Error ? error.message : String(error) });
+					else res.destroy();
+				} finally {
+					await unlink(tmp).catch(() => void 0);
 				}
 			}
-		],
+		}
+	];
+	const terminalSessions = new TerminalSessionRegistry({ openShell: (alias, size, onKeyboardInteractive) => engine.openShell(alias, size, onKeyboardInteractive) });
+	return {
+		routes,
 		upgrade: {
 			path: SSH_API.terminal,
 			handler: (req, socket, head) => {
@@ -3249,129 +2677,39 @@ function makeRoutes(deps) {
 				}
 				const url = new URL(req.url ?? "/", "http://localhost");
 				const alias = queryParam(url, "alias");
-				if (alias === void 0) {
+				const sessionId = queryParam(url, "session");
+				if (alias === void 0 && sessionId === void 0) {
 					socket.write("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
 					socket.destroy();
 					return;
 				}
 				const cols = Number.parseInt(queryParam(url, "cols") ?? "80", 10);
 				const rows = Number.parseInt(queryParam(url, "rows") ?? "24", 10);
+				const size = {
+					cols: Number.isFinite(cols) ? cols : 80,
+					rows: Number.isFinite(rows) ? rows : 24
+				};
 				terminalWss.handleUpgrade(req, socket, head, (ws) => {
-					let session;
-					let closed = false;
-					let paused = false;
-					let pendingAuthFinish;
-					const resume = () => {
-						if (paused && ws.bufferedAmount < BACKPRESSURE_LOW_WATER) {
-							paused = false;
-							session?.resume();
-						}
-					};
-					const sendFrame = (frame) => {
-						if (closed || ws.readyState !== WebSocket.OPEN) return;
-						ws.send(JSON.stringify(frame), resume);
-						if (!paused && ws.bufferedAmount > BACKPRESSURE_HIGH_WATER) {
-							paused = true;
-							session?.pause();
-						}
-					};
-					const closeSession = () => {
-						if (pendingAuthFinish !== void 0) {
-							const fn = pendingAuthFinish;
-							pendingAuthFinish = void 0;
-							try {
-								fn([]);
-							} catch {}
-						}
-						const opened = session;
-						session = void 0;
-						if (opened !== void 0) opened.close();
-					};
-					const onKeyboardInteractive = (name, instructions, _lang, prompts, finish) => {
-						const entry = store.find(alias);
-						if (entry?.auth.kind === "password" && entry.auth.password !== void 0 && prompts.length > 0 && prompts.every((p) => /password/i.test(p.prompt))) {
-							const password = entry.auth.password;
-							finish(prompts.map(() => password));
-							return;
-						}
-						pendingAuthFinish = finish;
-						sendFrame({
-							type: "auth_prompt",
-							name,
-							instructions,
-							prompts: prompts.map((p) => ({
-								prompt: p.prompt,
-								echo: p.echo
-							}))
-						});
-					};
-					engine.openShell(alias, {
-						cols: Number.isFinite(cols) ? cols : 80,
-						rows: Number.isFinite(rows) ? rows : 24
-					}, onKeyboardInteractive).then((opened) => {
-						if (ws.readyState !== WebSocket.OPEN) {
-							opened.close();
-							return;
-						}
-						session = opened;
-						sendFrame({
-							type: "ready",
-							alias
-						});
-						opened.onData = (data) => sendFrame({
-							type: "output",
-							data: data.toString("utf8")
-						});
-						opened.onExit = (code, error) => {
-							sendFrame({
-								type: "exit",
-								code,
-								error
-							});
-							closed = true;
-							try {
-								ws.close(1e3);
-							} catch {}
-						};
-					}).catch((error) => {
-						sendFrame({
+					if (sessionId !== void 0) {
+						if (terminalSessions.attach(ws, sessionId, size)) return;
+						const expired = {
 							type: "exit",
 							code: null,
-							error: error instanceof Error ? error.message : String(error)
-						});
-						closed = true;
+							error: "terminal session expired"
+						};
+						try {
+							ws.send(JSON.stringify(expired));
+						} catch {}
 						try {
 							ws.close(1e3);
 						} catch {}
-					});
-					ws.on("message", (data) => {
-						let frame;
-						try {
-							frame = JSON.parse(String(data));
-						} catch {
-							return;
-						}
-						if (frame.type === "input") session?.send(frame.data);
-						else if (frame.type === "resize") session?.resize(Math.max(2, frame.cols), Math.max(1, frame.rows));
-						else if (frame.type === "auth_response") {
-							if (pendingAuthFinish !== void 0) {
-								const fn = pendingAuthFinish;
-								pendingAuthFinish = void 0;
-								fn(frame.responses);
-							}
-						}
-					});
-					ws.on("close", () => {
-						closed = true;
-						closeSession();
-					});
-					ws.on("error", () => {
-						closed = true;
-						closeSession();
-					});
+						return;
+					}
+					terminalSessions.open(ws, alias, size);
 				});
 			}
-		}
+		},
+		terminalSessions
 	};
 }
 //#endregion
@@ -3400,8 +2738,8 @@ function toAgentHostRow(host) {
 function renderHosts(hosts) {
 	if (hosts.length === 0) return "no hosts configured";
 	return [
-		"alias | host | port | user | auth | proxy | environment | tags | description",
-		"--- | --- | --- | --- | --- | --- | --- | --- | ---",
+		"alias | host | port | user | auth | proxy | forward | environment | tags | description",
+		"--- | --- | --- | --- | --- | --- | --- | --- | --- | ---",
 		...hosts.map((host) => [
 			host.alias,
 			host.host,
@@ -3409,6 +2747,7 @@ function renderHosts(hosts) {
 			host.user,
 			host.auth,
 			host.proxyJump.length > 0 ? "jump:" + host.proxyJump.join(",") : host.proxyCommandConfigured ? "proxy-command" : "-",
+			host.forwardAgent ? "yes" : "-",
 			host.environment ?? "-",
 			host.tags.length > 0 ? host.tags.join(",") : "-",
 			host.description ?? ""
@@ -3441,7 +2780,7 @@ function renderTunnel(tunnel) {
 function sshListTool(engine) {
 	return defineTool({
 		name: "ssh_list",
-		description: "List configured SSH hosts (alias, host, user, auth, environment, tags, description). Use ssh_exec etc. with the alias. Triggers: SSH, remote server, server IP/hostname, connect/login, check server/status, deploy, upload/download, jump host, tunnel, port forward.",
+		description: "List configured SSH hosts (alias, host, user, auth, agent forwarding, environment, tags, description). Use ssh_exec etc. with the alias.",
 		parameters: { query: {
 			type: "string",
 			description: "Optional fuzzy match against alias, description, host, and tags."
@@ -3495,6 +2834,10 @@ function sshListTool(engine) {
 								type: "boolean",
 								required: true
 							},
+							forwardAgent: {
+								type: "boolean",
+								required: true
+							},
 							description: { type: "string" },
 							environment: { type: "string" },
 							tags: {
@@ -3517,6 +2860,7 @@ function sshListTool(engine) {
 			},
 			render: (_args, value) => text(renderHosts(value.hosts ?? []))
 		},
+		isConcurrencySafe: () => true,
 		async execute(args) {
 			return { hosts: engine.list(args.query).map(toAgentHostRow) };
 		}
@@ -3526,7 +2870,7 @@ function sshListTool(engine) {
 function sshExecTool(engine) {
 	return defineTool({
 		name: "ssh_exec",
-		description: "Execute a shell command on a REMOTE SSH host by alias; the command runs on the remote host, never on this machine. For commands on this machine, use the local bash tool. Prefer combining independent read-only queries into one command. Triggers: run command on server, deploy, check server/status, service control, view logs, any remote operation.",
+		description: "Execute a shell command on a REMOTE SSH host by alias; the command runs on the remote host, never on this machine. For commands on this machine, use the local bash tool. Prefer combining independent read-only queries into one command.",
 		parameters: {
 			alias: {
 				type: "string",
@@ -3540,7 +2884,7 @@ function sshExecTool(engine) {
 			},
 			timeoutMs: {
 				type: "integer",
-				description: "Timeout in milliseconds (default 60000)."
+				description: "Remote command execution timeout in milliseconds (default 60000); it starts after the connection is ready. The connection and authentication ceiling is the dsh-ssh connectTimeoutMs setting, not this argument."
 			}
 		},
 		output: {
@@ -3577,9 +2921,9 @@ function sshExecTool(engine) {
 			},
 			render: (_args, value) => text(renderExec(value))
 		},
-		async execute(args) {
+		async execute(args, exec) {
 			try {
-				return await engine.exec(args.alias, args.command, args.timeoutMs);
+				return await engine.exec(args.alias, args.command, args.timeoutMs, exec.signal);
 			} catch (error) {
 				return {
 					success: false,
@@ -3598,7 +2942,7 @@ function sshExecTool(engine) {
 function sshUploadTool(engine) {
 	return defineTool({
 		name: "ssh_upload",
-		description: "Transfer a file FROM this machine (the dsh host) TO a remote SSH host. Use this only when the file must be copied to the remote host. Files that stay on this machine are handled with the local file tools (read / write / edit), not ssh_upload. Triggers: upload file to server, deploy artifact, copy config to server.",
+		description: "Transfer a file FROM this machine (the dsh host) TO a remote SSH host. Use this only when the file must be copied to the remote host. Files that stay on this machine are handled with the local file tools (read / write / edit), not ssh_upload.",
 		parameters: {
 			alias: {
 				type: "string",
@@ -3653,7 +2997,7 @@ function sshUploadTool(engine) {
 function sshDownloadTool(engine) {
 	return defineTool({
 		name: "ssh_download",
-		description: "Copy a remote FILE from a configured SSH host to this machine (the dsh host). Use this only when the source is on the remote host; files already on this machine are read with the local file tools (read / write / edit), not ssh_download. Directory download is not supported — download files individually. Triggers: download file from server, fetch remote log/artifact.",
+		description: "Copy a remote FILE from a configured SSH host to this machine (the dsh host). Use this only when the source is on the remote host; files already on this machine are read with the local file tools (read / write / edit), not ssh_download. Directory download is not supported — download files individually.",
 		parameters: {
 			alias: {
 				type: "string",
@@ -3705,7 +3049,7 @@ function sshDownloadTool(engine) {
 function sshTunnelTool(engine) {
 	return defineTool({
 		name: "ssh_tunnel",
-		description: "Manage local port-forward tunnels to a configured SSH host. Start a tunnel to reach a remote internal service (database, web UI, API) through 127.0.0.1 on this machine. Triggers: tunnel, port forward, connect database, access internal service.",
+		description: "Manage local port-forward tunnels to a configured SSH host. Start a tunnel to reach a remote internal service (database, web UI, API) through 127.0.0.1 on this machine.",
 		parameters: {
 			action: {
 				type: "string",
@@ -3900,7 +3244,7 @@ function sshTunnelTool(engine) {
 function sshClusterTool(engine) {
 	return defineTool({
 		name: "ssh_cluster",
-		description: "Run one command concurrently across selected SSH hosts; at least one aliases, environment, or tags filter is required. Triggers: run on selected servers, batch operation, production servers, cluster command.",
+		description: "Run one command concurrently across selected SSH hosts; at least one aliases, environment, or tags filter is required.",
 		parameters: {
 			command: {
 				type: "string",
@@ -3923,7 +3267,7 @@ function sshClusterTool(engine) {
 			},
 			timeoutMs: {
 				type: "integer",
-				description: "Per-host timeout in milliseconds."
+				description: "Per-host command execution timeout in milliseconds (default 60000); it does not extend the connection and authentication ceiling (the dsh-ssh connectTimeoutMs setting)."
 			},
 			maxWorkers: {
 				type: "integer",
@@ -3961,9 +3305,12 @@ function sshClusterTool(engine) {
 			},
 			render: (_args, value) => text(renderCluster(value.results ?? []))
 		},
-		async execute(args) {
+		async execute(args, exec) {
 			if (!(Array.isArray(args.aliases) && args.aliases.some((alias) => typeof alias === "string" && alias.trim() !== "") || typeof args.environment === "string" && args.environment.trim() !== "" || Array.isArray(args.tags) && args.tags.some((tag) => typeof tag === "string" && tag.trim() !== ""))) throw new Error("ssh_cluster requires aliases, environment, or tags to limit the target set");
-			return { results: await engine.cluster(args) };
+			return { results: await engine.cluster({
+				...args,
+				signal: exec.signal
+			}) };
 		}
 	});
 }
@@ -3975,38 +3322,172 @@ function sshClusterTool(engine) {
 * the loader accepts a standalone install of the same package side by side;
 * without this guard the second instance would still re-register the same
 * webserver routes, tools, settings namespaces, and system-prompt sections
-* and fail the boot. mountOnce makes the second host apply a no-op for the
-* lifetime of the first instance (the browser half is already deduped by
-* package name in the client module host).
+* and fail the boot. mountOnce makes a mount of an already-mounted package a
+* no-op for as long as the first instance lives (the browser half is already
+* deduped by package name in the client module host).
+*
+* A no-op is only safe while the holder is ALIVE. The holder can be disposed
+* long after the refused mount ran its course: the Host reloads a profile by
+* creating the new loader entries before the old ones are torn down (a
+* plugin-manager enable/disable/install write, a settings-driven row reload,
+* HMR), so the new aggregate shell entry mounts its family plugin while the
+* previous entry still owns the name. Dropping that refused mount lost the
+* plugin for good - the previous entry then disposed its own mount, releasing
+* the name with nobody left to take it, and the family row stayed listed as
+* active while its host routes 404ed (the task-board panel showed
+* "board.hostError.notMounted", no degraded record appeared, and only a Host
+* restart recovered it).
+*
+* The refused mount is therefore QUEUED, not dropped, and replayed the moment
+* the holder releases the name - if the waiting fiber is still alive then. The
+* single-instance guarantee is unchanged: exactly one mount is live per
+* package name, and the replay re-enters the guard so a later mount still
+* dedupes against it.
 *
 * The registry rides a global symbol so two module instances of the same
-* package (npm copy vs repository link) still share one verdict. cordis
-* `ctx.effect` runs its callback immediately and treats the callback's
+* package (npm copy vs repository link) still share one verdict. That symbol
+* is a CROSS-REPOSITORY contract, not this file's private state: the four
+* satellite packages (dsh-skins / dsh-pet / dsh-presets /
+* dsh-community-plugins) are separate repositories carrying their own copy of
+* this guard, rebuilt on their own schedule, so the value under `MOUNTED`
+* must keep the shape every published copy reads (a `Set` of package names
+* with `has`/`add`/`delete`). The wait queues this guard added therefore live
+* under their own additive key, and the registry reads back a `Set` even when
+* some other build left a different value there. Changing `MOUNTED`'s shape
+* in place broke that contract once: a satellite's legacy copy created a
+* `Set`, the family's new copy read it as a `Map`, and every family row
+* mounted after it failed with "claims.get is not a function".
+*
+* cordis `ctx.effect` runs its callback immediately and treats the callback's
 * return value as the fiber disposer, so the unmarker is returned, not run.
 */
+/** Published cross-repository contract: package names currently mounted. */
 const MOUNTED = Symbol.for("dsh-web.mounted-plugins");
+/** Additive key this guard owns: refused mounts waiting for the name. */
+const WAITERS = Symbol.for("dsh-web.mounted-plugins.waiters");
+/**
+* The shared name registry, always a `Set` whatever another build stored here:
+* a foreign value (an interim shape, a hand-written global) must not take every
+* family plugin down with it.
+* @returns the process-wide set of mounted package names.
+*/
 function mountedSet() {
 	const registry = globalThis;
-	return registry[MOUNTED] ??= /* @__PURE__ */ new Set();
+	const existing = registry[MOUNTED];
+	if (existing instanceof Set) return existing;
+	const created = /* @__PURE__ */ new Set();
+	registry[MOUNTED] = created;
+	return created;
+}
+/** Queue per package name for mounts refused while a holder was alive. */
+function mountWaiters() {
+	const registry = globalThis;
+	return registry[WAITERS] ??= /* @__PURE__ */ new Map();
 }
 /**
 * Wrap a cordis plugin apply so the package runs at most once per process.
-* The first mount registers normally and unmarks when its fiber disposes;
-* any later mount of the same package name is a no-op.
+* The first mount registers normally and releases the name when its fiber
+* disposes; a mount refused while that name is held waits for the release and
+* then runs, unless its own fiber disposes first.
 * @param packageName - npm package identity shared by every install source.
 * @param fn - the original plugin apply.
 * @returns an apply of the same shape.
 */
 function mountOnce(packageName, fn) {
-	return ((...args) => {
+	const mount = (...args) => {
 		const mounted = mountedSet();
-		if (mounted.has(packageName)) return;
+		const ctx = args[0];
+		if (mounted.has(packageName)) {
+			const waiters = mountWaiters();
+			const queue = waiters.get(packageName) ?? [];
+			let alive = true;
+			const pending = { run: () => {
+				if (alive) mount(...args);
+			} };
+			ctx?.effect?.(() => () => {
+				alive = false;
+				const index = queue.indexOf(pending);
+				if (index >= 0) queue.splice(index, 1);
+			});
+			queue.push(pending);
+			waiters.set(packageName, queue);
+			return;
+		}
 		mounted.add(packageName);
-		args[0]?.effect?.(() => () => {
+		ctx?.effect?.(() => () => {
 			mounted.delete(packageName);
+			const waiters = mountWaiters();
+			const queue = waiters.get(packageName);
+			if (queue === void 0) return;
+			waiters.delete(packageName);
+			for (const waiter of queue.splice(0)) queueMicrotask(() => {
+				waiter.run();
+			});
 		});
 		return fn(...args);
-	});
+	};
+	return mount;
+}
+//#endregion
+//#region src/tool-surface.ts
+/**
+* Family-shared tool-surface conventions for the packages that register
+* model-facing tools.
+*
+* One home for the prompt-section placement and the visibility gate this
+* family previously restated per package.
+*
+* Modelled on the official tool packages:
+* - `@deepseek-ai/dsh-tool-subagent` renders its section through
+*   `tools.get(name, context.scope) === undefined ? '' : text`, so guidance
+*   disappears together with a restricted tool.
+* - 21 of the 22 official tool packages register their tools GLOBALLY and gate
+*   them with a setting, not per agent. Only the Agent Teams tool package —
+*   whose tools belong to one membership — installs into each `agent.ctx`.
+*   This family follows the majority: registration stays global so the
+*   registry's per-scope `restrict()` mask (which filters inherited global
+*   tools and REJECTS scope-local names) can still withhold these tools.
+*
+* Structural types only: this copy lands in packages that do not all depend on
+* the same SDK service packages.
+*/
+/**
+* Prompt-section order for each package's tool guidance.
+*
+* These sit in the family band between the deployment persona and the SDK's
+* `PLAN_POLICY` (500). Values are owned here rather than written per package so
+* the host plugins whose guidance shares one prompt cannot drift into an
+* accidental tie.
+*/
+const PLUGIN_TOOL_SECTION_ORDERS = {
+	ssh: 150,
+	"task-board": 200,
+	agents: 220
+};
+/**
+* Build a section provider that renders \`text\` only while at least one of
+* \`toolNames\` is visible to the rendering scope.
+*
+* The native convention: a tool that a restriction, a preset, or a missing
+* registry removed must not leave guidance behind telling the model to call it.
+* An unreadable registry renders the text unchanged — guidance that outlives a
+* momentary read failure is recoverable; guidance for a tool that is gone is
+* not.
+* @param tools - the scoped tool registry, when the deployment serves one.
+* @param toolNames - registered names the guidance describes.
+* @param text - the guidance rendered while they are reachable.
+* @returns the section text provider.
+*/
+function visibleToolText(tools, toolNames, text) {
+	if (tools === void 0) return () => text;
+	return (context) => {
+		for (const name of toolNames) try {
+			if (tools.get(name, context.scope) !== void 0) return text;
+		} catch {
+			return text;
+		}
+		return "";
+	};
 }
 //#endregion
 //#region src/index.ts
@@ -4019,20 +3500,48 @@ const inject = [
 	"systemPrompt"
 ];
 /**
-* Settings namespace of the SSH capability — the section the web settings
-* surface edits. Spelled here rather than imported: the browser half spells
-* the same value and must not depend on a Host package.
+* Plugin config schema. Under the 0.1.7 settings model this schema IS the
+* entry's settings page: the Host derives one form per profile entry from it
+* and serves it through the shared configuration forms. Every field is
+* `volatile()`, which is what puts it on that page and what lets an edit reach
+* a running instance without a remount: the loader commits the new value into
+* the field's reference and announces `loader/volatile-update` on this fiber.
 */
-const SSH_SETTINGS_NAMESPACE = "dsh-ssh";
-const Config = import_lib.default.object({
-	announceToAgent: import_lib.default.boolean().default(false),
-	enabled: import_lib.default.boolean().default(true),
-	terminalFontFamily: import_lib.default.string().default("")
+const Config = z.object({
+	announceToAgent: z.boolean().default(false).volatile(),
+	enabled: z.boolean().default(true).volatile(),
+	terminalFontFamily: z.string().default("").volatile(),
+	connectTimeoutMs: z.number().step(1).min(1e3).max(6e5).default(DEFAULT_CONNECT_TIMEOUT_MS).volatile().description("TCP connect, SSH key exchange and user authentication timeout in milliseconds; raise it for hosts whose authentication is slow.")
 });
-/** Schema default, re-read for hand-built test contexts (the loader applies them normally). */
+/** Schema defaults, re-read for hand-built test contexts (the loader applies them normally). */
 const DEFAULT_ANNOUNCE = false;
-/** Order of the announcement section within the tool-guidance band. */
-const SECTION_ORDER = 150;
+const DEFAULT_ENABLED = true;
+/** Read one resolved config field, following the live reference the schema produces. */
+function readConfigField(field, fallback) {
+	if (field === void 0) return fallback;
+	if (typeof field === "object" && field !== null && typeof field.get === "function") {
+		const value = field.get();
+		return value === void 0 ? fallback : value;
+	}
+	return field;
+}
+/** Raw config the profile declares for this entry, when the loader exposes it. */
+function profileConfig(ctx) {
+	const config = ctx.fiber.entry?.options?.config;
+	if (typeof config !== "object" || config === null || Array.isArray(config)) return void 0;
+	return config;
+}
+/** Order of the announcement section within the shared tool-guidance band. */
+const SECTION_ORDER = PLUGIN_TOOL_SECTION_ORDERS.ssh;
+/** The six agent-tool names this plugin's announcement describes. */
+const SSH_TOOL_NAMES = [
+	"ssh_list",
+	"ssh_exec",
+	"ssh_upload",
+	"ssh_download",
+	"ssh_tunnel",
+	"ssh_cluster"
+];
 /** Model-facing announcement: plugin presence, capabilities, and limits. */
 const SSH_GUIDANCE = "本机已安装 dsh-ssh 插件（DSH 远程 SSH 运维）：侧边栏「SSH」入口；在 dsh-web 插件全家桶仓库（packages/dsh-ssh）统一维护。能力：主机配置存 $DSH_HOME/dsh-ssh.json（默认 ~/.dsh）（可从 ~/.ssh/config 导入）；持久连接池复用长连接（空闲 30 分钟自动断开）；ssh_list 列出主机、ssh_exec 执行远程命令、ssh_upload/ssh_download 传输文件、ssh_tunnel 本地端口转发（访问远程数据库/内网服务）、ssh_cluster 按 aliases/environment/tags 至少一种非空 selector 筛选后集群并发执行；支持密钥/密码/ssh-agent 认证、passphrase 密钥、ProxyJump 跳板机（别名或 [user@]host[:port] 地址）与 OpenSSH 语义的 ProxyCommand（跳过堡垒机客户端场景，只能由用户在 GUI 配置，agent 不可写）；Web 终端走 WebSocket。限制：主机操作由用户在 GUI 中配置后 agent 方可使用；密码以明文存在用户主目录私有文件（权限 0600）；命令输出原样返回、可能含敏感信息；断线重连可能重放非幂等命令；传输/执行消耗真实远程资源，先确认再操作。路径区分：本机（dsh host）上的文件与命令一律用本地工具（read / write / edit / bash），ssh_* 工具只针对远程主机上的路径。用户提到「SSH / 远程服务器 / 服务器操作 / 跳板机 / 隧道 / 部署 / 上传下载」时即指本插件，请据此协作。";
 /**
@@ -4042,23 +3551,20 @@ const SSH_GUIDANCE = "本机已安装 dsh-ssh 插件（DSH 远程 SSH 运维）�
 */
 const apply = mountOnce("@linxin666/dsh-ssh", applyImpl);
 function applyImpl(ctx, config) {
-	let current = () => config ?? {};
-	let isSettingsBound = false;
 	const store = new HostStore();
-	const engine = new SshEngine(store);
+	const engine = new SshEngine(store, { connectTimeoutMs: readConfigField(config?.connectTimeoutMs, DEFAULT_CONNECT_TIMEOUT_MS) });
 	ctx.effect(() => () => {
 		engine.dispose();
 	}, "dsh-ssh: engine");
 	const resolve = () => {
-		const value = current();
-		let enabled = value.enabled ?? true;
-		if (enabled === false && !isSettingsBound && store.list().length > 0) enabled = true;
+		let enabled = readConfigField(config?.enabled, DEFAULT_ENABLED);
+		if (enabled === false && profileConfig(ctx)?.enabled === void 0 && store.list().length > 0) enabled = true;
 		return {
-			announceToAgent: value.announceToAgent ?? DEFAULT_ANNOUNCE,
+			announceToAgent: readConfigField(config?.announceToAgent, DEFAULT_ANNOUNCE),
 			enabled
 		};
 	};
-	const { routes, upgrade } = makeRoutes({
+	const { routes, upgrade, terminalSessions } = makeRoutes({
 		store,
 		engine
 	});
@@ -4074,6 +3580,7 @@ function applyImpl(ctx, config) {
 	let disposeTools;
 	let disposeSection;
 	const sync = () => {
+		engine.setConnectTimeout(readConfigField(config?.connectTimeoutMs, DEFAULT_CONNECT_TIMEOUT_MS));
 		const value = resolve();
 		if (disposeSection !== void 0) {
 			disposeSection();
@@ -4091,7 +3598,7 @@ function applyImpl(ctx, config) {
 		if (value.announceToAgent) disposeSection = ctx.systemPrompt.section({
 			name: "plugin:dsh-ssh",
 			order: SECTION_ORDER,
-			text: SSH_GUIDANCE
+			text: visibleToolText(ctx.tools, SSH_TOOL_NAMES, SSH_GUIDANCE)
 		});
 		disposeRoutes = ctx.effect(() => {
 			const disposers = routes.map((route) => ctx.webServer.register(route));
@@ -4099,6 +3606,7 @@ function applyImpl(ctx, config) {
 			return () => {
 				for (const dispose of disposers) dispose();
 				upgradeDisposer();
+				terminalSessions.dispose();
 			};
 		}, "dsh-ssh: routes");
 		disposeTools = ctx.effect(() => {
@@ -4108,27 +3616,10 @@ function applyImpl(ctx, config) {
 			};
 		}, "dsh-ssh: tools");
 	};
-	ctx.inject(["settings"], (settingsCtx) => {
-		try {
-			if (typeof settingsCtx.settings?.installSection === "function") settingsCtx.settings.installSection(ctx, SSH_SETTINGS_NAMESPACE, Config, config ?? {}, {
-				setSource: (source) => {
-					isSettingsBound = true;
-					current = source;
-					sync();
-				},
-				onChange: sync
-			});
-			else if (typeof settingsCtx.settings?.register === "function") {
-				const scope = settingsCtx.settings.register(SSH_SETTINGS_NAMESPACE, Config, { base: config ?? {} });
-				isSettingsBound = true;
-				current = () => scope?.get?.() ?? config ?? {};
-				scope?.watch?.(() => {
-					sync();
-				});
-			}
-		} catch {}
+	ctx.on("loader/volatile-update", () => {
+		sync();
 	});
 	sync();
 }
 //#endregion
-export { Config, SSH_GUIDANCE, SSH_SETTINGS_NAMESPACE, apply, inject, name };
+export { Config, SSH_GUIDANCE, apply, inject, name };

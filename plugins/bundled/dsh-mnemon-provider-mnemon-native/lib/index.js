@@ -4,6 +4,13 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 //#region src/driver.ts
+/**
+* Output cap for the two whole-Store reads: the full readonly recall and the
+* HTML graph. Their size grows with the Store, not with a misbehaving command,
+* and a Store of about 1,000 insights already produces 3–9 MB (issue #320).
+* Every other command keeps the Source's 2 MiB default.
+*/
+const STORE_DUMP_MAX_OUTPUT_BYTES = 134217728;
 function record(value) {
 	return typeof value === "object" && value !== null && !Array.isArray(value) ? value : void 0;
 }
@@ -169,7 +176,8 @@ var MnemonNativeProvider = class {
 			"-"
 		], {
 			...signal === void 0 ? {} : { signal },
-			store: body.id
+			store: body.id,
+			maxOutputBytes: STORE_DUMP_MAX_OUTPUT_BYTES
 		}), this.allNativeInsights(body, signal, true)]);
 		const snapshot = parseMemoryGraph(html);
 		const metadata = new Map(insights.map((insight) => [insight.id, insight]));
@@ -197,7 +205,8 @@ var MnemonNativeProvider = class {
 			"100000"
 		], {
 			...signal === void 0 ? {} : { signal },
-			store: body.id
+			store: body.id,
+			maxOutputBytes: STORE_DUMP_MAX_OUTPUT_BYTES
 		});
 		return (Array.isArray(payload) ? payload : Array.isArray(record(payload)?.results) ? record(payload).results : []).map(normalizeInsight).filter((entry) => entry !== void 0);
 	}
@@ -218,32 +227,73 @@ var MnemonNativeProvider = class {
 	}
 	async search(body, request, signal) {
 		const mode = request.mode ?? "smart";
+		const semantic = mode === "smart";
+		const limit = request.limit ?? this.config.defaultRecallLimit;
+		const candidateLimit = semantic ? Math.max(limit, Math.min(50, Math.max(20, limit * 4))) : limit;
+		const readonly = request.inspect === true ? ["--readonly"] : [];
 		const args = mode === "keyword" ? [
+			...readonly,
 			"search",
 			request.query,
 			"--limit",
-			String(request.limit ?? this.config.defaultRecallLimit)
+			String(candidateLimit)
 		] : [
+			...readonly,
 			"recall",
 			request.query,
 			"--limit",
-			String(request.limit ?? this.config.defaultRecallLimit)
+			String(candidateLimit)
 		];
+		if (semantic) args.push("--verbose");
 		if (mode === "basic") args.push("--basic");
 		if (mode !== "keyword") {
 			if (request.category !== void 0) args.push("--cat", request.category);
 			if (request.source !== void 0) args.push("--source", request.source);
 			if (request.intent !== void 0) args.push("--intent", request.intent);
 		}
-		const payload = await this.runner.runJson(args, {
+		const options = {
 			...signal === void 0 ? {} : { signal },
 			store: body.id
-		});
+		};
+		let payload;
+		try {
+			payload = await this.runner.runJson(args, options);
+		} catch (error) {
+			if (!semantic || signal?.aborted || !(error instanceof Error)) throw error;
+			const prefix = `mnemon ${args.join(" ")} exited `;
+			const detail = error.message.startsWith(prefix) ? error.message.slice(prefix.length) : error.message;
+			if (!/^(?:[1-9]\d*:\s*)?(?:Error:\s*)?unknown flag: --verbose[ \t]*(?:\r?\n|$)/u.test(detail)) throw error;
+			const legacyArgs = [...args];
+			legacyArgs.splice(readonly.length + 4, 1);
+			payload = await this.runner.runJson(legacyArgs, options);
+		}
 		const wrapper = record(payload);
-		const values = Array.isArray(payload) ? payload : Array.isArray(wrapper?.results) ? wrapper.results : [];
-		const hint = text(wrapper?.hint);
+		const candidates = (Array.isArray(payload) ? payload : Array.isArray(wrapper?.results) ? wrapper.results : []).flatMap((value) => {
+			const insight = normalizeInsight(value);
+			if (insight === void 0) return [];
+			const item = record(value);
+			return [{
+				insight,
+				similarity: number(record(item?.signals)?.similarity),
+				superseded: item?.superseded === true
+			}];
+		});
+		if (semantic && candidates.some((candidate) => candidate.similarity !== void 0 && candidate.similarity > 0)) {
+			for (const candidate of candidates) {
+				const { insight, similarity } = candidate;
+				delete insight.confidence;
+				if (similarity === void 0) {
+					if (!candidate.superseded) delete insight.score;
+				} else {
+					const relevance = Math.min(1, Math.max(0, similarity));
+					insight.score = candidate.superseded ? Math.min(relevance, insight.score ?? 0) : relevance;
+				}
+			}
+			candidates.sort((left, right) => (right.insight.score ?? -1) - (left.insight.score ?? -1));
+		}
+		const hint = text(wrapper?.hint) ?? text(record(wrapper?.meta)?.hint);
 		return {
-			results: values.map(normalizeInsight).filter((entry) => entry !== void 0),
+			results: candidates.slice(0, limit).map((candidate) => candidate.insight),
 			...hint === void 0 ? {} : { hint }
 		};
 	}
@@ -271,25 +321,44 @@ var MnemonNativeProvider = class {
 		if (requests.length === 0) return [];
 		const existing = new Map((await this.allNativeInsights(body, signal, true)).map((entry) => [entry.content, entry]));
 		const ordered = new Array(requests.length);
-		const pending = /* @__PURE__ */ new Map();
+		const reused = /* @__PURE__ */ new Set();
+		let pending = /* @__PURE__ */ new Map();
+		const queue = (index) => {
+			const request = requests[index];
+			const group = pending.get(request.content);
+			if (group === void 0) pending.set(request.content, {
+				request,
+				indexes: [index]
+			});
+			else group.indexes.push(index);
+		};
 		for (const [index, request] of requests.entries()) {
 			const exact = existing.get(request.content);
-			if (exact !== void 0) ordered[index] = {
-				action: "skipped",
-				id: exact.id,
-				content: exact.content
-			};
+			if (exact === void 0) queue(index);
 			else {
-				const group = pending.get(request.content);
-				if (group === void 0) pending.set(request.content, {
-					request,
-					indexes: [index]
-				});
-				else group.indexes.push(index);
+				ordered[index] = {
+					action: "skipped",
+					id: exact.id,
+					content: exact.content
+				};
+				reused.add(index);
 			}
 		}
-		const batch = [...pending.values()];
-		if (batch.length === 0) return ordered;
+		while (pending.size > 0) {
+			const pruned = await this.importExact(body, [...pending.values()], ordered, signal);
+			pending = /* @__PURE__ */ new Map();
+			for (const index of reused) {
+				const id = record(ordered[index])?.id;
+				if (typeof id === "string" && pruned.has(id)) {
+					reused.delete(index);
+					queue(index);
+				}
+			}
+		}
+		return ordered;
+	}
+	/** Import entries as written, record their receipts and return what Mnemon pruned after it. */
+	async importExact(body, batch, ordered, signal) {
 		const temporary = mkdtempSync(join(tmpdir(), "dsh-mnemon-runtime-archive-"));
 		const draftPath = join(temporary, "memory-draft.json");
 		try {
@@ -299,7 +368,7 @@ var MnemonNativeProvider = class {
 				insights: batch.map(({ request }) => ({
 					content: request.content,
 					category: request.category,
-					importance: request.importance,
+					importance: request.importance ?? 3,
 					source: request.source,
 					...request.tags === void 0 ? {} : { tags: request.tags },
 					...request.entities === void 0 ? {} : { entities: request.entities }
@@ -340,12 +409,28 @@ var MnemonNativeProvider = class {
 					action: "skipped"
 				};
 			}
-			return ordered;
+			return new Set(stringArray(summary?.auto_pruned_ids) ?? []);
 		} finally {
 			rmSync(temporary, {
 				recursive: true,
 				force: true
 			});
+		}
+	}
+	/** One stored memory by exact id, read from a snapshot without touching access counts or the log. */
+	async get(body, id, signal) {
+		try {
+			return normalizeInsight(await this.runner.runJson([
+				"--readonly",
+				"show",
+				id
+			], {
+				...signal === void 0 ? {} : { signal },
+				store: body.id
+			}));
+		} catch (error) {
+			if (error instanceof Error && /no rows in result set/u.test(error.message)) return void 0;
+			throw error;
 		}
 	}
 	async related(body, id, depth, edge, signal) {
@@ -393,7 +478,7 @@ const definition = defineMemorySpaceProviderDefinition({
 		kind: "provider",
 		typeId: descriptor.id,
 		packageName: "dsh-mnemon-provider-mnemon-native",
-		version: "0.5.5",
+		version: "0.5.11",
 		label: descriptor.label,
 		icon: descriptor.icon,
 		summary: descriptor.summary,

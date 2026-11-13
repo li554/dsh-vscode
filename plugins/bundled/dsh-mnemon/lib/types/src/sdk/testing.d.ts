@@ -20,6 +20,7 @@ export interface MemoryTestSource {
 export interface MemoryTestOptions {
     strategyInstanceKey?: string;
     strategyTypeId?: string;
+    strategyFallback?: 'sole-strategy';
     sourceConfiguration?: (source: MemoryTestSource) => Readonly<Record<string, MemoryJsonValue>>;
     sourceCapabilities?: (source: MemoryTestSource) => readonly MemoryCapability[];
     now?: () => Date;

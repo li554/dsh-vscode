@@ -1,5 +1,5 @@
 /**
- * Snapshot cleanup policy: the settings-backed policy, its validation, the
+ * Snapshot cleanup policy: the config-backed policy, its validation, the
  * `/snapshot-auto-cleanup` command's argument grammar, and the auto-sweep
  * throttle. Kept free of host wiring so the policy and the parser are
  * unit-testable in isolation; `src/index.ts` is the only consumer.
@@ -11,53 +11,52 @@
  *   member stamp is older than this many days of idle is removed by a sweep.
  *   `0`/negative/non-integer are rejected, so a broken value can never steer
  *   the sweep into deleting everything.
- * - The policy lives in the dsh-settings document under
- *   `dsh-rewind-snapshot-cleanup`, created ONLY by an explicit
- *   `/snapshot-auto-cleanup` write. An absent value is the safe default (off);
- *   an unreadable or invalid value fail-closes a sweep (deletes nothing)
- *   instead of guessing.
+ * - The policy is this plugin entry's live configuration (`autoCleanupEnabled` /
+ *   `autoCleanupMaxAgeDays` — named for what they gate, because the entry's own
+ *   `disabled:` flag sits beside them in the same document); an absent value is
+ *   the safe default (off), and an invalid one fail-closes a sweep (deletes
+ *   nothing) instead of guessing.
  *
  * @module dsh-rewind/snapshot-cleanup
  */
-import z from '@deepseek-ai/schemastery';
-/** The cleanup policy, as persisted in the dsh-settings document. */
+import type { Volatile } from '@deepseek-ai/cordis';
+/** The cleanup policy, as resolved from this plugin entry's configuration. */
 export interface CleanupConfig {
     readonly enabled: boolean;
     readonly maxAgeDays: number;
 }
 /** The default keep threshold: finished sessions idle > 30 days are pruned. */
 export declare const DEFAULT_MAX_AGE_DAYS = 30;
-/** The safe default policy (off) — a missing/corrupt file behaves like this. */
+/** The safe default policy (off) — a missing/corrupt value behaves like this. */
 export declare const DEFAULT_CLEANUP_CONFIG: CleanupConfig;
 /**
- * The dsh-settings namespace that backs the cleanup policy.
- * Namespaces must match the settings provider's `^[a-z][a-z0-9-]*$` grammar (no
- * dots), so this is hyphenated, not dotted.
+ * The live configuration slice the cleanup policy reads: the two schema fields
+ * the host resolves into stable references before `apply` runs. The host's
+ * `Config` schema (see `src/index.ts`) declares both as `.volatile()`, which is
+ * what makes them user-editable in the Plugins page and live-updated without a
+ * restart. These are the DOCUMENT's field names; the resolved policy keeps its
+ * own ({@link CleanupConfig}), and the adapter below is the one place that maps
+ * between the two.
  */
-export declare const CLEANUP_SETTINGS_NAMESPACE = "dsh-rewind-snapshot-cleanup";
+export interface CleanupSettings {
+    readonly autoCleanupEnabled: Volatile<boolean>;
+    readonly autoCleanupMaxAgeDays: Volatile<number>;
+}
 /**
- * The schemastery schema that persists + validates the cleanup policy in the
- * dsh-settings document. This is the SINGLE storage validator: the `maxAgeDays`
- * rule is enforced by `.step(1).min(1)` (positive integer) and the defaults by
- * `.default(...)`, so the resolved value is always a valid {@link CleanupConfig}
- * and a bad stored/user value cannot steer the sweep into deleting everything.
+ * The host settings service's entry write port. A write is a revision-fenced
+ * document mutation, so clearing a field is what lets it re-inherit the schema
+ * default instead of pinning a copy of it.
  */
-export declare const CleanupConfigSchema: z<CleanupConfig>;
-/**
- * Structural face of the settings scope the host needs for the policy: a
- * resolved read and a validated write. Kept local (never imports the settings
- * contract) so the host bundle does not type-couple on the client settings
- * API (0.1.2 adds `mutate`; it is unused here), and the seam the host passes
- * in isolates the drift to this module.
- */
-export interface CleanupSettingsScope {
-    /** The resolved policy: schema defaults, then base, then the user layer. */
-    get(): CleanupConfig;
-    /** Merge a partial patch into the user layer (validated by the schema). */
-    update(patch: {
-        enabled?: boolean;
-        maxAgeDays?: number;
+export interface CleanupConfigWriter {
+    /** Entry id the write addresses (this plugin's profile entry). */
+    readonly entryId: string;
+    /** Merge field values into the entry's user layer. */
+    update(entryId: string, patch: {
+        autoCleanupEnabled?: boolean;
+        autoCleanupMaxAgeDays?: number;
     }): Promise<void>;
+    /** Remove fields from the entry's user layer, restoring the inherited value. */
+    clear(entryId: string, fields: readonly string[]): Promise<void>;
 }
 /** A validated policy read/write port the command + auto-sweep use. */
 export interface CleanupConfigStore {
@@ -67,13 +66,15 @@ export interface CleanupConfigStore {
     save(next: CleanupConfig): Promise<void>;
 }
 /**
- * Adapter that turns a {@link CleanupSettingsScope} into a
- * {@link CleanupConfigStore}. Reads come straight from the resolved scope; a
- * write validates via `parseCleanupConfig` before touching the scope, so a bad
- * value can never reach the document (defense-in-depth below the schema).
+ * Adapter over the live {@link CleanupSettings} references and the host's entry
+ * write port, mapping the document's field names onto the resolved policy's own.
+ * Reads re-read the references, so a settings write is visible without a
+ * remount; writes validate via `parseCleanupConfig` first, so a bad value can
+ * never reach the document (defense-in-depth below the schema), and a defaulted
+ * field is cleared rather than pinned.
  */
-export declare function settingsCleanupStore(scope: CleanupSettingsScope): CleanupConfigStore;
-/** Auto-sweep cadence (the user's hardcoded 24h rhythm — not user-set). */
+export declare function volatileCleanupStore(settings: CleanupSettings, writer: CleanupConfigWriter): CleanupConfigStore;
+/** Default auto-sweep cadence (once a day); `autoSweepIntervalMs` overrides it. */
 export declare const AUTO_SWEEP_INTERVAL_MS: number;
 /** The state file that records the last automatic-sweep wall-clock time. */
 export declare const STATE_FILENAME = "snapshot-cleanup-last-sweep.json";
@@ -107,6 +108,9 @@ export interface AutoCleanupPruner {
  * a corrupt config fail-closes (no deletion) and logs, a prune failure logs.
  *
  * `sessionId` is the active session directory that must never be pruned.
+ * `signal` is the caller's mount lifecycle: an abort before the prune or before
+ * the re-anchor stops the sweep (a live plugin unload must not keep deleting
+ * under a disposed owner).
  */
 export declare function runAutoCleanupCheck(deps: {
     pruner: AutoCleanupPruner;
@@ -119,6 +123,10 @@ export declare function runAutoCleanupCheck(deps: {
     }>;
     statePath: string;
     log: (msg: string) => void;
+    /** Sweep cadence in ms; defaults to {@link AUTO_SWEEP_INTERVAL_MS}. */
+    intervalMs?: number;
+    /** Optional mount lifecycle signal; absent means "never cancelled". */
+    signal?: AbortSignal;
 }, sessionId: string | undefined): Promise<void>;
 /**
  * Validate one parsed JSON value into a {@link CleanupConfig}. Tolerates
@@ -132,9 +140,6 @@ export declare function parseCleanupConfig(raw: unknown): {
     ok: false;
     error: string;
 };
-/**
- * The `/snapshot-auto-cleanup` sub-command the parser can resolve to.
- */ export type CleanupCommandAction = 'status' | 'on' | 'off' | 'max-age' | 'run';
 /** A parsed `/snapshot-auto-cleanup` command (excludes the error branch). */
 export type CleanupCommand = {
     action: 'status' | 'on' | 'off';
@@ -162,8 +167,8 @@ export declare function parseCleanupCommand(rawInput: string): CleanupCommand | 
     error: string;
 };
 /**
- * The 24h auto-sweep throttle. `lastAtMs` of `0` means "never ran" (a fresh
- * process), so the first call always sweeps; after that a call within 24h is
- * a no-op, matching the "every machine at most once per day" model.
+ * The auto-sweep throttle: `lastAtMs` of `0` means "never ran" (a fresh
+ * process), so the first call always sweeps; after that a call within
+ * `intervalMs` is a no-op. `autoSweepIntervalMs` sets the cadence.
  */
-export declare function shouldRunAutoSweep(lastAtMs: number, nowMs: number): boolean;
+export declare function shouldRunAutoSweep(lastAtMs: number, nowMs: number, intervalMs?: number): boolean;

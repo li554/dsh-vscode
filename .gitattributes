@@ -1,0 +1,2 @@
+vendor/node_modules/@deepseek-ai/libreoffice-kit-wasm/** filter=lfs diff=lfs merge=lfs -text
+vendor/node_modules/@deepseek-ai/libreoffice-kit-win32-x64/bin/dsoffice.exe filter=lfs diff=lfs merge=lfs -text

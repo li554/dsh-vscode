@@ -8,10 +8,12 @@
 
 - **零依赖开箱即用**：宿主运行时、网页前端、生态插件全部打进扩展，一条 `.vsix` 完成安装。
 - **原生 DSH 体验**：完整渲染 Harness 网页界面（模型对话、工具调用、工作区、会话管理），无二次封装。
-- **内置插件（精简集）**：分层记忆、自动续写、PPT↔HTML 桥、网页预览、SSH 远程、Git 管理、架构图、Web IDE 等插件随附启用。
-- **对 DSH 零改动**：利用本地回环端口映射（`WebviewPortMapping`）+ 信任边界机制接入，不修改 DSH 任何源码。
+- **内置插件（精简集）**：三层记忆、自动续写、对话回退、PPT 大师预设、网页预览/批注、SSH 远程、Git 管理、架构图、服务化侧边栏（编辑器 + 终端 + 浏览器）、归档任务管理等插件随附启用。
+- **对 DSH 零改动**：利用本地回环端口映射（`WebviewPortMapping`）+ 信任边界机制接入，平台代码只带少量可审计的本地补丁（`.smoke/platform-patches/`，打包前字节校验），不改插件源码之外的东西。
 - **多窗口隔离**：每个 VS Code 窗口独立宿主实例、独立端口，互不冲突。
 - **丰富操作命令**：打开面板、重启宿主、外部浏览器逃生、查看宿主日志。
+
+> **平台版本**：内置 `@deepseek-ai/dsh@0.2.2-rc.2`（2026-11 升级；此前为 0.1.5-rc.2）。破坏性变更、逐项证据与后续升级方法见 [`docs/upgrade/0.2.2-deltas.md`](docs/upgrade/0.2.2-deltas.md)。
 
 ## 🚀 快速开始
 
@@ -46,39 +48,51 @@
 
 ## 🔌 内置插件
 
-> **探索分支说明**：本分支（`explore/dsh-0.1.5-rc2`）把内置平台升级到 `@deepseek-ai/dsh@0.1.5-rc.2`，并把内置插件从原先的整套生态**裁剪为精简集**（见下表），其余全部移除（见 `src/extension.js` 的 `RETIRED_PLUGINS`，旧 `DSH_HOME` 里的残留插件会在下次启动时被清理）。
+> **平台版本说明（0.4.0）**：本版本把内置平台升级到 `@deepseek-ai/dsh@0.2.2-rc.2`（原 `0.1.5-rc.2`），内置插件整体刷新到声明 0.2.x 兼容的上游版本，并按 0.2.2 的新机制改写了预设与插件兼容性处理。升级影响、官方升级指南索引与逐项证据见 [`docs/upgrade/0.2.2-deltas.md`](docs/upgrade/0.2.2-deltas.md)，平台补丁的逐条裁决见 [`.smoke/platform-patches/NOTES-0.2.2.md`](.smoke/platform-patches/NOTES-0.2.2.md)。
 
 扩展在 `plugins/bundled` 下随附以下插件（各自保留原 LICENSE）：
 
 | 插件 | 来源 | 说明 / 本地改动 |
 | --- | --- | --- |
-| `dsh-client-auto-continue` | [HsiangNianian/dsh-auto-continue](https://github.com/HsiangNianian/dsh-auto-continue) | 请求被网络错误等非人为原因中断时自动续写（升到 0.11.5） |
-| `@canglongcl/dsh-web-review` | canglongcl | 页面预览 + 元素框选批注 + 视觉调整（升到 0.6.0；0.6.0 起它自己也已改用官方 slot，不再依赖 better-sidebar）。有一处本地修补：批注草稿按 sessionId 存，不要求会话有活跃 agent，见下 |
-| `dsh-undo-plugin` + `@dsh-undo/*`（7 个成员包） | [23swccp/dsh-undo](https://github.com/23swccp/dsh-undo) | 对话回退/撤销：`/undo` 命令、消息行与头部回退按钮、回退时 fork 到新会话（模型不会看到被撤销的提示）、设置页「归档任务」管理器、影子 Git 文件恢复（绝不碰项目自身的 `.git`）。`rollback-fork` 有一处针对 0.1.5 的本地修补，见下 |
-| `dsh-ppt-master` | [npm `dsh-ppt-master`](https://www.npmjs.com/package/dsh-ppt-master) `1.0.8` | **PPT 大师预设**：源文档 → 八项确认闸门 → 逐页手写 SVG → 质检 → 视觉闸门 → 导出可编辑 PPTX。零运行时依赖（只用 `node:` 内置模块），`skills/` 内置两个 PPT 技能。预设走平台 `.agent-presets/` 机制（`plugins/presets/ppt-master/`，`syncBakedPresets` 下发）——原包 cordis patch 的 insert 目标是 `@deepseek-ai/dsh-agent-preset`（单数包，dsh ≥ 0.1.7 才有），0.1.5 上按 preset 目录转换，`dsh-workflow-ptc` 同样替换为本平台存在的 `dsh-workflow-worker-thread`，见下 |
-| `dsh-live-compact` | [MerkyorLynn/dsh-live-compact](https://github.com/MerkyorLynn/dsh-live-compact) `1.0.1` | **Spine 压缩引擎**：`SpineCompactionEngine extends BasicCompactionEngine`，按 surface 节点摘取历史做选择性压缩（`auto: true`，`thresholdRatio: 0.8`）。零运行时依赖；peer `@deepseek-ai/dsh-compaction*`/`dsh-llm` 全部由 vendor 闭包提供（peer 声明 ≥0.2.0，但所用 API 在 0.1.5-rc.2 均已存在，静态核对通过），cordis patch 顶层挂 `compaction-spine` |
-| `@liustack/modlens` | [liustack/modlens](https://github.com/liustack/modlens) | **视觉插件**：给纯文本模型（DeepSeek/GLM 等）加「看图」能力，粘贴图片返回结构化 JSON 证据（OCR + 版面 + 语义）。提供 `modlens_read_image` 工具、图片粘贴处理、`(modlens vision)` 模型变体与设置卡片。自带 `node_modules/{commander,undici}` 供它 spawn 的 CLI 使用，见下 |
-| `dsh-mnemon` | [omdsh-dev/dsh-mnemon](https://github.com/omdsh-dev/dsh-mnemon) `0.5.8` | **三层记忆**（Runtime / Documents / Memory Spaces）。Starter + 3 Source + Strategy + 9 Provider 作为 sibling 包 transplant；`zod`/`fflate`/`schemastery` 等在 `_hostdeps`。**Mnemon Native** 使用 vsix 内置的 `@mnemon-dev/mnemon@0.2.8` win32-x64 二进制，宿主启动时设 `MNEMON_CLI_PATH`，**无需联网、无需全局装 CLI**。 |
-| `@linxin666/dsh-ssh` | [linxin666/dsh-web](https://github.com/zhu1090093659/dsh-web) `0.3.23` | **SSH 远程（局域网/内网服务器）**：`ssh_list`/`ssh_exec`/`ssh_upload`/`ssh_download`/`ssh_tunnel`/`ssh_cluster` 模型工具 + 设置页主机配置 + Web 终端/SFTP。纯 JS（ssh2 + ws，无 native ABI）；`ssh2`/`asn1`/`bcrypt-pbkdf`/`tweetnacl`/`ws` 在 `_hostdeps`。**仅出站连接**（本地 spawn/ssh2 连远端），不暴露宿主端口。 |
-| `@duke-dsh-plugins/dsh-git-manager` | [MoonlitDropOfBlood/dsh-git-manager](https://github.com/MoonlitDropOfBlood/dsh-git-manager) `1.1.0` | **Git 工作区管理**：输入框「模式」选择器旁入口（仅 git 仓库显示），居中面板提供 status/diff、分支管理、合并冲突解决、commit/fetch/pull/push、worktree 管理（添加后自动注册为 DSH 工作区）、带分支线图形的提交历史。纯 JS（`zod` 在 `_hostdeps`），走平台 Typert 协议。 |
-| `dsh-archify` | [GongYuanCaiJi/dsh-archify](https://github.com/GongYuanCaiJi/dsh-archify) `0.1.0` | **架构图 Skill**（移植自 tt-a1i/archify）：用 JSON 规格生成可验证的架构图/流程图/时序图/数据流图/生命周期图。Skill-only bundle：零运行时依赖，`skills/` 目录由 `prepare` 脚本 staging（已内置），挂载平台 `@deepseek-ai/dsh-skill-filesystem` provider。 |
-| `dsh-better-sidebar` | [omdsh-dev/DSH-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar) `0.19.1` | **服务化侧边栏工作台**：文件资源管理器 + CodeMirror 编辑器 + xterm 真实终端 + Git/本轮文件变动 + 内嵌浏览器 + 子代理与后台任务页，挂进 DSH **0.1.5 原生右侧栏**（`dsh-client-ui-sidebar-right`），并向其他插件开放 `ctx.betterSidebar`。client 半自包含（`client.js` 与三个惰性 chunk 零裸导入，mermaid/dompurify/CodeMirror 等已内联）；host 半只需 `ws`、`schemastery` 与 5 个 `@deepseek-ai/dsh-*`，前三者已在 `_hostdeps`、后五者由 vendor 闭包提供。**取代已退役的 `dsh-code-ide`**（explore.84）。 |
-| `dsh-mcp` | [ArvinQi/dsh-mcp](https://github.com/ArvinQi/dsh-mcp) `1.14.4` | **MCP 管理界面 + tool search**：设置页「MCP」可视化配置/启停/刷新 MCP 服务器与工具勾选，按需检索热注入；宿主半 `McpManagerService`（服务器定义持久化、`dsh-mcp-client` 运行时挂载、OAuth、连接探测），其 cordis patch 顶层插入单行 `dsh-mcp`。声明 `supported: 0.2.0-rc.2`，但 Config 只有全默认键（`probeTimeoutMs`/`allowBrowserOnMount`），平台 `dsh-mcp-client`@0.1.5 已内置；`@modelcontextprotocol/client@2.0.0` 及闭包、`js-yaml` 进 `_hostdeps` |
-| `_hostdeps/`（`@vscode/*`、`ssh2` 族、`zod`、`fflate`、`node-pty`、`@modelcontextprotocol/*` 族、`js-yaml` 等 25 个包） | npm 包 | 各内置插件宿主侧所需的非平台依赖，内置以便离线解析（p2h-bridge 专属的 docgen-utils/fontkit/jszip/linkedom 及其闭包已随插件退役删除） |
+| `dsh-client-auto-continue` | [HsiangNianian/dsh-auto-continue](https://github.com/HsiangNianian/dsh-auto-continue) | 请求被网络错误等非人为原因中断时自动续写（0.19.0，设置改走 0.2.2 的 `Config`/`configForms`） |
+| `@canglongcl/dsh-web-review` | canglongcl | 页面预览 + 元素框选批注 + 视觉调整（0.6.0）。本地修补三处：批注草稿按 sessionId 存、不要求会话有活跃 agent；命令描述改成 thunk；两处 0.2.2 API 适配（`ctx.layout.closeDetails?.()` 与批注 source 的 `plugin:dsh-web-review`），见下 |
+| `dsh-rewind-plugin` | npm `dsh-rewind-plugin` `0.22.1` | 对话回退/撤销（取代此前的 `dsh-undo-plugin` 与 `@dsh-undo/*`）：`/undo`、消息行与头部回退按钮、回退时 fork 到新会话、影子 Git 文件恢复。一处本地修补：压缩（compaction）把目标消息移出模型上下文后仍可按 surface 覆盖节点撤回 |
+| `dsh-ppt-master` | [npm `dsh-ppt-master`](https://www.npmjs.com/package/dsh-ppt-master) `1.0.8` | **PPT 大师预设**：源文档 → 八项确认闸门 → 逐页手写 SVG → 质检 → 视觉闸门 → 导出可编辑 PPTX。零运行时依赖，`skills/` 内置两个 PPT 技能。0.2.2 起**包本身只是 bundle-only shell**（`cordis.patch.yml` 为空）：预设声明由 `@dsh-vscode/presets` 统一持有，避免同一 `ppt-master` id 被声明两次；包仍随附以提供 `ppt-master-tools` 行与 `skills/` |
+| `dsh-live-compact` | [MerkyorLynn/dsh-live-compact](https://github.com/MerkyorLynn/dsh-live-compact) `1.1.6` | **Spine 压缩引擎**：`SpineCompactionEngine extends BasicCompactionEngine`，按 surface 节点摘取历史做选择性压缩。1.1.6 起自带设置页/阴影存储的 client 半；挂 `compaction-spine` 行 |
+| `@liustack/modlens` | [liustack/modlens](https://github.com/liustack/modlens) `3.27.3` | **视觉插件**：给纯文本模型（DeepSeek/GLM 等）加「看图」能力，粘贴图片返回结构化 JSON 证据（OCR + 版面 + 语义）。提供 `modlens_read_image` 工具、图片粘贴处理、`(modlens vision)` 模型变体与设置卡片。自带 `node_modules/{commander,undici}` 供它 spawn 的 CLI 使用；`config.families` 契约未变，`dsh.modlensFamilies` 覆盖层继续有效 |
+| `dsh-mnemon` | [omdsh-dev/dsh-mnemon](https://github.com/omdsh-dev/dsh-mnemon) `0.5.45` | **三层记忆**（Runtime / Documents / Memory Spaces）。Starter + Source + Strategy + Provider 作为 sibling 包 transplant（0.5.45 的 sibling 集合含 `dsh-mnemon-source-skills`、`dsh-mnemon-strategy-general`）。**Mnemon Native** 使用 vsix 内置的 `@mnemon-dev/mnemon@0.2.8` win32-x64 二进制，宿主启动时设 `MNEMON_CLI_PATH`，**无需联网、无需全局装 CLI** |
+| `@linxin666/dsh-ssh` | [linxin666/dsh-web](https://github.com/zhu1090093659/dsh-web) `0.4.18` | **SSH 远程（局域网/内网服务器）**：`ssh_list`/`ssh_exec`/`ssh_upload`/`ssh_download`/`ssh_tunnel`/`ssh_cluster` 模型工具 + 设置页主机配置 + Web 终端/SFTP。纯 JS（ssh2 + ws，无 native ABI）；`ssh2`/`asn1`/`bcrypt-pbkdf`/`tweetnacl`/`ws` 在 `_hostdeps`。0.4.18 声明 `engines.dsh >=0.2.2-rc.2`，client 设置改用 `ctx.configForms`。**仅出站连接**，不暴露宿主端口 |
+| `@duke-dsh-plugins/dsh-git-manager` | [MoonlitDropOfBlood/dsh-git-manager](https://github.com/MoonlitDropOfBlood/dsh-git-manager) `1.7.0` | **Git 工作区管理**：输入框「模式」选择器旁入口（仅 git 仓库显示），居中面板提供 status/diff、分支管理、合并冲突解决、commit/fetch/pull/push、worktree 管理、带分支线图形的提交历史。纯 JS，走平台 Typert 协议；1.7.0 的 typert 调用带 0.2.2 严格校验要求的 `create()` schema 投影 |
+| `dsh-archify` | [GongYuanCaiJi/dsh-archify](https://github.com/GongYuanCaiJi/dsh-archify) `0.1.0` | **架构图 Skill**（移植自 tt-a1i/archify）：用 JSON 规格生成可验证的架构图/流程图/时序图/数据流图/生命周期图。Skill-only bundle：零运行时依赖，`skills/` 目录由 `prepare` 脚本 staging（已内置），挂载平台 `@deepseek-ai/dsh-skill-filesystem` provider |
+| `dsh-better-sidebar` | [omdsh-dev/DSH-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar) `0.32.1` | **服务化侧边栏工作台**：文件资源管理器 + CodeMirror 编辑器 + xterm 真实终端 + Git/本轮文件变动 + 内嵌浏览器 + 子代理与后台任务页，挂进 DSH **原生右侧栏**（`dsh-client-ui-sidebar-right`），并向其他插件开放 `ctx.betterSidebar`。0.32.1 针对 0.2.2 改写：peer 全部 `^0.2.2-rc.2`，宿主侧改用 `webStartup`/`ctx.settings` 新 API；client 半自包含。**取代已退役的 `dsh-code-ide`** |
+| `@mlgbnb/dsh-archive-manager` | npm `@mlgbnb/dsh-archive-manager` `1.0.10` | **归档任务管理器**：设置页「归档任务」列表/恢复/删除，自行读取 `session(.vN).jsonl[.zstd]` 会话日志；client 注册平台 `settings.section` 槽位 |
+| `dsh-zh-kit` | npm `dsh-zh-kit` `0.1.2` | **中文界面套件**：中文化文案与中文输入体验。一处本地修补：首步提醒消息的 source kind 改为 `plugin:${name}`（0.2.2 session format v4 拒绝 `kind:'plugin'`） |
+| `@dsh-vscode/presets` | 本仓库生成（`.smoke/gen-presets.py`） | **内置 agent 预设打包层**：把 `plugins/presets/{router-standard,router-spec,ppt-master}` 转成 0.2.2 的 bundle 声明（`@deepseek-ai/dsh-agent-preset` 行）。预设里挂载的本地 ES 模块（`router-bootstrap-*.mjs`、`gitbash-executor.mjs`）作为 `dsh-preset-*` 真实包随附——预设的子行名是从 profile 解析的，相对路径不会被锚定到 patch 文件 |
+| `_hostdeps/`（`@vscode/*`、`ssh2` 族、`zod`、`fflate`、`node-pty`、`schemastery`、`cosmokit`、`markdown-to-jsx` 等 13 个包 / 12 个目录） | npm 包 | 各内置插件宿主侧所需的非平台依赖，内置以便离线解析（`dsh-mcp` 退役后其专属的 `@modelcontextprotocol/*`、`js-yaml` 及闭包已一并删除） |
 
-> `dsh-undo-plugin` 只是 bundle 层，真正的插件是它 cordis patch 挂载的 7 个 `@dsh-undo/*` 成员包——所以它们不在 `BUNDLED_PLUGINS` 里，由 `.smoke/selfcontained-plugins.mjs` 按「被 patch 认领」校验。
+> `dsh-mnemon` 的 source/strategy/provider 成员包与 `@dsh-vscode/presets` 挂载的 `dsh-preset-*` 模块包都以**兄弟包**形式放在 `plugins/bundled` 下（不在 `BUNDLED_PLUGINS` 里，由各 bundle 的 cordis patch 按裸包名认领），`.smoke/selfcontained-plugins.mjs` 会按「被 patch 认领」逐个校验；`_hostdeps/` 则是扁平化进 `<profile>/node_modules` 的第三方依赖。
 
 > **`@liustack/modlens` 需要自己配一个视觉引擎才能读图**。它与平台几乎没有耦合（宿主半只 import node 内建，客户端半只 require `react` + `dsh-client-ui-primitives`，都来自前端共享表），并且**已经内置了 Electron 部署的处理**：它 spawn `process.execPath <dist/main.js>` 时显式设 `ELECTRON_RUN_AS_NODE=1`，所以用 VS Code 二进制当 Node 跑得通（实测 `--version` 正常）。
 > 它的配置在 **`~/.modlens/config.json`**（不在 `DSH_HOME` 内，因此残留清理逻辑碰不到它）。装完先跑 `doctor` 看引擎状态，再按需配一条：`modlens config set gemini-api.apiKey`（免费、5-10 秒）、或把它指到任意 OpenAI 兼容的视觉端点：`modlens config set openai.baseUrl <url>` / `openai.apiKey` / `openai.model`。
 
 **本分支的本地改造（相对上游）**
 
-- **移除 `@dsh-vscode/p2h-bridge`，换装 `dsh-ppt-master` + `dsh-live-compact`**：p2h-bridge（本仓库自研的 PPT↔HTML 桥）从 `BUNDLED_PLUGINS` 摘掉、列入 `RETIRED_PLUGINS`（启动时从旧 profile 的 `bundles` 与 `node_modules` 清理），`plugins/bundled/@dsh-vscode/p2h-bridge` 与其 38 个专属 `_hostdeps` 依赖（docgen-utils、fontkit、jszip、linkedom 及闭包，经反向依赖闭包计算确认无他用）一并删除，专属 smoke 测试 `.smoke/p2h-manager-test.mjs` 移除。新装两个零运行时依赖插件：**`dsh-ppt-master@1.0.8`**（PPT 大师预设 + 两个 PPT 技能；原包 cordis patch 的 preset insert 目标是 dsh ≥ 0.1.7 才有的单数 `@deepseek-ai/dsh-agent-preset` 包，0.1.5 上改为平台 `.agent-presets/` 目录 preset `plugins/presets/ppt-master/`，patch 中不存在的 `dsh-workflow-ptc` 替换为 `dsh-workflow-worker-thread`，包自身的 `dsh.bundle.patch` 置空）与 **`dsh-live-compact@1.0.1`**（Spine 压缩引擎，扩展 compaction-basic；peer 声明 ≥0.2.0 但全部所用 API 静态核对在 0.1.5-rc.2 存在，原样保留其顶层 cordis patch）。验证：`.smoke/selfcontained-plugins.mjs` 两个新条目 `ok`（其余 9 个 FAIL 为改动前既有基线）、`.smoke/boot-test.mjs`、打包安装。
-- `@deepseek-ai/dsh-client-ui-settings-models`（explore.24）：自定义模型「容量与能力」增加 **支持图像** / **推理模型** 开关。推理开关写入 `reasoningEfforts: {low,high,max}`；**对话框模型选择器**（`dsh-client-ui-model-selection`）对声明了 reasoning 的模型显示 **Default / Low / High / Max**，与官方模型同一套 UI，不在设置卡片里选档。
+- **0.4.0：内置平台升级到 `@deepseek-ai/dsh@0.2.2-rc.2`**（原 0.1.5-rc.2）。要点：
+  - `vendor/node_modules` 整体替换为 `@deepseek-ai/dsh@0.2.2-rc.2` + `@vscode/ripgrep@1.18.0` 的干净 hoisted 安装（`npm install` 到 staging 后整体替换，旧树备份在 git 历史里）。新平台闭包从 224 MB 变成 1.03 GB（新增 office/语音/computer-use/插件市场等 bundle，其中 `libreoffice-kit-*` 占 335 MB），`pack.py` 因此在打包时剔除两个非 Windows 的 wasm 回退包（`@deepseek-ai/libreoffice-kit-wasm`、`@img/sharp-wasm32`，见 `pack.py` 的 `PRUNE`），否则 vsix 会白涨 ~150 MB。
+  - **插件兼容性闸门**（0.2.1-alpha.3 起）：宿主启动时按 `engines.dsh`（优先）或 `@deepseek-ai/dsh*` 的 peer 范围判断插件与运行时是否兼容，不匹配就**静默跳过**该 bundle。所有内置插件都已升到声明 0.2.x 兼容的版本（闸门全通过），`PLUGIN_VERSION_EXEMPTIONS` **为空**——只有「已验证但清单无法表达」的插件才允许往 `<profile>/compatibility.json` 写豁免；该机制保留但默认不授权，`.smoke/plugin-compat.mjs` 逐条断言。
+  - **预设机制重写**：0.2.2 的预设 registry **不再扫描 `<DSH_HOME>/.agent-presets/`**，预设是 bundle patch 里 `@deepseek-ai/dsh-agent-preset` 的声明行。新增生成器 `.smoke/gen-presets.py` 把 `plugins/presets/*` 转成 `@dsh-vscode/presets` bundle；预设里挂载的本地 ES 模块打包成 `dsh-preset-*` 真实包（预设子行名从 profile 解析，相对路径不会被锚定）。预设内容同步迁移到 0.2.2：`persona.text`→`prefix`、删除 `{{cwd}}`、`workflow-worker-thread`→`workflow-ptc`、删掉已移除的 `tool-subagent-control/list-agents` 子路径、`modelSelectionSettings`→`modelSelection`、`tool-subagent-control` 加 `interrupt: false`。旧 `.agent-presets/` 里**只清理本扩展当年写的那三个 id**，用户自己的目录不动。
+  - **插件整体刷新**：ssh 0.3.23→0.4.18、better-sidebar 0.19.1→0.32.1、git-manager 1.1.0→1.7.0、mnemon 0.5.8→0.5.45（sibling 集合更新）、modlens 3.26.1→3.27.3、auto-continue 0.11.5→0.19.0、live-compact 1.0.1→1.1.6、archive-manager→1.0.10；`dsh-undo-plugin` 由 `dsh-rewind-plugin@0.22.1` 取代；**`dsh-mcp` 退役**（见下）。详见下表。
+  - **`dsh-mcp` 退役 → 平台官方 MCP 管理器接管**：0.2.2 自带 `@deepseek-ai/dsh-mcp-manager` + `dsh-mcp-client`，而 `dsh-mcp` 1.15.1 的 client 半也自行挂载同名（`mcpManager`）的 Remote contribution，**两个客户端挂载争用同一命名空间会把 client gateway 的串行挂载队列卡死**：面板永远停在「Loading plugins…」（40% 插件后定格）。这是浏览器侧死锁，纯宿主冒烟测试看不到，是靠 CDP 驱动真实浏览器才定位的（跳过那一处 `$mount` 即可完整启动）。故本版本把 `dsh-mcp` 移入 `RETIRED_PLUGINS`、随附目录删除，MCP 服务器改由官方管理器自带的设置表单管理。代价：失去旧插件的「MCP 管理页面 / OAuth / `mcp_tool_search` 热注入」，官方 README 把这些列为 Known Limitations。——详见 [`docs/upgrade/0.2.2-deltas.md`](docs/upgrade/0.2.2-deltas.md)。
+  - **客户端 API 迁移**：0.2.2 删除 `ctx.settings.register`、`settingsScope`/`webUiSettings`、`ctx.layout.closeDetails`、`webRuntime` 服务；改为 `Config` 声明 + 客户端 `ctx.configForms`、`ctx.layout.closeDetails?.()`、`webStartup`。涉及插件已逐个移植（ssh/better-sidebar 走上游新版，web-review/zh-kit 打最小补丁）。
+  - **会话格式 v4**：`source.kind: 'plugin'` 被拒，插件注入的消息必须写 `plugin:<包名>`（web-review、zh-kit 已改）；v0→v4 迁移链由平台负责，旧的 v0 容错补丁继续保留（只容忍、不修改原始文件）。
+  - **平台补丁**：8 条 → **6 条**。`dsh-subprocess-local`（`windowsHide`）与 `dsh-win32-process`（`STARTF_USESHOWWINDOW`）**上游已修复**，补丁删除但保留 `.smoke/windows-hide-test.mjs` 作为「上游不许回退」的守护；`dsh-session-persistence-jsonl` 的 `inspect(id)` 随 `@dsh-undo` 退役**移除**；新增**剪贴板 shim 补丁**（此前只存在于 vendor 树、不在补丁库里，升级会静默丢失）。逐条裁决见 `.smoke/platform-patches/NOTES-0.2.2.md`。
+  - **兼容性验证**：`.smoke/boot-test.mjs` 现在还会向宿主查询预设名单（Typert Remote `agentPresets/list`）并断言每个预设都能组装（`broken` 为空），因为 0.2.2 会把失败的预设**留在名单里**而不是启动失败。
+- **移除 `@dsh-vscode/p2h-bridge`，换装 `dsh-ppt-master` + `dsh-live-compact`**：p2h-bridge（本仓库自研的 PPT↔HTML 桥）从 `BUNDLED_PLUGINS` 摘掉、列入 `RETIRED_PLUGINS`（启动时从旧 profile 的 `bundles` 与 `node_modules` 清理），`plugins/bundled/@dsh-vscode/p2h-bridge` 与其 38 个专属 `_hostdeps` 依赖（docgen-utils、fontkit、jszip、linkedom 及闭包，经反向依赖闭包计算确认无他用）一并删除，专属 smoke 测试 `.smoke/p2h-manager-test.mjs` 移除。新装两个零运行时依赖插件：**`dsh-ppt-master@1.0.8`**（PPT 大师预设 + 两个 PPT 技能）与 **`dsh-live-compact`**（Spine 压缩引擎，扩展 compaction-basic）。0.2.2 上二者的预设/兼容处理见上一节。
+- **自定义模型「支持图像 / 推理模型」开关**（explore.24，**0.2.2 已上游化**）：0.1.5 时给 `dsh-client-ui-settings-models` 打了补丁；0.2.2 原生提供 `ModelInputTypes`（text/image）与 `ModelReasoningEfforts`（低/高/最高）编辑，模型选择器对声明 reasoning 的模型显示 **Default / Low / High / Max**。因此该补丁**不再重新移植**（重复添加会出现两套控件）；唯一未复刻的是旧版「切换即持久化」的交互（0.2.2 走卡片 Apply）。
 - **移除 `dsh-code-ide`，由 `dsh-better-sidebar` 取代**（explore.84）：两者覆盖同一片「编辑器 + 终端 + 资源管理器 + 工作区搜索」的表面，同时存在会争夺右侧栏，且 dsh-code-ide 把 CodeMirror/xterm 的重复负载又带进 vsix 一份。改为把 `dsh-code-ide` 从 `BUNDLED_PLUGINS` 摘掉、列入 `RETIRED_PLUGINS`（启动时从旧 profile 的 `bundles` 与 `node_modules` 清理），并删除 `plugins/bundled/dsh-code-ide` 与其专属依赖 `_hostdeps/ffi-rs`（`node-pty`/`@vscode/ripgrep` 保留——前者是 better-sidebar 的宿主依赖）。它此前在 0.1.5-rc.2 上的三处适配（client 的 slot props/`baselinesReady`、host 的 `X-Frame-Options`、`ffi-rs` 的 mutation backend）随之归档；相关根因分析仍留在 git 历史里，需要时可 `git log -p -- plugins/bundled/dsh-code-ide` 取回。
 - **宿主移植的「静默半成品」缺陷修复**（explore.83）：装上带新内置插件的 vsix 后宿主启动即 `cannot resolve profile bundle "dsh-better-sidebar"` 并 exit 1、面板全白。根因不在插件：`syncBakedPlugins` 会把名字写进 profile 的 `bundles`，而移植那一步的每次拷贝都包在 `catch { /* skip */ }` 里**静默吞错**，标记文件却**无条件写入**——于是一次瞬时拷贝失败（pnpm/vendor 刚写完、杀软正在扫那个 14 MB 新包之类）被固化成「已移植」，fast path 又只比对版本+内容摘要、**从不校验包目录是否存在**，从此每次都跳过移植，profile 永久无法启动。修法：新增 `missingBundledPackages()` 并纳入 fast path 条件（只要有 entry 目录缺失就强制重跑移植），三处拷贝改为收集失败项并新增 `baked-in transplant INCOMPLETE: …` / `baked-in transplant re-running: …` 两行可见上报。验证：从源码提取该函数对真实文件系统跑四组用例（完整=0 缺失；挪走 better-sidebar=正确检出；挪走 `_hostdeps` 依赖=不计入；还原=干净）。
 - **内置 `dsh-better-sidebar`**（explore.82）：把插件包整体放进 `plugins/bundled/` 并加入 `BUNDLED_PLUGINS`。依赖账：client 半零裸导入（自包含），host 半只需 `ws`/`schemastery`/5 个 `@deepseek-ai/dsh-*`——前两者已在 `_hostdeps`（`dsh-mnemon` 同样按裸名解析 `schemastery`），后五者由 vendor 闭包按**运行宿主的同版本**提供，因此 `_hostdeps` 与 `vendor` 一行未动。验证：`.smoke/boot-test.mjs` 13/13（该 harness 直接从 `src/extension.js` 读 `BUNDLED_PLUGINS`，不会与发货内容漂移）。
-- **复制功能整体失效修复**（explore.74）：webview 里所有复制按钮（消息复制、记忆空间复制 ID 等）静默失败。根因：VS Code webview 的**跨源 iframe**（`vscode-webview://` 嵌入 `http://127.0.0.1:*`）里 `navigator.clipboard.writeText` 被 permissions-policy 拦截抛 `NotAllowedError`，而平台 `Rn` helper 与各插件均无 fallback。修法：在宿主服务的 SPA 入口 `vendor/.../dsh-web-frontend/dist/index.html` 注入 shim，覆盖 `navigator.clipboard.writeText`——先在用户手势内**同步**尝试不受 policy 限制的 `document.execCommand('copy')`（textarea 中转），成功即返回；失败再走原生 API。一处修复覆盖平台与**全部现有及未来插件**。验证：宿主启动后 `GET /` 返回的 HTML 含 shim。
+- **复制功能整体失效修复**（explore.74，0.2.2 起纳入补丁库）：webview 里所有复制按钮（消息复制、记忆空间复制 ID 等）静默失败。根因：VS Code webview 的**跨源 iframe**（`vscode-webview://` 嵌入 `http://127.0.0.1:*`）里 `navigator.clipboard.writeText` 被 permissions-policy 拦截抛 `NotAllowedError`，而平台 `Rn` helper 与各插件均无 fallback。修法：在宿主服务的 SPA 入口 `vendor/.../dsh-web-frontend/dist/index.html` 注入 shim，覆盖 `navigator.clipboard.writeText`——先在用户手势内**同步**尝试不受 policy 限制的 `document.execCommand('copy')`（textarea 中转），成功即返回；失败再走原生 API。一处修复覆盖平台与**全部现有及未来插件**。0.2.2 没有修（它只给自己的 helper 加了兜底，`dsh-mnemon` 等仍直接调 `navigator.clipboard`），所以升到 0.2.2 后这处 shim **必须保留**，现已作为 `.smoke/platform-patches/` 的第 7 条补丁（`pack.py` 打包前字节校验，丢了就拒绝打包）。验证：宿主启动后 `GET /` 返回的 HTML 含 shim。
 - **代理同源 Origin/Referer 转发修复**（explore.74）：网页预览报「页面无法通过隔离预览加载」，日志 `proxy 403 POST /webview-preview-sessions`。根因：扩展代理的 `STRIPPED_REQUEST_HEADERS` **无条件剥离** `origin`/`referer`，而 `dsh-web-review` 的 `previewSessionsHandler` 用 `requestOrigin()` **强制要求同源 Origin**，缺 Origin → 403。修法：`forwardToHost()` 改为对**同源**（host 等于 `appAuthority`）的 Origin/Referer 放行转发，跨源的仍剥离——DSH 的 Host/Origin fence（`sec-fetch-site: cross-site` 硬拒）与 web-review 的校验均通过，浏览器标记不再被误伤。验证：直连宿主 `POST /webview-preview-sessions` 无 Origin 仍 403、带同源 Origin 返回 201。
 - **撤回支持压缩后被摘除的消息**（`dsh-rewind-plugin`，explore.75）：压缩（compaction）会把旧消息从**模型上下文表面**摘除——摘要节点用 `surfaceOp: replace` 覆盖一段范围，旧消息只留在会话日志里。此前撤回这些消息（点历史消息下的撤回按钮）直接报 `user message at seq N is no longer in the model context (shadowed by compaction)`。这其实不合理：撤回的语义是"放弃目标之后的内容"，而目标**是否还在模型上下文里**与"它之后的内容要不要放弃"无关。修法：`planRewind` 在目标不在 surface 时，沿 surface **从后往前**找覆盖它的节点（`sourceEventSeqs` 含目标 seq；`SurfaceOp replace` 契约保证摘要节点引用每一个被它 shadow 的节点），从该节点起连同后续全部摘除——与正常撤回完全同一条 `surfaceOp: replace` 路径，会话日志始终保留。找不到覆盖节点时才保留报错（真实折叠下不会发生）。验证：`.smoke/rewind-compaction-test.mjs` 白盒提取真实 `planRewind` 函数体，10/10 通过（含正常路径回归）。
 - **「打开预览」跳转到「网页预览」标签页 + 预览内容在 webview 内真正可达**（`dsh-web-review` + `p2h-bridge` + `src/extension.js`，explore.76）：此前 PPT「打开预览」只在本面板内联 iframe 展示，从不驱动 web-review 的「网页预览」标签页；且即便驱动成功，web-review 隔离预览服务器监听**临时端口**（`server.listen(0)`），frameUrl 形如 `http://<id>.localhost:<临时端口>/.dsh-web-review/entry/...`——而 VS Code webview 的 portMapping 只映射扩展代理固定端口（37750），临时端口在 webview 内不可达，于是显示「页面无法通过隔离预览加载」。三层修复：① **loopback 走公共端口**（`dsh-web-review` host）：`createSession` 对落在**应用自身公共端口**上的 `127.0.0.1`/`localhost` 目标（如 p2h 的 `http://127.0.0.1:37750/p2h-bridge/decks/...`）返回**路由 descriptor**——与公共 origin 同源、会话 id 放进路径 `/.dsh-web-review-frame/<id>/.dsh-web-review/entry/...`，隔离包装与批注 bridge 全部保留（由宿主 `ctx.webServer` 前缀路由承载，公共端口取自 `publicFramePortOf()`：VS Code 用 `DSH_PROXY_PORT`，桌面用宿主自身端口）；其它 loopback 端口（第三方 dev server）仍走**直连 descriptor**，避免把外来本地服务抬到 DSH surface 的 origin 上；外部网址仍走隔离预览（回归已验证）。② **跨插件驱动通道**（`dsh-web-review` client）：web-review 0.6.0 的 `openPreview` 是 `conversation.input.dock` 注入的私有能力，其他插件够不着——现发布全局 `window.__dshWebReviewOpenPreview__(url)`（设 webviewStore URL + 激活「网页预览」标签页），WebviewView 只对**未包装的直连** descriptor（frameUrl 不带 entry/路由前缀）跳过 bridge 握手（否则 15s 后误报「页面无法通过隔离预览加载」）；路由/隔离 frame 一律照常握手——元素框选与批注依赖它。**关键点：引擎（store 实例）改由插件自有的 per-session 注册表持有**，照搬本仓库 `main` 分支的现成实现：`createWebviewStoreRegistry(handle)` 提供 `instanceFor(sessionId)`（惰性 `handle.create(sessionId)` + Map 缓存）、`prune`/`pruneAbsent(liveIds)`，配合 `ctx.sessions.list.subscribe` 做会话回收。两个 `slots.register` **不再声明 `store:`**，改由注入面返回 `hooks: { webviewStore: engine }` + `actions: engine.actions`（`WebviewView`/`DraftOverlayBar` 相应改吃 `useWebviewStore`）——若保留 `store:`，renderer 会经由它私有的 store 轴再建一个实例，同一会话出现两个引擎，opener 写入的那个组件观察不到。全局 opener 则按 `ctx.sessions.list.getSnapshot().current` 取当前会话的引擎即时写入。**为什么不能沿用「捕获 renderer actions」的写法**：`conversation.view` 视图区只渲染激活项（`renderSlot(..., { only: active.id })`），且 `cachedSessionInject` 按 (entry × binding) 记忆化 → 在从未打开过「网页预览」标签页的会话里 dock/view 的 inject 根本没跑过，被捕获的 action 不存在，opener 只能返回 false；`instanceFor` 则按需铸造。③ **预览 URL 端口**（`p2h-bridge` + 扩展）：p2h 的 `ctxPort()` 原本取 `ctx.webServer.port`（宿主 OS 分配临时端口，webview 不可达），现优先读扩展注入的 `DSH_PROXY_PORT`（= `hostPortFor()`，37750）；扩展 `startHost` 的 env 注入该变量。p2h「打开预览」按钮优先调用全局 opener，失败才回退内联预览/新窗口。验证：`.smoke/direct-preview-test.mjs`（loopback→路由 201、外部→隔离 201、客户端含全局 opener 与路由/直连分支、per-session 引擎注册表两个注册以 `hooks`/`actions` 下发引擎、p2h 接线、p2h routes 优先 `DSH_PROXY_PORT`）。
@@ -89,25 +103,21 @@
 ③ `.smoke/p2h-manager-test.mjs` 扩到 25 项：新增「会话作用域的请求只看到该会话的 deck」「previewUrl 带 session」「会话作用域的预览路由能取到该会话的 slides」「该会话上传落在它自己的工作区」「删除也只动它的树」。
 - **路由 frame 的 `frame-ancestors` 必须省略（否则预览空白）**（`dsh-web-review` host，2026-09-18 续修）：把 loopback 预览改成路由 frame 后，标签页变成空白并报「页面无法通过隔离预览加载，请检查网址或目标站点」，控制台为 `Framing 'http://127.0.0.1:37750/' violates … "frame-ancestors http://127.0.0.1:37750"`。根因：隔离 handler 给每个 HTML 响应加了 `frame-ancestors <parentOrigin>`，而 **VS Code webview 的祖先链里永远有一个 `vscode-webview://…` 文档**，`frame-ancestors` 校验**所有祖先**（不只直接父级），于是只要指令里没列这个 scheme 就必然被拦——直连 frame 之前能显示，正因为它压根没有 CSP。修法：`frameAncestorsHeaders(session)`/`handoffCspHeaders(session)` 只对**真正隔离**的 `<id>.localhost` 会话保留该指令（桌面端仍生效、外部网址语义不变），路由 frame 只带 `default-src 'none'; script-src 'unsafe-inline'`（会话 id 是 128 位随机、内容本身就是本应用自己的），并顺手修掉「新窗口」按钮：webview 沙箱拒绝弹窗（控制台 `Blocked opening … in a sandboxed frame whose 'allow-popups' permission is not set`），现 `window.open` 被拒时回退到「网页预览」标签页而不是静默失败。验证：Chromium 三层嵌套（第三方 origin → 应用 shell → 路由 frame）A/B——修前 `frame-ancestors` violation 且 frame 未渲染，修后无 violation 且 frame 自身执行上下文返回 `DECK LOADED`；`.smoke/direct-preview-test.mjs` 增加「路由 frame 不带 frame-ancestors / 隔离会话仍带」两条断言。
 - `@dsh-vscode/p2h-bridge` 0.2.1 → 0.3.0：原本是挂在 `dsh-better-sidebar` 标签栏里的侧边栏标签页，现改为注册平台官方 slot `conversation.view`（`order: 15`），**紧邻「轨迹」标签页右侧**；同时移除对 `betterSidebar` 服务的全部探测与 web-review 预览标签页的外部驱动（web-review 0.6.0 已不再提供该公开 API），预览改为面板内联 iframe + 「新窗口」兜底。调研与 0.1.1→0.1.5 API 差异见 `docs/superpowers/specs/2026-09-01-p2h-bridge-conversation-view-tab-research.md`。
-- `@dsh-undo/rollback-fork`：上游 `@deepseek-ai/dsh-agent-presets` 在 0.1.1-rc.2 之后删掉了 `resolveSessionPreset` 导出，而 dsh-undo rc.8 正是 `import` 它——**这会让整个宿主启动失败**（cordis 报的是「加载插件失败」，看不出根因在平台）。已把 0.1.1 那个 8 行实现内联回来（0.1.5 仍在产生它依赖的 `agent-preset/selected` 事件与 `header.agentPreset` 字段）。用 `.smoke/platform-api-scan.mjs` 可一次性扫出这类断裂。
+- ~~`@dsh-undo/rollback-fork` 平台导出缺失~~（**已随 `dsh-undo` 退役**）：0.1.1-rc.2 之后上游删除了 `@deepseek-ai/dsh-agent-presets` 的 `resolveSessionPreset` 导出，当时把旧实现内联回来才让宿主启动。0.2.2 起回退功能由 `dsh-rewind-plugin` 提供，该成员包不再随附；`platform-api-scan.mjs` 仍用于一次性扫出这类平台导出断裂。
 - `@canglongcl/dsh-web-review` 的 `storeAnnotationSnapshot` + 客户端清除路径：**批注同步/清除不应因「无 live agent」或「宿主短暂不可达」报「注释上下文同步失败」**。上游把 pending 绑在 `agents.get(sessionId)` 上，取不到 live agent 就 **404 `session not found`**；且客户端只容忍「清除 + 404」，宿主重启/被 SIGTERM 时的网络错误或 502 会让 dock 卡在「正在清除注释 / 同步失败」。批注本质上只是「下一轮 user message 的历史上下文」：已改为 **pending 按 sessionId 存**（`agent.id` 就是 sessionId），空/非空草稿在无 agent 时都可写入；注入仍走 `agent/pre-step`；**不再**在 `agent/disposed` 时丢掉未注入草稿。客户端：**空草稿（清除）在任何 fetch 失败/非 2xx/非法回执时都视为成功**（浏览器已丢掉 picks，宿主 pending 本就随进程消失），非空路径的错误上报原样保留。已验证与扩展代理无关：同一请求直连宿主与经代理返回完全一致。
 - **已移除 `dsh-memory-evolve`**（explore.17）：切会话时 Advisor 面板对无 live agent 的 sessionId 连打 `status/instructions/scopes/events`（全部 400），并疑似与宿主异常退出相关。已从 `BUNDLED_PLUGINS` 摘掉、列入 `RETIRED_PLUGINS`（启动时从 profile `bundles` 与 `node_modules` 清理），插件目录不再打包。
 - **宿主意外退出后自动恢复**（`src/extension.js`）：宿主被 SIGTERM（窗口重载、扩展宿主回收、`DSH: Restart` 等）后，旧代码只尝试改写 `webview.html`——而 VS Code 对**已渲染**的 view 改 html **不会重绘**（见 `resolveWebviewView` 注释），于是旧 iframe 留在原地，技能等面板的 `fetch` 全部变成 `Failed to fetch`。现改为：非 shutdown 退出时自动 `ensureHost()` 并 `postMessage` 让 shell 重载 iframe（与 `restartHost` 同路径）；3 秒冷却防止崩溃循环；连续失败才退回错误页。
-- **执行命令时不再弹出命令行窗口**（`@deepseek-ai/dsh-subprocess-local`，见 `.smoke/platform-patches/`）：Windows 上跑普通命令走的是 `launchWindowsJob`，它 spawn 托管 job runner 时**漏了 `windowsHide`**，于是 Windows 给 runner 分配一个控制台 → **命令开始时弹窗、结束时消失**。这是上游的疏漏而非设计：**同一个包里的 fallback 路径 `spawnSubprocess` 早就写了** `windowsHide: platform === "win32"`（就在 `detached: platform !== "win32"` 旁边），只有 Windows 正常走的那条路忘了。补丁加上该选项（非 Windows 平台忽略）。
+- **执行命令时不再弹出命令行窗口**（explore.27/58 的 `dsh-subprocess-local` + `dsh-win32-process` 平台补丁，**0.2.2 已上游修复，补丁删除**）：Windows 上跑普通命令走的是 `launchWindowsJob`，它 spawn 托管 job runner 时**漏了 `windowsHide`**，于是 Windows 给 runner 分配一个控制台 → **命令开始时弹窗、结束时消失**；受限令牌路径的 `STARTUPINFOW` 则只置 `STARTF_USESTDHANDLES`，紧挨着的 `wShowWindow: 0` 因此完全无效。0.2.2 的 `launchWindowsJob` 已带 `windowsHide: true`，两个 `STARTUPINFOW` 站点也都改成 `dwFlags: 257` + `wShowWindow: 0`（SW_HIDE，且没有用有 `0xC0000142` 风险的 `CREATE_NO_WINDOW`）。补丁不再需要，但 `.smoke/windows-hide-test.mjs` 保留并改为**断言上游修复仍在**（源码三段 + 机制 + 真跑一条受限命令），防止未来平台升级把它带回来；本仓库仅剩 `dsh-sandbox-local` 的能力探测 `windowsHide` 补丁。
   > 这个调用点靠「grep `spawn(`」是**找不到**的——它写作 `(internals.spawn ?? spawn)(`，`spawn` 后面跟的是 `)`；而「这个文件里有没有 `windowsHide`」也会漏，因为**同一个包里 `runner-launch` 的 taskkill 调用确实设了**。我是把全树每个 `child_process` 调用点的**参数对象**逐一审出来才定位到的。
 - **斜杠指令恢复显示**（`@canglongcl/dsh-web-review` 客户端半边，本地补丁）：打出 `/` 时**只列出技能、指令全不见**（`/goal`、`/compact`、`/model`…）。原因是 0.1.5 的客户端用
   ```js
   rows.push({ name: contribution.name, description: contribution.description() })
   ```
   构造菜单——**它把 `description` 当函数调用**，所以贡献必须给它一个 thunk（平台自己写的是 `description: () => t("command.description")`）。而 web-review 是按**旧版客户端**写的（那时接受字符串），传的是 `description: t("command.skills.description")`，于是抛 `TypeError: contribution.description is not a function`。因为这个候选构造是**一个函数**，异常会让**整个指令源**失败——症状不是「少了一条指令」，而是**一条都没有**，只剩技能。补丁把它改成 thunk（顺带让描述能跟随语言切换重新翻译）。新测试 `.smoke/client-command-shape.mjs` 扫描 `plugins/bundled` 里**所有客户端包**（认 `__ModuleLoader__` 标记，因此主机侧用字符串的 `@dsh-undo` 不会被误判）并断言每处注册的 `description` 都是函数。
-- **归档任务恢复可读**（`@deepseek-ai/dsh-session-persistence-jsonl`，见 `.smoke/platform-patches/`）：设置里的「归档任务」一直报「暂时无法读取归档任务」，浏览器控制台给出的真实原因是
-  ```
-  sessionArchive.list failed gateway/internal: this.ctx.sessionPersistence.inspect is not a function
-  ```
-  内置的 `@dsh-undo/*` 是照**更新的持久化契约**写的（服务上有个 `inspect(id)`），而 0.1.5-rc.2 的这个后端没有它。服务基类本身只是个空壳（`class extends Service { constructor }`），方法都在 jsonl 后端里，它的 API 是 `locate/create/open/flush/stat/list/requireStoredLog`——**恰好没有 `inspect`**。之所以只有「归档」坏：调用方优先用 `ctx.sessions.get(id)?.events`，**只有对没有活动句柄的会话（也就是归档的那些）才回退到持久化**。补丁基于已有的 `open(id, 'read')` + `handle.read()` 实现了 `inspect(id, options)`，**不引入任何新的存储行为**，调用方只读 `.events`。测试 `.smoke/persistence-inspect-test.mjs` 是**行为断言**——真的把模块 import 进来，检查 `inspect` 是原型上的 2 元函数，并确认 `open`/`list`/`locate` 仍在（否则它就是死代码）。
+- ~~归档任务恢复可读~~（**0.2.2 起退役**）：0.1.5 时代设置页「归档任务」报 `this.ctx.sessionPersistence.inspect is not a function`，当时给 `dsh-session-persistence-jsonl` 补了 `inspect(id)`。0.2.2 上唯一的调用方 `@dsh-undo/*` 已随插件退役，现在的 `@mlgbnb/dsh-archive-manager` 自己读取 `session(.vN).jsonl[.zstd]`，`dsh-better-sidebar` 用 `open(id,'read')`，**没有任何调用方**——补丁与守护测试已一并移除（回归：`.smoke/platform-patches/NOTES-0.2.2.md` 记录理由与证据）；包本身回到与干净 0.2.2 字节一致。
   > 顺带记一条踩过的坑：`sessionPersistence.inspect` 这类**客户端与服务端的契约错配**，错误信息只会出现在**浏览器控制台**，不会进宿主日志。所以「宿主日志里什么都没有」根本不能证明插件没出问题。
 - **「打开配置文件」内嵌桥接恢复**（`@deepseek-ai/dsh-api-settings-controller`，见 `.smoke/platform-patches/`）：0.1.1 时这个职责在 `dsh-host-apiproxy` 里——`DSH_EMBEDDED=1` 时把设置文档路径打到 stdout（`[dsh-vscode:open-settings] <path>`），由扩展在 VS Code 编辑器里打开，因为**内嵌部署下原生打开器用户根本看不见**。0.1.5 删掉了 `dsh-host-apiproxy`，设置职责搬到 `dsh-api-settings-controller`，而那里的 `openSettingsDocument` **无条件**调用 `openTextFile`：环境变量判断和哨兵都没了，也没有 `openAgentPresetDirectory` 那样的「返回路径」分支。0.1.5 全平台**不再读取 `DSH_EMBEDDED`**（仅剩 `DSH_AGENTS_HOME`、`DSH_BUNDLED_SKILL_DIR`、`DSH_TELEMETRY_DISABLED`、`DSH_WEB_FETCH_PROVIDER`、`DSH_WEB_SEARCH_PROVIDER`），没有官方接缝可用——于是面板里点「打开配置文件」**毫无反应**。已在接手同一职责的 handler 里恢复该分支，并保留 `internals.openTextFile` 接缝（`.smoke/embedded-open-settings-test.mjs` 用桩驱动真实 controller，验证开/不开 `DSH_EMBEDDED` 两种路径）。
-- **会话格式迁移的插件兼容层**（`@deepseek-ai/dsh-session-format-v0-to-v1`，见 `.smoke/platform-patches/`）：0.1.5 引入了会话格式版本化，v0→v1 迁移对「已发布 v0 规格」之外的内容**一律拒绝**，且一个事件不合格就让整个会话无法读取。而**第三方插件当年往 v0 会话里写了不少规格外内容**，于是升级后旧历史打不开。已加入四类容错（各自只记录一次日志，原始 v0 文件永不修改）：丢掉内容块上的插件注解（`dsh-file-review` 的 `dshFileReview`）、丢掉插件 source 上的多余成员（`dsh-web-review` 的 `snapshotId`）、丢掉非 `notice` 形式下多余的 `summary`（`dsh-mnemon`）、把 `subagent/descriptor` 的 version 2 提升为 3（`sidechat` 插件）。实测某份 30 会话的真实历史：修复前 **21 个会话、1251 个事件被拒**，修复后 **0**。容错时会打印形如 `[dsh-session-format-v0-to-v1] note: tolerated plugin-authored v0 data: dropped member "dshFileReview"` 的提示——**这是通报不是报错**（会话照常加载，只是丢弃了某个插件加进去的字段），每种形状只打一次，且走 stdout 所以不会显示成 `[host-err]`。
+- **会话格式迁移的插件兼容层**（`@deepseek-ai/dsh-session-format-v0-to-v1`，见 `.smoke/platform-patches/`）：0.1.5 引入了会话格式版本化，v0→v1 迁移对「已发布 v0 规格」之外的内容**一律拒绝**，且一个事件不合格就让整个会话无法读取。而**第三方插件当年往 v0 会话里写了不少规格外内容**，于是升级后旧历史打不开。已加入四类容错（各自只记录一次日志，原始 v0 文件永不修改）：丢掉内容块上的插件注解（`dsh-file-review` 的 `dshFileReview`）、丢掉插件 source 上的多余成员（`dsh-web-review` 的 `snapshotId`）、丢掉非 `notice` 形式下多余的 `summary`（`dsh-mnemon`）、把 `subagent/descriptor` 的低版本视为可接受（0.2.2 已原生接受 v1/2/3，因此该条容错**已删除**）。0.2.2 新增了 v3→v4 迁移层（`dsh-session-format-v3-to-v4`），本次补丁只作用于 v0→v1 这一层，两者互不影响。实测某份 30 会话的真实历史：修复前 **21 个会话、1251 个事件被拒**，修复后 **0**。容错时会打印形如 `[dsh-session-format-v0-to-v1] note: tolerated plugin-authored v0 data: dropped member "dshFileReview"` 的提示——**这是通报不是报错**（会话照常加载，只是丢弃了某个插件加进去的字段），每种形状只打一次，且走 stdout 所以不会显示成 `[host-err]`。用 `.smoke/session-history-check.mjs <DSH_HOME>` 复检（0.2.2 起日志名是 `session.v<N>.jsonl.zstd`，脚本只校验尚未迁移的 v0 文件）。
 - **升级残留自动清理**（`pruneRetiredArtifacts`，每次启动宿主前运行）：反复升级的 `DSH_HOME` 会积累三类没人清理的残留。
   1. **失效或指向旧安装的模块回退链接**：`<home>/profiles/node_modules` 是大量指向「当前扩展 vendor 树」的 junction，而 DSH 自己的修复**只遍历当前版本依赖闭包里的包**，并且**在目标仍然存在时完全不动这条链接**——于是「装新版但不卸载旧版」留下一个致命后果：**模块仍从旧扩展的 vendor 树解析，宿主跑的还是上一版的平台代码，新版 vsix 里的平台补丁永远不会被加载**。实测某台机器上 **240 条**链接全部指向 `0.3.0-explore.25`，其中 `dsh-subprocess-local` 正是**没有** `windowsHide` 补丁的那一份——这就是「补丁明明修了、仍然弹窗」的原因。另一类是完全悬空的链接（实测 17 条指向已卸载的 `0.2.53`，含 `dsh-client-runtime`、`dsh-host-apiproxy` 等 0.1.5 已删除的平台包，以及 `react`/`react-dom`/`zustand`/`immer`/`clsx` 一族）。两者都会被删除，DSH 随后用**正在运行的**那份安装重建它们。
      > 规则仍收得很窄：目标已不存在的删；指向**别的安装**的，**只有当「当前这份」确实带这个包时**才删（那才叫改正），否则保留——因为 `katex`、`shiki` 这类包并不在 0.1.5 的 vendor 闭包里，链接可能是唯一副本，删掉是倒退而不是清理。这类「保留」只在日志里提示一次。
@@ -122,8 +132,9 @@
 ### 环境要求
 
 - Git
-- Python 3（用于打包脚本）
-- 无需 Node.js/npm：构建产物由本仓库已提交的 `vendor/` 与 `plugins/bundled/` 直接打包
+- Python 3（用于打包脚本与预设生成）
+- 无需 Node.js/npm 打包：构建产物由本仓库已提交的 `vendor/` 与 `plugins/bundled/` 直接打包
+- 只有**升平台**（重建 `vendor/`）或跑冒烟测试时才需要 Node.js ≥ 24.9 与 npm（0.2.2 的 `engines` 要求）。运行时不需要：宿主用 VS Code 自带的 Electron Node 跑（`ELECTRON_RUN_AS_NODE=1`），Node 24 这条 `engines` 在进程内并不强制校验——属于「能跑但非官方支持」的边界，升级平台时值得复核
 
 ### 仓库结构
 
@@ -132,10 +143,12 @@ dsh-vscode/
 ├── vendor/            # DSH 宿主平台依赖树（已提交，构建时整体打包）
 ├── plugins/
 │   ├── bundled/       # 内置生态插件（自包含，含 _hostdeps 宿主依赖）
-│   ├── presets/       # 内置 agent 预设（router-standard / router-spec）
+│   │   └── @dsh-vscode/presets/  # 生成物：0.2.2 预设 bundle（.smoke/gen-presets.py）
+│   ├── presets/       # 预设源文件（router-standard / router-spec / ppt-master，不随包发布）
 │   └── node_modules/  # 插件扁平安装树（仅本地生成用，不入库）
+├── docs/upgrade/      # 平台升级的破坏性变更报告（0.2.2-deltas.md）
 ├── src/extension.js   # 扩展入口：宿主 fork、插件移植、配置同步
-└── .smoke/            # 打包脚本与冒烟测试
+└── .smoke/            # 打包脚本、平台补丁库与冒烟测试
 ```
 
 ### 打包
@@ -146,25 +159,46 @@ python .smoke/pack.py
 ```
 
 > 优先使用 `.smoke/pack.py` 而非 `npx @vscode/vsce package`：vsce 的依赖清单校验不兼容 pnpm 扁平布局，且文件遍历明显更慢。
+>
+> `pack.py` 打包前会做两件事：`platform-patches.py verify`（平台补丁缺失/漂移直接拒绝打包）与按 `PRUNE` 列表剔除**非 Windows 的 wasm 回退包**（`@deepseek-ai/libreoffice-kit-wasm`、`@img/sharp-wasm32`，共 ~154 MB 原始体积）。0.2.2 平台的 vendor 树约 1.03 GB，剔除后 vsix 约 **450 MB**（不剔除要多 ~75 MB）。打出来的包可用 `.smoke/installed-boot.mjs` 从包内直接起宿主验收。
+
+### 升级平台（重建 `vendor/`）
+
+```bash
+# 1. 干净安装到 staging（不要在仓库根目录里装，根 node_modules 是开发用）
+mkdir .tmp-vendor/stage-<ver> && cd .tmp-vendor/stage-<ver>
+printf '{"name":"dsh-vscode-platform-stage","version":"0.0.0","private":true,"dependencies":{
+  "@deepseek-ai/dsh":"<ver>","@vscode/ripgrep":"1.18.0","@vscode/ripgrep-win32-x64":"1.18.0"}}' > package.json
+npm install --no-audit --no-fund
+# 2. 整体替换 vendor/node_modules（旧树先挪走，便于对比差异）
+#    robocopy .tmp-vendor/stage-<ver>/node_modules vendor/node_modules /E /XF .package-lock.json
+# 3. 重导平台补丁：python .smoke/platform-patches.py verify → apply / 按 NOTES 重新移植
+# 4. 冒烟：plugin-compat → platform-api-scan → boot-test → extension-proxy-test
+# 5. 2.2 起平台的破坏性变更在 vendor/.../@deepseek-ai/dsh/docs/upgrade-guide/，先读它再动手
+```
+
+> `.smoke/gen-presets.py` 在改 `plugins/presets/` 之后必须重跑（生成 `@dsh-vscode/presets` 与 `dsh-preset-*` 包）；它会在发现相对模块名时直接报错退出，因为 0.2.2 的预设子行名只从 profile 解析。
 
 ### 冒烟测试
 
 | 脚本 | 作用 |
 | --- | --- |
 | `.smoke/platform-api-scan.mjs` | 扫描内置插件对平台（`@deepseek-ai/*`）的每一个具名 import，核对当前 vendor 树是否仍导出它。**升级平台后应先跑这个**——插件是外部预构建产物，平台删掉一个导出会让宿主启动时直接崩，而报错只提插件不提根因 |
-| `.smoke/session-history-check.mjs` | 用平台自己的 v0 会话校验器扫一遍某个 `DSH_HOME` 下的全部历史会话，报告哪些会话会被**拒绝加载**以及原因。升级平台后检查旧历史是否还能读时用 |
-| `.smoke/platform-patches.py` | `verify` / `apply` 保存在 `.smoke/platform-patches/` 的 vendor 平台补丁。**`vendor/` 整体重建后必须跑 `apply`**；`pack.py` 会在打包前自动 verify，补丁缺失直接拒绝打包 |
-| `.smoke/boot-test.mjs` | 起真实宿主 + 临时 `DSH_HOME`，移植 `plugins/bundled`，断言首页与每个 **web 客户端**条目的带 revision 插件 URL 都返回 200、且在前端模块图里有对应行 |
+| `.smoke/plugin-compat.mjs` | **0.2.2 新增**：在本地复刻宿主的插件兼容性闸门（`engines.dsh` 优先、否则 peer 范围，`includePrerelease` 语义），逐个断言 `BUNDLED_PLUGINS` 能挂载；同时检查每个平台 peer 在 vendor 树里确实存在（`dsh-better-sidebar` 曾 peer 一个已被删除的 `dsh-invariants`）。门禁不通过 = 插件会被宿主静默跳过 |
+| `.smoke/session-history-check.mjs` | 用平台自己的 v0 会话校验器扫某个 `DSH_HOME` 下的 **v0** 历史会话，报告哪些会被**拒绝加载**及原因。0.2.2 起日志名是 `session.v<N>.jsonl.zstd`（N 为已存格式版本），脚本只校验尚未迁移的 v0 文件，并会明确报告「本地没有 v0 语料可验」——拿 0.1.x 写的旧 `DSH_HOME` 备份来测才有意义 |
+| `.smoke/platform-patches.py` | `verify` / `apply` 保存在 `.smoke/platform-patches/` 的 vendor 平台补丁（0.2.2 起 6 条）。**`vendor/` 整体重建后必须跑 `apply`**；`pack.py` 会在打包前自动 verify，补丁缺失直接拒绝打包。逐条裁决（保留/上游已修复/退役）见 `.smoke/platform-patches/NOTES-0.2.2.md` |
+| `.smoke/boot-test.mjs` | 起真实宿主 + 临时 `DSH_HOME`，移植 `plugins/bundled` 并写入兼容性豁免，断言首页与每个 **web 客户端**条目的带 revision 插件 URL 都返回 200、且在前端模块图里有对应行；**0.2.2 起还通过 Typert Remote `agentPresets/list` 断言每个预设都能组装（`broken` 为空）**——失败的预设会留在名单里而不是启动失败。`--only=a,b` 可只跑指定条目，`--keep-home` 保留临时 home，完整宿主日志落在 `.smoke/.last-boot.log` |
 | `.smoke/extension-proxy-test.cjs` | 用 stub 的 `vscode` 模块加载真实 `src/extension.js`，跑 `activate()` 起宿主与鉴权中转代理，然后**不带 Cookie** 去探测代理端口：首页须 200、未知 `/api` 通道不得是 401/403、`ws://…/api/remote.mux` 须返回 101 |
 | `.smoke/annotations-clear-test.mjs` | 驱动真实宿主（经扩展代理，即 webview 实际路径）验证：无 live agent 时 `comments: []` 返回 `200 {kind:"empty"}`，非空草稿返回 `200 {kind:"ready", snapshotId}`（按 sessionId 暂存），清空后再写再清均成功，并证明直连与经代理结果一致 |
 | `.smoke/profile-overlay-test.mjs` | 验证 `dsh.modlensFamilies` → `--patch` 覆盖层这条链路：驱动真实 `activate()` 断言覆盖层已生成且 YAML 转义正确（含 `:` 和引号这类值）、**你自己的 `cordis.patch.yml` 未被改写**、诊断日志已带启动头落盘，并用 `dsh --dump-config` 证明 DSH 真的把它合成到了 modlens 行上——而且**一个不少地保留其余行**（对比开关覆盖层前后的行集合；若某个 `id` 行被当成顶层条目重新组装整棵树，其它插件会全部掉线而旧断言仍然通过） |
-| `.smoke/persistence-inspect-test.mjs` | **行为断言**：真的 import 0.1.5-rc.2 的 jsonl 持久化后端，检查 `inspect` 是原型上 arity 2 的函数，并确认它依赖的 `open`/`list`/`locate` 仍在（否则补丁就是死代码）。这是「归档任务」从 `sessionPersistence.inspect is not a function` 恢复可读的那处补丁的守护 |
-| `.smoke/bundled-patches.mjs` | 断言我们对**内置第三方代码**的每个本地补丁都还在（含 web-review 的 thunk、undo 归档错误不再被吞）。内置插件每次启动会从 `plugins/bundled` 重新移植，补丁能扛过重启，但**扛不过上游刷新**——那会静默还原，于是现在会在这里失败 |
-| `.smoke/client-command-shape.mjs` | 扫描 `plugins/bundled` 里所有**客户端包**（以 `__ModuleLoader__` 识别），断言每处 `command.register({...})` 的 `description` 都是**函数**——0.1.5 客户端会调用它，传字符串会让**整个 `/` 指令源**报错消失（只剩技能）。用真实浏览器复现过：修复前控制台 1 条 `TypeError`、菜单无指令；修复后 0 条错误、`/goal` `/compact` 等全部列出 |
-| `.smoke/windows-hide-test.mjs` | 验证执行命令不再弹窗，**两半**：① **源码**——`launchWindowsJob` 的 spawn 参数带**无条件** `windowsHide: true`、fallback 路径仍保留自己的设置、且 **`dsh-win32-process` 两个 `STARTUPINFOW` 站点都置了 `STARTF_USESHOWWINDOW`（`dwFlags: 257`）+ `wShowWindow: 0`**（即 `SW_HIDE`；受限令牌路径就是回归过的那条：explore.58 补了普通路径、漏了受限令牌路径，且原有的 `wShowWindow: 0` 因缺 `STARTF_USESHOWWINDOW` 而无效），并断言受限调用点**不得**使用 `CREATE_NO_WINDOW`（`0xC0000142` 风险）；第三部分是**真跑一条受限命令**端到端（exit 0 + stdout + 无新可见窗口/控制台宿主）；② **机制**——让子进程报告 Windows 是否给它分配了控制台（`windowsHide` 走 `CREATE_NO_WINDOW`，返回 `NO_CONSOLE` 故不可能有窗口；不设则被分配控制台，在无控制台的 Electron 宿主里就是可见窗口） |
+| `.smoke/bundled-patches.mjs` | 断言我们对**内置第三方代码**的每个本地补丁都还在：web-review 的 `description` thunk / `ctx.layout.closeDetails?.()` / 批注 source `plugin:dsh-web-review`、zh-kit 的 `plugin:${name}`、rewind 的压缩后撤回、auto-continue 的 `settingsScope` 死注入移除、ppt-master 的 bundle-only shell。内置插件每次启动会从 `plugins/bundled` 重新移植，补丁能扛过重启，但**扛不过上游刷新**——那会静默还原，于是现在会在这里失败 |
+| `.smoke/client-command-shape.mjs` | 扫描 `plugins/bundled` 里所有**客户端包**（以 `__ModuleLoader__` 识别），断言每处 `command.register({...})` 的 `description` 都是**函数**——0.1.5 客户端会调用它，传字符串会让**整个 `/` 指令源**报错消失（只剩技能）；保留 thunk 形式对 0.2.2 同样安全 |
+| `.smoke/windows-hide-test.mjs` | **0.2.2 起改为「上游不许回退」的守护**（本仓库的两条相关补丁已删除，平台已自带修复）：断言 `launchWindowsJob` 的 spawn 参数带**无条件** `windowsHide: true`、fallback 路径（`runner-launch-*.js`，按内容定位而非硬编码 chunk 名）仍保留自己的设置、**两个 `STARTUPINFOW` 站点都置了 `STARTF_USESHOWWINDOW`（`dwFlags: 257`）+ `wShowWindow: 0`**、受限调用点**不得**使用 `CREATE_NO_WINDOW`（`0xC0000142` 风险）；再**真跑一条受限命令**端到端，并让子进程报告 Windows 是否给它分配了控制台（`windowsHide` 走 `CREATE_NO_WINDOW`，返回 `NO_CONSOLE`） |
 | `.smoke/embedded-open-settings-test.mjs` | 用桩驱动真实的 `SettingsController`，验证「打开配置文件」在 `DSH_EMBEDDED=1` 时输出扩展哨兵且**不**调用原生打开器，未设置时走原生路径 |
-| `.smoke/legacy-cleanup-test.cjs` | 用合成 `DSH_HOME` 复现每一类升级残留（悬空/跨版本/全局 npm 链接、失效 profile 依赖、空 scope 目录、`*.pnpm-old`、`.ignored_*`、`.bak-*`、退役插件状态），跑真实 `activate()` 后断言残留已清、**且会话/记忆/配置/在用插件状态逐字节未变**、退役状态可在隔离目录找回 |
-| `.smoke/selfcontained-plugins.mjs` | 校验 `plugins/bundled` 与 `BUNDLED_PLUGINS` 一致：每个条目要么被声明、要么被某个条目的 cordis patch 认领；并拒绝任何仍注入已被删除的 `dsh-client-runtime` 的包 |
+| `.smoke/legacy-cleanup-test.cjs` | 用合成 `DSH_HOME` 复现每一类升级残留（悬空/跨版本/全局 npm 链接、失效 profile 依赖、空 scope 目录、`*.pnpm-old`、`.ignored_*`、`.bak-*`、退役插件状态、旧的 `.agent-presets/<内置 id>`），跑真实 `activate()` 后断言残留已清、**且会话/记忆/配置/在用插件与用户自己预设的状态逐字节未变**、退役状态可在隔离目录找回 |
+| `.smoke/selfcontained-plugins.mjs` | 校验 `plugins/bundled` 与 `BUNDLED_PLUGINS` 一致：每个条目要么被声明、要么被某个条目的 cordis patch 认领（mnemon 的 sibling 包、预设挂载的 `dsh-preset-*` 走这条路）；`_hostdeps` 每项必须是真包（scoped 目录按 scope 展开）；仍注入已删除 `dsh-client-runtime` 的只告警不判失败（非行 inject 在 0.2.2 被安全跳过） |
+| `.smoke/gen-presets.py` | **0.2.2 新增（生成器）**：把 `plugins/presets/` 的旧式预设目录转成 `@dsh-vscode/presets` bundle（`@deepseek-ai/dsh-agent-preset` 声明行）并为本地 `.mjs` 入口生成 `dsh-preset-*` 真实包；发现相对模块名会报错退出。改预设源后必须重跑 |
+| `.smoke/installed-boot.mjs` | **打包后验收**：解包真实 `.vsix`，从**包内**的 `vendor/` + `plugins/bundled/` 起宿主，断言 `HOST READY`、首页 200、每个内置 web 客户端条目都在模块图里、预设名单全部可组装，并断言被 `PRUNE` 的 wasm 包确实不在包里。仓库里的 `boot-test` 证明源码树能跑，这个证明**打出来的包**能跑（打包会剔 map 与非 Windows wasm 回退包） |
 
 ## 🧱 工作原理
 
@@ -176,8 +210,9 @@ python .smoke/pack.py
    在 VS Code 里 webview iframe 属于**第三方上下文**（`vscode-webview://` 内嵌 `127.0.0.1`），其请求由 VS Code 的端口映射层中继而非渲染进程直发，因此中继响应上的 `Set-Cookie` 永远不会进入浏览器 Cookie 罐——重定向后的 `GET /` 不带 Cookie，面板就会显示 DSH 的 `dsh web authentication required` 页面。
 
    所以**不由浏览器承担认证**：扩展宿主自己完成 token 交换（普通 Node 请求，能拿到 `Set-Cookie`），并在端口映射指向的稳定端口上运行一个**本地回环反向代理**。代理负责注入 Cookie，并剥掉 DSH 的 Host/Origin 围栏会拒绝的浏览器标记（`Sec-Fetch-Site: cross-site` 是硬 403，跨源 `Origin`/`Referer` 也过不了同源检查）。**启动令牌完全不会进入 webview**。宿主本身改用 OS 分配的临时端口，`dsh.port`（默认 `37750`）现在描述的是代理端口。`DSH: Open in External Browser` 仍直接打开带 token 的宿主地址，由真实浏览器自行完成交换。
-5. DSH Web 客户端仅使用 fetch + SSE（无 WebSocket），端口映射代理完全可以承载（中转代理是流式转发的，不缓冲 SSE）。
-6. 插件前端资源不走裸 `/plugins/<id>/client.js`：0.1.5 的模块注册表只服务它自己广告的**带 revision 的合并 URL**（`/plugins/??<id>/client.js,…&rev=<hash>`），裸路径返回 404。
+5. Web 客户端以 fetch（SSE 流式响应）承载对话，但 **RPC mux 是 WebSocket**：客户端会打开 `ws://<origin>/api/remote.mux`，中转代理必须转发 upgrade（`.smoke/extension-proxy-test.cjs` 断言返回 101），否则面板能渲染但一直「自动重连中…」。0.2.2 的 Typert Remote（如预设名单 `agentPresets/list`）也走这条 mux。
+6. 插件前端资源不走裸 `/plugins/<id>/client.js`：模块注册表只服务它自己广告的**带 revision 的合并 URL**。**0.2.2 起该 URL 是相对文档的 `plugins/??<id>/client.js,…&rev=<hash>`**（0.1.5 是根相对的 `/plugins/??…`），裸路径仍返回 404；扩展的「客户端表面」日志因此同时接受两种形式。
+7. **插件兼容性与预设（0.2.2 起）**：宿主启动时按 `engines.dsh` / peer 范围做兼容性闸门，不匹配就静默跳过（日志只有一行），扩展为此在 `<profile>/compatibility.json` 写入「经过验证的豁免白名单」（默认为空，见 `PLUGIN_VERSION_EXEMPTIONS`）。预设不再从 `<DSH_HOME>/.agent-presets/` 目录读取，而是作为 bundle patch 里的 `@deepseek-ai/dsh-agent-preset` 声明行由 `@dsh-vscode/presets` 提供；旧目录里本扩展写过的三个 id 会在启动时清掉。
 
 ## ❓ 常见问题
 
@@ -195,10 +230,10 @@ python .smoke/pack.py
 
 宿主起来后还会写一行**客户端表面**：
 ```
-client surface: 65 mounted of 12 shipped (every shipped client plugin mounted)
+client surface: 91 mounted of 16 shipped (every shipped client plugin mounted)
 ```
 
-「shipped」是移植进 `<profile>/node_modules` 的插件里声明了 `dsh.client` 的那些，「mounted」是宿主在 shell 里**真正公布**的客户端插件。**插件没挂载是无声的**——`inject` 得不到满足时宿主会直接跳过它，日志里一个字都不留（「撤回插件完全没输出」就是这么来的）。所以这一行专门把沉默变成名单：如果某个插件的 UI 什么都不做，看这里有没有 `shipped but NOT mounted: …`。**撤回功能**尤其适合用这行判断：`rollback-undo` 依赖 `sessionArchive`/`sessionFork`，只要链条上任一环没挂上，`@dsh-undo/client-rollback-button` 就不会被挂载——于是图标不出现、归档任务读不出来，同时日志一片安静。
+「shipped」是移植进 `<profile>/node_modules` 的插件里声明了 `dsh.client` 的那些，「mounted」是宿主在 shell 里**真正公布**的客户端插件。**插件没挂载是无声的**——`inject` 得不到满足时宿主会直接跳过它，日志里一个字都不留（「撤回插件完全没输出」就是这么来的）。所以这一行专门把沉默变成名单：如果某个插件的 UI 什么都不做，看这里有没有 `shipped but NOT mounted: …`。**回退功能**尤其适合用这行判断：`dsh-rewind-plugin` 依赖平台的会话/存档链路，只要链条上任一环没挂上，它的回退按钮就不会被挂载——于是图标不出现、归档读不出来，同时日志一片安静。
 
 **问：记忆标签页 / `Failed to fetch`？**
 答：explore.17 起已**移除** `dsh-memory-evolve`。升级后重启宿主，旧 profile 里的该插件会被自动 prune；若仍看到记忆 Tab，执行 `DSH: Restart Host` 或重载窗口。`Failed to fetch` 通常是宿主进程已退出（见 Host Logs 的 `host exited` / `deactivate`），面板会自动尝试拉起；拉不起来再点 Restart Host。
@@ -223,8 +258,20 @@ git probe: cannot run git (ENOENT: …)          （宿主环境里没有 git）
 
 抓不了快照时插件**故意不阻塞对话**（注释写着 "Snapshot must never block the conversation"），所以「没有回滚按钮」本身不是故障，但要能从日志里看出**为什么**。
 
-**问：为什么 .vsix 有 100+ MB？**
-答：完整运行时依赖树内置在扩展内以保证离线可用，体积换取了"零依赖、开箱即用"的体验。
+**问：为什么 .vsix 变到 ~450 MB 了？**
+答：0.2.2 的平台闭包比 0.1.5 大得多（1.03 GB vs 224 MB）：新增了 Office 套件（`libreoffice-kit-*` 占 335 MB）、语音、computer-use、插件市场等 bundle。为了不白涨约 75 MB，`pack.py` 在打包时剔除非 Windows 的 wasm 回退包（`libreoffice-kit-wasm`、`sharp-wasm32`）；其余仍完整内置，换取"零依赖、开箱即用"（宿主运行时、网页前端、生态插件全在包里，用户机器不需要 Node/npm/pnpm/Python）。若还要更小，可再权衡是否砍掉 Office 套件（`office-kit`/`skill-office` 两行 + `libreoffice-kit-*`，约再省 200 MB）——那是功能取舍，不是打包细节。
+
+**问：MCP 页面去哪了？（0.2.2 起）**
+答：旧的内置 `dsh-mcp` 已**退役**。它的宿主半仍可用，但 client 半会自行挂载与官方管理器**同命名空间**（`mcpManager`）的 Remote contribution，两个客户端挂载把 0.2.2 的 client gateway 串行挂载队列卡死，面板会永远停在「Loading plugins…」。0.2.2 自带官方 MCP 管理器（`@deepseek-ai/dsh-mcp-manager` + `dsh-mcp-client`），MCP 服务器改由它（以及设置页里自动生成的表单）管理；代价是失去旧插件的「MCP 管理页面 / OAuth / `mcp_tool_search` 热注入」。
+
+**问：某个内置插件的界面没了，日志里只有一行 `skipping profile bundle`？**
+答：0.2.2 的**插件兼容性闸门**在启动时按 `engines.dsh`/peer 范围判断插件能否在本运行时上跑，不匹配就跳过。看 Host Logs 里 `skipping profile bundle "<名字>"` 的 requirements；正确做法是把插件升到声明 0.2.x 兼容的版本（本版本所有内置插件都已升级并全部通过，`.smoke/plugin-compat.mjs` 可复检）。扩展仍保留向 `<profile>/compatibility.json` 写「已验证豁免」的机制，但默认白名单为空——不要为了消掉警告而给未验证的插件开豁免。
+
+**问：内置的 Router / PPT 预设去哪了？**
+答：0.2.2 的预设 registry 不再扫描 `<DSH_HOME>/.agent-presets/`，预设改由 bundle 声明。本版本用 `@dsh-vscode/presets` 提供 `router-standard` / `router-spec` / `ppt-master` 三个预设（在会话的预设选择器里可见，`.smoke/boot-test.mjs` 会断言它们都能组装）；旧目录里本扩展写过的三个 id 会在启动时被清掉，**你自己放进 `.agent-presets/` 的其他预设目录不会被删**，但它们也不再被平台读取——要保留请迁移成 bundle 声明（见 `vendor/.../@deepseek-ai/dsh-agent-preset/skills/dsh-doc/references/compositions.md` 的「Migrate a legacy preset」）。
+
+**问：升级后旧会话还打得开吗？会不会被改写？**
+答：会照常打开，且**升级是单向的**：0.2.2 在读取时把旧格式会话迁移到 v4（`session.v<N>.jsonl.zstd`），原始 v0 文件不会被原地修改；但回退到 0.1.5 后，0.1.5 不认 v4 文件。第三方插件当年写进 v0 的规格外字段由 `.smoke/platform-patches/` 的 v0 容错补丁容忍（只丢弃、只记一次日志），升级前可用 `.smoke/session-history-check.mjs <DSH_HOME>` 预检。另外 0.2.2 要求 Node.js ≥ 24.9——运行时用的是 VS Code 自带 Electron 的 Node，这条 `engines` 不会在进程内强制校验，属于「能跑但非官方支持」的边界。
 
 ## 👥 致谢
 

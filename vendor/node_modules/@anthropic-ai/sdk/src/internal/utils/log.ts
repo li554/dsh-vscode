@@ -1,5 +1,3 @@
-// File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
-
 import { hasOwn } from './values';
 import { readEnv } from './env';
 import { type BaseAnthropic } from '../../client';
@@ -114,7 +112,7 @@ export function defaultLogger(): Logger {
   return cachedDefaultLogger;
 }
 
-export const formatRequestDetails = (details: {
+type RequestDetails = {
   options?: RequestOptions | undefined;
   headers?: Headers | Record<string, string> | undefined;
   retryOfRequestLogID?: string | undefined;
@@ -125,7 +123,21 @@ export const formatRequestDetails = (details: {
   durationMs?: number | undefined;
   message?: unknown;
   body?: unknown;
-}) => {
+};
+
+/**
+ * Logs `details` at debug level. Formatting copies headers and options, so it
+ * runs only when debug logging is enabled.
+ */
+export function debugLogRequestDetails(logger: Logger, message: string, details: RequestDetails): void {
+  // `loggerFor` filters disabled levels to `noop`.
+  if (logger.debug === noop) {
+    return;
+  }
+  logger.debug(message, formatRequestDetails(details));
+}
+
+export const formatRequestDetails = (details: RequestDetails) => {
   if (details.options) {
     details.options = { ...details.options };
     delete details.options['headers']; // redundant + leaks internals

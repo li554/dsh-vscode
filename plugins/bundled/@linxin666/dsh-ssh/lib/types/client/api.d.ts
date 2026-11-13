@@ -7,10 +7,48 @@ import { type ClusterResult, type ExecResult, type HostPayload, type ImportResul
 export declare class SshApiError extends Error {
     constructor(message: string);
 }
+/** The location facts a terminal socket URL is built from. */
+interface PageLocation {
+    /** Page scheme with its colon (for example `https:` or `dsh-app:`). */
+    protocol: string;
+    /** Page authority, empty for a scheme that carries none. */
+    host: string;
+}
+/**
+ * The WebSocket URL the terminal route is reached at, or undefined when this
+ * page cannot carry one.
+ *
+ * A web page resolves the socket against its own origin, exactly as before.
+ *
+ * A page delivered by an application on this machine (the official DSH Desktop
+ * shell serves its Web GUI from `dsh-app://app/`) cannot carry a socket on its
+ * own scheme: the protocol handler forwards HTTP to the local Host but has no
+ * upgrade to forward. That is exactly the case the official transport hook
+ * covers - the shell publishes `__DSH_TRANSPORT__.streamBaseUrl`, the loopback
+ * authority of the Host it owns and already forwards every other request to
+ * (issue #1744). The socket is therefore dialed there instead, with the `ws`/
+ * `wss` scheme derived from that base, which is what the shell's
+ * `onBeforeSendHeaders` hook expects to see before it attaches its
+ * authority-bound credential.
+ *
+ * The base is used only on an application-delivered page. A web page that
+ * somehow carries the hook (the remote channel grants `ownsHost` to a paired
+ * LAN page, and that page is fenced behind a pairing channel) keeps resolving
+ * against its own origin, so this cannot reroute gated traffic onto a host the
+ * page is not entitled to reach. A blank authority is treated the same as an
+ * application scheme with no base: there is nothing to dial, and the caller
+ * gets the actionable reason instead of a socket that can only fail.
+ *
+ * @param location - the page location to read.
+ * @param search - the query string carrying `alias` or `session`.
+ * @param streamBaseUrl - `__DSH_TRANSPORT__.streamBaseUrl`, when the shell published one.
+ * @returns the absolute `ws:`/`wss:` URL, or undefined when the page cannot carry one.
+ */
+export declare function terminalSocketUrl(location: PageLocation, search: string, streamBaseUrl?: string | undefined): string | undefined;
 /** One open terminal connection (WebSocket JSON frames). */
 export interface TerminalConnection {
-    /** Fired on the ready frame (shell is up). */
-    onReady: (() => void) | undefined;
+    /** Fired on the ready frame (shell is up); carries the host session id and alias. */
+    onReady: ((sessionId: string, alias: string) => void) | undefined;
     /** Fired on every output frame. */
     onOutput: ((data: string) => void) | undefined;
     /** Fired on the exit frame (or transport error). */
@@ -26,7 +64,13 @@ export interface TerminalConnection {
     resize(cols: number, rows: number): void;
     /** Send interactive 2FA response codes to the remote server. */
     sendAuthResponse(responses: string[]): void;
-    /** Close the socket and the remote session. */
+    /**
+     * Leave the socket while the host keeps the remote shell alive, so a later
+     * {@link SshApi.attachTerminal} picks the session up where it left off.
+     * This is what a view does on unmount; it is not a disconnect.
+     */
+    detach(): void;
+    /** Close the socket and end the remote session. */
     close(): void;
 }
 /** The browser half's only data entry point. */
@@ -74,6 +118,45 @@ export declare class SshApi {
         streamed: boolean;
         bytes: number;
     }>;
-    /** Open a WebSocket terminal session. */
+    /**
+     * Open a new host terminal session for the alias.
+     * @param alias - the configured host alias.
+     * @param cols - initial PTY width.
+     * @param rows - initial PTY height.
+     * @returns the live connection; its ready callback carries the session id
+     *   {@link attachTerminal} uses after a view detach.
+     */
     openTerminal(alias: string, cols: number, rows: number): TerminalConnection;
+    /**
+     * Reattach to a host-side session that outlived its view (a panel switch, a
+     * page navigation). The host replays its scrollback before the ready frame.
+     * @param sessionId - the id the previous connection reported on ready.
+     * @param cols - the view's current width.
+     * @param rows - the view's current height.
+     */
+    attachTerminal(sessionId: string, cols: number, rows: number): TerminalConnection;
+    /**
+     * End a host session this view is not attached to (closing a background
+     * tab). The session has no other handle from the browser: giving it a
+     * dedicated HTTP route would widen the host's surface for one frame, so this
+     * opens one short-lived attach instead and sends the close frame as soon as
+     * the socket is open.
+     *
+     * The answer is "is this session no longer running", which has three
+     * truthful answers and one lie to avoid:
+     *   - the frame went out on an open socket: the host ends the session;
+     *   - the host answered with an exit frame: an unknown id is reported as
+     *     `terminal session expired` and an ended shell also exits, and in both
+     *     cases nothing is running, so the tab really is closed;
+     *   - the socket errored, closed before opening, or never settled inside
+     *     `timeoutMs`: delivery is unproven, so the session may still be alive and
+     *     the caller must keep the tab instead of claiming it closed.
+     * @param sessionId - the session id the host reported on its ready frame.
+     * @param timeoutMs - bounded wait for the delivery signal (default 5000).
+     * @returns true when the session is known to be gone.
+     */
+    closeTerminalSession(sessionId: string, timeoutMs?: number): Promise<boolean>;
+    /** One terminal socket over either an alias (open) or a session id (attach). */
+    private terminalSocket;
 }
+export {};

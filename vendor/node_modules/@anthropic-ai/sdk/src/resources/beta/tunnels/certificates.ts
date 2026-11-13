@@ -1,5 +1,3 @@
-// File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
-
 import { APIResource } from '../../../core/resource';
 import * as BetaAPI from '../beta';
 import { APIPromise } from '../../../core/api-promise';
@@ -33,12 +31,15 @@ export class Certificates extends APIResource {
     params: CertificateCreateParams,
     options?: RequestOptions,
   ): APIPromise<BetaTunnelCertificate> {
-    const { betas, ...body } = params;
+    const { betas, workspace_id, ...body } = params;
     return this._client.post(path`/v1/tunnels/${tunnelID}/certificates?beta=true`, {
       body,
       ...options,
       headers: buildHeaders([
-        { 'anthropic-beta': [...(betas ?? []), 'mcp-tunnels-2026-06-22'].toString() },
+        {
+          'anthropic-beta': [...(betas ?? []), 'mcp-tunnels-2026-06-22'].toString(),
+          ...(workspace_id != null ? { 'anthropic-workspace-id': workspace_id } : undefined),
+        },
         options?.headers,
       ]),
     });
@@ -66,11 +67,14 @@ export class Certificates extends APIResource {
     params: CertificateRetrieveParams,
     options?: RequestOptions,
   ): APIPromise<BetaTunnelCertificate> {
-    const { tunnel_id, betas } = params;
+    const { tunnel_id, betas, workspace_id } = params;
     return this._client.get(path`/v1/tunnels/${tunnel_id}/certificates/${certificateID}?beta=true`, {
       ...options,
       headers: buildHeaders([
-        { 'anthropic-beta': [...(betas ?? []), 'mcp-tunnels-2026-06-22'].toString() },
+        {
+          'anthropic-beta': [...(betas ?? []), 'mcp-tunnels-2026-06-22'].toString(),
+          ...(workspace_id != null ? { 'anthropic-workspace-id': workspace_id } : undefined),
+        },
         options?.headers,
       ]),
     });
@@ -100,7 +104,7 @@ export class Certificates extends APIResource {
     params: CertificateListParams | null | undefined = {},
     options?: RequestOptions,
   ): PagePromise<BetaTunnelCertificatesPageCursor, BetaTunnelCertificate> {
-    const { betas, ...query } = params ?? {};
+    const { betas, workspace_id, ...query } = params ?? {};
     return this._client.getAPIList(
       path`/v1/tunnels/${tunnelID}/certificates?beta=true`,
       PageCursor<BetaTunnelCertificate>,
@@ -108,7 +112,10 @@ export class Certificates extends APIResource {
         query,
         ...options,
         headers: buildHeaders([
-          { 'anthropic-beta': [...(betas ?? []), 'mcp-tunnels-2026-06-22'].toString() },
+          {
+            'anthropic-beta': [...(betas ?? []), 'mcp-tunnels-2026-06-22'].toString(),
+            ...(workspace_id != null ? { 'anthropic-workspace-id': workspace_id } : undefined),
+          },
           options?.headers,
         ]),
       },
@@ -140,11 +147,14 @@ export class Certificates extends APIResource {
     params: CertificateArchiveParams,
     options?: RequestOptions,
   ): APIPromise<BetaTunnelCertificate> {
-    const { tunnel_id, betas } = params;
+    const { tunnel_id, betas, workspace_id } = params;
     return this._client.post(path`/v1/tunnels/${tunnel_id}/certificates/${certificateID}/archive?beta=true`, {
       ...options,
       headers: buildHeaders([
-        { 'anthropic-beta': [...(betas ?? []), 'mcp-tunnels-2026-06-22'].toString() },
+        {
+          'anthropic-beta': [...(betas ?? []), 'mcp-tunnels-2026-06-22'].toString(),
+          ...(workspace_id != null ? { 'anthropic-workspace-id': workspace_id } : undefined),
+        },
         options?.headers,
       ]),
     });
@@ -163,17 +173,19 @@ export interface BetaTunnelCertificate {
   id: string;
 
   /**
-   * A timestamp in RFC 3339 format
+   * RFC 3339 datetime string indicating when the certificate was archived. Null if
+   * it is still in the trusted set.
    */
   archived_at: string | null;
 
   /**
-   * A timestamp in RFC 3339 format
+   * RFC 3339 datetime string indicating when the certificate was registered.
    */
   created_at: string;
 
   /**
-   * A timestamp in RFC 3339 format
+   * RFC 3339 datetime string indicating when the certificate expires, or `null` if
+   * it does not expire.
    */
   expires_at: string | null;
 
@@ -201,11 +213,21 @@ export interface CertificateCreateParams {
    * Header param: Optional header to specify the beta version(s) you want to use.
    */
   betas?: Array<BetaAPI.AnthropicBeta>;
+
+  /**
+   * Header param: Optional header to select the Workspace for this request. The
+   * value is a Workspace ID (for example, `wrkspc_011CZkZaBF1tNoB5wlCeusgy`).
+   *
+   * Only needed for credentials that can act on more than one Workspace. A
+   * credential that belongs to a specific Workspace may omit it; if sent, it must
+   * match that Workspace.
+   */
+  workspace_id?: string;
 }
 
 export interface CertificateRetrieveParams {
   /**
-   * Path param: Path parameter tunnel_id
+   * Path param: ID of the tunnel (`tnl_...`).
    */
   tunnel_id: string;
 
@@ -213,6 +235,16 @@ export interface CertificateRetrieveParams {
    * Header param: Optional header to specify the beta version(s) you want to use.
    */
   betas?: Array<BetaAPI.AnthropicBeta>;
+
+  /**
+   * Header param: Optional header to select the Workspace for this request. The
+   * value is a Workspace ID (for example, `wrkspc_011CZkZaBF1tNoB5wlCeusgy`).
+   *
+   * Only needed for credentials that can act on more than one Workspace. A
+   * credential that belongs to a specific Workspace may omit it; if sent, it must
+   * match that Workspace.
+   */
+  workspace_id?: string;
 }
 
 export interface CertificateListParams extends PageCursorParams {
@@ -226,11 +258,21 @@ export interface CertificateListParams extends PageCursorParams {
    * Header param: Optional header to specify the beta version(s) you want to use.
    */
   betas?: Array<BetaAPI.AnthropicBeta>;
+
+  /**
+   * Header param: Optional header to select the Workspace for this request. The
+   * value is a Workspace ID (for example, `wrkspc_011CZkZaBF1tNoB5wlCeusgy`).
+   *
+   * Only needed for credentials that can act on more than one Workspace. A
+   * credential that belongs to a specific Workspace may omit it; if sent, it must
+   * match that Workspace.
+   */
+  workspace_id?: string;
 }
 
 export interface CertificateArchiveParams {
   /**
-   * Path param: Path parameter tunnel_id
+   * Path param: ID of the tunnel (`tnl_...`).
    */
   tunnel_id: string;
 
@@ -238,6 +280,16 @@ export interface CertificateArchiveParams {
    * Header param: Optional header to specify the beta version(s) you want to use.
    */
   betas?: Array<BetaAPI.AnthropicBeta>;
+
+  /**
+   * Header param: Optional header to select the Workspace for this request. The
+   * value is a Workspace ID (for example, `wrkspc_011CZkZaBF1tNoB5wlCeusgy`).
+   *
+   * Only needed for credentials that can act on more than one Workspace. A
+   * credential that belongs to a specific Workspace may omit it; if sent, it must
+   * match that Workspace.
+   */
+  workspace_id?: string;
 }
 
 export declare namespace Certificates {

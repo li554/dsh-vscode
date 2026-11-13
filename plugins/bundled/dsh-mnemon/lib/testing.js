@@ -1,6 +1,6 @@
-import { t as provideMemoryRuntime } from "./runtime-AtIOTeP1.js";
+import { t as provideMemoryRuntime } from "./runtime-DmL0It3P.js";
 import { DEFAULT_MEMORY_VIEW_BUDGET } from "./contracts.js";
-import { c as jsonClone } from "./definitions-j0FLgE0-.js";
+import { c as jsonClone } from "./definitions-DU7MLBhu.js";
 import { Context } from "@deepseek-ai/cordis";
 import { readFileSync } from "node:fs";
 //#region src/sdk/testing.ts

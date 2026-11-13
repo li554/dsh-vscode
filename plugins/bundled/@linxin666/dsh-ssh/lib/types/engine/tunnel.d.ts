@@ -14,6 +14,8 @@ export interface TunnelRecord {
     /** The pooled connection this tunnel pins; siblings on one alias may share it. */
     record: PoolRecord;
     sockets: Set<Socket>;
+    /** Detach the link-death hook startTunnel installs on the pooled client. */
+    detachLink?: () => void;
 }
 /** The engine slice the tunnel module needs (adds the tunnel registry). */
 export interface TunnelEngine extends PoolEngine {

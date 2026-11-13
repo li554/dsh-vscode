@@ -1,7 +1,7 @@
 {
   "name": "dsh-mnemon-strategy-scoped",
-  "version": "0.5.4",
-  "description": "Additive Source selection and write narrowing for Mnemon's default three-tier Strategy.",
+  "version": "0.5.5",
+  "description": "Additive Source selection and write narrowing for any Mnemon main Strategy.",
   "license": "MIT",
   "type": "module",
   "engines": {
@@ -12,10 +12,12 @@
       "types": "./lib/index.d.ts",
       "default": "./lib/index.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
   },
   "files": [
     "lib",
+    "locale",
     "cordis.patch.yml",
     "README.md"
   ],
@@ -32,14 +34,12 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "dsh-mnemon": "^0.5.1",
-    "dsh-mnemon-strategy-default-three-tier": "^0.5.1"
+    "dsh-mnemon": "^0.5.17"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "^4.0.1",
     "@types/node": "^22.0.0",
-    "dsh-mnemon": "^0.5.4",
-    "dsh-mnemon-strategy-default-three-tier": "^0.5.4",
+    "dsh-mnemon": "^0.5.17",
+    "dsh-mnemon-strategy-default-three-tier": "^0.5.7",
     "tsdown": "^0.22.0",
     "typescript": "^5.9.0",
     "vitest": "^3.2.0"

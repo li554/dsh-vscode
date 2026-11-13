@@ -6,6 +6,9 @@ export declare function EditorHost(props: {
     store: SidebarStore;
     scope: SessionScope;
     tab: SidebarTab;
+    /** Whether this tab is the active one with its panel open: a parked tab
+     *  must not keep polling (the workbench keeps every tab body mounted). */
+    visible?: boolean;
     expanded: string[];
     revealed: string[];
     onToggleDir: (path: string) => void;

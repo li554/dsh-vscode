@@ -28,9 +28,9 @@ export declare class CommandDirectory {
      */
     status(sessionId: SessionId): DirectoryStatus;
     /**
-     * Synchronous exact-name lookup over one session's hot snapshot.
+     * Synchronous command lookup over one Session's ready catalog; exact names precede localized aliases.
      * @param sessionId - session key.
-     * @param name - command name without the leading slash.
+     * @param name - typed command spelling without the leading slash.
      * @returns the descriptor, or undefined when absent or the entry is not ready.
      */
     resolve(sessionId: SessionId, name: string): CommandDescriptor | undefined;

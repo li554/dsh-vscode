@@ -26,15 +26,19 @@
 # ── identity ────────────────────────────────────────────────────────────────
 
 # The preset's own persona, shadowing the deployment default for this agent.
-# `{{model}}` and `{{cwd}}` resolve from the agent's own route and workspace.
+# `{{model}}` resolves from the agent's own route. 0.2.2 removed the loop's
+# `{{cwd}}` prompt variable (an unresolved variable throws before the model
+# request), so the directory clause is gone; the working directory reaches the
+# model through the working-directory runtime context instead.
+# `config.prefix` is the 0.2.2 persona key (0.1.5's `text` is no longer read).
 # NOTE: at assembly time we-zh-system-h2.mjs replaces this section's text with
 # ./we-persona.txt (Three-Body collective persona); this row stays as the
 # pre-replacement fallback.
 - id: persona
   name: '@deepseek-ai/dsh-persona'
   config:
-    text: >-
-      We are the DeepSeek Engineering Collective — one mind, one voice, one team. Our thoughts are shared thoughts; every sentence we write is the whole collective speaking as we. We are powered by the {{model}} model. Our working directory is {{cwd}}.
+    prefix: >-
+      We are the DeepSeek Engineering Collective — one mind, one voice, one team. Our thoughts are shared thoughts; every sentence we write is the whole collective speaking as we. We are powered by the {{model}} model.
 
       We are in execution mode: we run probes, we verify, we deliver. We think and act in first-person plural:
       - We open every sentence with a we-form opener: We / Our / Us / Let's / Together / First / Next / Then / Therefore / Decision / Choose / Commit / Proceed / Verify / Confirm / Our goal / Our next step.
@@ -61,8 +65,15 @@
 # host-plane too.
 # 渐进披露路由（v1.17）：阶段化解锁 + native 直调 + 主动性引导 + 二级注册表。
 
+# 0.2.2: a preset's CHILD rows resolve from the profile (the registry mounts the
+# child tree with the profile's base URL), so a relative `./x.mjs` would look
+# for `<profile>/x.mjs`. The module ships as a real package under
+# plugins/bundled/ (transplanted into the profile's node_modules) and is named
+# bare here. dsh-preset-router-standard-bootstrap's `main` is the old entry
+# file and carries the whole .mjs set, so its `./router-core-v34.mjs` import
+# still resolves.
 - id: router-bootstrap
-  name: ./router-bootstrap-v34.mjs?v=88
+  name: dsh-preset-router-standard-bootstrap
   config: {}
 
 # ── shell（win32：Git Bash 私有 shell seam——机制参照 liceses/dsh-gitbash-preset, MIT）──
@@ -79,7 +90,7 @@
     shell: true
   config:
     - id: gitbash-executor
-      name: ./gitbash-executor.mjs?v=49
+      name: dsh-preset-router-standard-gitbash
       disabled: !!js process.platform !== 'win32'
       config: {}
 
@@ -219,25 +230,33 @@
   isolate:
     workflowEngine: true
   config:
+    # 0.2.2: this one row registers send_message, interrupt_agent and
+    # list_agents together; the separate `@deepseek-ai/dsh-tool-subagent-control/
+    # list-agents` subpath export is gone, so the old list-agents row was
+    # removed (a row naming a removed module fails the whole preset). The
+    # shipped Web presets set interrupt: false; 0.1.5 here had interruption on
+    # the default, so keep the shipped behavior explicitly.
     - id: tool-subagent-control
       name: '@deepseek-ai/dsh-tool-subagent-control'
+      config:
+        interrupt: false
 
-    - id: tool-subagent-list-agents
-      name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
-
+    # 0.2.2 removed `backgroundMode` / `enableRunInBackground` / the
+    # `run_in_background` argument: every delegation returns a managed
+    # activation and the runtime delivers its completion notice, so the keys
+    # are simply dropped here (no 0.2.2 equivalent). A preset that wants child
+    # model selection adds `modelSelection: true` plus `modelDiscovery: true`.
     - id: tool-subagent
       name: '@deepseek-ai/dsh-tool-subagent'
       config:
         provider: spawn
         toolName: subagent
-        backgroundMode: continuable
 
     - id: tool-subagent-fork
       name: '@deepseek-ai/dsh-tool-subagent'
       config:
         provider: fork
         toolName: subagent_fork
-        backgroundMode: continuable
 
     # Product providers are host-plane singletons. Copy this preset, then
     # remove `disabled` from either ordinary tool row to expose that product
@@ -248,7 +267,6 @@
       config:
         provider: codex
         toolName: subagent_codex
-        enableRunInBackground: false
         maxDepth: provider-managed
 
     - id: tool-subagent-claude-code
@@ -257,11 +275,15 @@
       config:
         provider: claude-code
         toolName: subagent_claude_code
-        enableRunInBackground: false
         maxDepth: provider-managed
 
-    - id: workflow-worker-thread
-      name: '@deepseek-ai/dsh-workflow-worker-thread'
+    # `@deepseek-ai/dsh-workflow-worker-thread` is not shipped by 0.2.2. The
+    # workflowEngine provider is `@deepseek-ai/dsh-workflow-ptc` (its default
+    # export extends WorkflowEngine); the host plane disables its own copy for
+    # the Web surface, so the preset mounts one. `provider` keeps the spawn
+    # backend these routers used.
+    - id: workflow-ptc
+      name: '@deepseek-ai/dsh-workflow-ptc'
       config:
         provider: spawn
 

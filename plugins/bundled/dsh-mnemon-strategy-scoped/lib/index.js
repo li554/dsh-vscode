@@ -1,5 +1,4 @@
-import { defineMemoryPlugin, defineMemoryStrategyConfiguration, installMemory } from "dsh-mnemon/extension-sdk";
-import { defineThreeTierExtension, validateThreeTierExtension } from "dsh-mnemon-strategy-default-three-tier/extension-sdk";
+import { defineMemoryPlugin, defineMemoryStrategyConfiguration, defineMemoryViewExtension, installMemory, validateMemoryViewExtension } from "dsh-mnemon/extension-sdk";
 //#region src/index.ts
 const name = "dsh-mnemon-strategy-scoped";
 const inject = ["mnemonMemory"];
@@ -10,15 +9,15 @@ const memoryPlugin = defineMemoryPlugin({
 		"zh-CN": "范围组合"
 	},
 	description: {
-		en: "Select and order the Sources admitted to the current View.",
-		"zh-CN": "选择并排序允许进入当前 View 的 Source。"
+		en: "Compose the available memory sources in a stable order.",
+		"zh-CN": "按稳定顺序组合当前可用的记忆来源。"
 	},
 	roles: ["strategy-extension"],
 	provides: [{
-		id: "strategy.default-three-tier.selection",
+		id: "strategy.selection",
 		exclusive: true
 	}],
-	requires: ["strategy.default-three-tier"]
+	requires: ["strategy"]
 });
 const roles = [
 	"working-context",
@@ -26,15 +25,15 @@ const roles = [
 	"durable-evidence"
 ];
 function createScopedExtension(config = {}) {
-	const selection = config.sourceKeys === void 0 ? void 0 : validateThreeTierExtension("selection", {
+	const selection = config.sourceKeys === void 0 ? void 0 : validateMemoryViewExtension("selection", {
 		sourceKeys: config.sourceKeys,
 		...config.writableSourceKeys === void 0 ? {} : { writableSourceKeys: config.writableSourceKeys }
 	});
-	const writable = config.writableSourceKeys === void 0 ? void 0 : validateThreeTierExtension("selection", {
+	const writable = config.writableSourceKeys === void 0 ? void 0 : validateMemoryViewExtension("selection", {
 		sourceKeys: config.writableSourceKeys,
 		writableSourceKeys: config.writableSourceKeys
 	}).writableSourceKeys;
-	return defineThreeTierExtension({
+	return defineMemoryViewExtension({
 		typeId: "scoped",
 		packageName: name,
 		slot: "selection",

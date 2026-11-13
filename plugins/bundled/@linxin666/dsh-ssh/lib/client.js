@@ -9,7 +9,6 @@ window.__ModuleLoader__.load({
 		//#endregion
 		let react = require("react");
 		let react_jsx_runtime = require("react/jsx-runtime");
-		let react_dom_client = require("react-dom/client");
 		//#region src/protocol.ts
 		const SSH_API = {
 			hosts: "/api/dsh-ssh/hosts",
@@ -64,6 +63,8 @@ window.__ModuleLoader__.load({
 			"hosts.deleteConfirm": "确定删除主机「{alias}」？将同时停止其隧道。",
 			"hosts.imported": "解析 {parsed} 个配置块，新增 {added} 台主机，跳过 {skipped} 个。",
 			"hosts.proxyBadge": "代理",
+			"hosts.forwardAgentBadge": "Agent 转发",
+			"hosts.forwardAgentHint": "仅对可信主机开启：远端可用本机私钥签名（等价 ssh -A）。",
 			"import.reason.wildcard": "通配符 pattern，需手动配置",
 			"import.reason.existing": "别名已存在",
 			"import.reason.match": "Match 条件块，不支持",
@@ -86,8 +87,8 @@ window.__ModuleLoader__.load({
 			"form.auth.password": "密码",
 			"form.auth.agent": "SSH Agent",
 			"form.agentPath": "Agent 路径",
-			"form.agentPathHint": "留空自动检测（SSH_AUTH_SOCK / Windows Pageant）；也可填 socket 路径或 pageant",
-			"form.authKeepHint": "编辑时密钥/密码/Agent 留空将保留原认证方式与已存凭据；如需更换认证方式请填写新凭据。",
+			"form.agentPathHint": "留空自动检测（SSH_AUTH_SOCK；Windows 上为原生 ssh-agent 命名管道）；也可填 socket 路径或 pageant",
+			"form.authKeepHint": "编辑时密码 / 私钥留空将保留已存凭据；Agent 路径留空是合法的自动检测，选「SSH Agent」即切换到 agent 认证。",
 			"form.keyPath": "私钥路径",
 			"form.keyPathHint": "如 ~/.ssh/id_ed25519",
 			"form.passphrase": "密钥口令",
@@ -98,6 +99,8 @@ window.__ModuleLoader__.load({
 			"form.proxyJumpHint": "逗号分隔的本地主机别名，或 [user@]host[:port] 地址，按顺序连接",
 			"form.proxyCommand": "ProxyCommand",
 			"form.proxyCommandHint": "OpenSSH ProxyCommand：%h 主机、%p 端口、%r 用户、%n 别名；留空或填 none 表示不使用。与跳板机别名互斥。",
+			"form.forwardAgent": "启用 Agent 转发",
+			"form.forwardAgentHint": "把本机 SSH Agent 转发到该主机（等价 ssh -A）：远端可用本机私钥签名。仅对可信主机开启。",
 			"form.description": "备注",
 			"form.environment": "环境",
 			"form.environmentHint": "如 development / production",
@@ -116,11 +119,19 @@ window.__ModuleLoader__.load({
 			"terminal.ready": "终端已连接（{alias}）",
 			"terminal.exited": "终端已退出（{alias}）",
 			"terminal.error": "终端错误：{error}",
+			"terminal.noWebSocket": "当前页面不支持 WebSocket（应用外壳没有可连接的本地主机地址），请改用浏览器打开的 Web 界面使用终端。",
 			"terminal.auth.title": "二次身份验证 (2FA / 交互式认证)",
 			"terminal.auth.submit": "提交验证码",
 			"terminal.auth.cancel": "取消",
 			"terminal.auth.placeholder": "请输入验证码或口令",
 			"terminal.auth.hint": "服务器请求进行交互式二次验证（输入仅本次生效，不落盘）：",
+			"terminal.tabs": "终端标签",
+			"terminal.newTab": "按当前主机新开标签",
+			"terminal.closeTab": "关闭标签",
+			"terminal.authPending": "待验证",
+			"terminal.tabExited": "已退出",
+			"terminal.tabError": "出错",
+			"terminal.closeFailed": "无法确认该标签已关闭：关闭帧未送达宿主。标签已保留——可重试，或切到该标签前台，用它自己的连接关闭。",
 			"transfer.selectHost": "选择主机",
 			"transfer.remotePath": "远程路径",
 			"transfer.remotePathHint": "如 /tmp/ 或 /home/user/app.tar.gz",
@@ -219,6 +230,8 @@ window.__ModuleLoader__.load({
 			"hosts.deleteConfirm": "Delete host \"{alias}\"? Its tunnels will be stopped.",
 			"hosts.imported": "Parsed {parsed} blocks, added {added} hosts, skipped {skipped}.",
 			"hosts.proxyBadge": "proxy",
+			"hosts.forwardAgentBadge": "agent-fwd",
+			"hosts.forwardAgentHint": "Enable only for hosts you trust: the remote can sign with your local private keys (equivalent to ssh -A).",
 			"import.reason.wildcard": "wildcard pattern — configure it by hand",
 			"import.reason.existing": "alias already configured",
 			"import.reason.match": "Match block — not supported",
@@ -241,8 +254,8 @@ window.__ModuleLoader__.load({
 			"form.auth.password": "Password",
 			"form.auth.agent": "SSH Agent",
 			"form.agentPath": "Agent path",
-			"form.agentPathHint": "Leave empty to auto-detect (SSH_AUTH_SOCK / Pageant on Windows), or set a socket path or \"pageant\"",
-			"form.authKeepHint": "While editing, empty secret fields keep the stored authentication and credentials; enter new values to switch methods.",
+			"form.agentPathHint": "Leave empty to auto-detect (SSH_AUTH_SOCK; the native ssh-agent named pipe on Windows), or set a socket path or \"pageant\"",
+			"form.authKeepHint": "While editing, an empty password or key field keeps the stored credential; an empty agent path is a valid auto-detect, so choosing SSH Agent switches the host to agent auth.",
 			"form.keyPath": "Private key path",
 			"form.keyPathHint": "e.g. ~/.ssh/id_ed25519",
 			"form.passphrase": "Key passphrase",
@@ -253,6 +266,8 @@ window.__ModuleLoader__.load({
 			"form.proxyJumpHint": "Comma-separated local aliases or [user@]host[:port] addresses, chained in order",
 			"form.proxyCommand": "ProxyCommand",
 			"form.proxyCommandHint": "OpenSSH ProxyCommand: %h host, %p port, %r user, %n alias; empty or none disables it. Mutually exclusive with the jump chain.",
+			"form.forwardAgent": "Enable agent forwarding",
+			"form.forwardAgentHint": "Forward your local SSH agent to this host (equivalent to ssh -A): the remote can sign with your private keys. Enable it only for hosts you trust.",
 			"form.description": "Description",
 			"form.environment": "Environment",
 			"form.environmentHint": "e.g. development / production",
@@ -271,11 +286,19 @@ window.__ModuleLoader__.load({
 			"terminal.ready": "Terminal connected ({alias})",
 			"terminal.exited": "Terminal exited ({alias})",
 			"terminal.error": "Terminal error: {error}",
+			"terminal.noWebSocket": "This page cannot carry a WebSocket (the application shell published no local host address to reach). Open the Web UI in a browser to use the terminal.",
 			"terminal.auth.title": "Two-Factor Authentication (2FA)",
 			"terminal.auth.submit": "Submit Code",
 			"terminal.auth.cancel": "Cancel",
 			"terminal.auth.placeholder": "Enter code or passphrase",
 			"terminal.auth.hint": "The server requested interactive 2FA (session only, never saved):",
+			"terminal.tabs": "Terminal tabs",
+			"terminal.newTab": "New tab on the current host",
+			"terminal.closeTab": "Close tab",
+			"terminal.authPending": "2FA pending",
+			"terminal.tabExited": "exited",
+			"terminal.tabError": "error",
+			"terminal.closeFailed": "Could not confirm the tab closed: the close never reached the host, so the tab was kept. Retry, or bring the tab to the front and close it over its own connection.",
 			"transfer.selectHost": "Select host",
 			"transfer.remotePath": "Remote path",
 			"transfer.remotePathHint": "e.g. /tmp/ or /home/user/app.tar.gz",
@@ -447,6 +470,111 @@ window.__ModuleLoader__.load({
 			for (const [key, value] of Object.entries(params)) if (value !== void 0 && value !== "") search.set(key, String(value));
 			const text = search.toString();
 			return text === "" ? "" : "?" + text;
+		}
+		/**
+		* The WebSocket URL the terminal route is reached at, or undefined when this
+		* page cannot carry one.
+		*
+		* A web page resolves the socket against its own origin, exactly as before.
+		*
+		* A page delivered by an application on this machine (the official DSH Desktop
+		* shell serves its Web GUI from `dsh-app://app/`) cannot carry a socket on its
+		* own scheme: the protocol handler forwards HTTP to the local Host but has no
+		* upgrade to forward. That is exactly the case the official transport hook
+		* covers - the shell publishes `__DSH_TRANSPORT__.streamBaseUrl`, the loopback
+		* authority of the Host it owns and already forwards every other request to
+		* (issue #1744). The socket is therefore dialed there instead, with the `ws`/
+		* `wss` scheme derived from that base, which is what the shell's
+		* `onBeforeSendHeaders` hook expects to see before it attaches its
+		* authority-bound credential.
+		*
+		* The base is used only on an application-delivered page. A web page that
+		* somehow carries the hook (the remote channel grants `ownsHost` to a paired
+		* LAN page, and that page is fenced behind a pairing channel) keeps resolving
+		* against its own origin, so this cannot reroute gated traffic onto a host the
+		* page is not entitled to reach. A blank authority is treated the same as an
+		* application scheme with no base: there is nothing to dial, and the caller
+		* gets the actionable reason instead of a socket that can only fail.
+		*
+		* @param location - the page location to read.
+		* @param search - the query string carrying `alias` or `session`.
+		* @param streamBaseUrl - `__DSH_TRANSPORT__.streamBaseUrl`, when the shell published one.
+		* @returns the absolute `ws:`/`wss:` URL, or undefined when the page cannot carry one.
+		*/
+		function terminalSocketUrl(location, search, streamBaseUrl) {
+			if (WEB_PAGE_PROTOCOLS.has(location.protocol)) return (location.protocol === "https:" ? "wss" : "ws") + "://" + location.host + SSH_API.terminal + search;
+			const base = hostAuthorityOf(streamBaseUrl);
+			if (base === void 0) return void 0;
+			return (base.protocol === "https:" ? "wss" : "ws") + "://" + base.authority + SSH_API.terminal + search;
+		}
+		/**
+		* The authority and scheme of a shell-owned Host base, or undefined when the
+		* value is absent, unparsable, or not a network origin this Host can serve
+		* (an application scheme could only resolve back to the page that has no
+		* socket transport in the first place).
+		* @param base - the raw `streamBaseUrl` as published by the transport hook.
+		*/
+		function hostAuthorityOf(base) {
+			if (base === void 0 || base === "") return void 0;
+			let url;
+			try {
+				url = new URL(base);
+			} catch {
+				return;
+			}
+			if (url.protocol !== "http:" && url.protocol !== "https:") return void 0;
+			if (url.username !== "" || url.password !== "") return void 0;
+			if (url.host === "") return void 0;
+			return {
+				protocol: url.protocol,
+				authority: url.host
+			};
+		}
+		/**
+		* The shell-owned Host authority the page is told to reach, read from the
+		* official transport hook. The global is written by the shell before any boot
+		* entry runs, so it is absent on every page it does not own.
+		* @param globals - the global object to read (defaults to the real one).
+		* @returns the published base URL, or undefined when the page carries none.
+		*/
+		function transportStreamBaseUrl(globals = globalThis) {
+			const published = globals.__DSH_TRANSPORT__?.streamBaseUrl;
+			return typeof published === "string" ? published : void 0;
+		}
+		/**
+		* Schemes a network page can be delivered with. Every other scheme belongs to
+		* an application on this machine, which is the same classification the remote
+		* channel and the update seat use (`isWebPageProtocol` / `isApplicationDeliveredPage`).
+		*/
+		const WEB_PAGE_PROTOCOLS = /* @__PURE__ */ new Set([
+			"http:",
+			"https:",
+			"blob:",
+			"data:",
+			"about:",
+			"filesystem:"
+		]);
+		/**
+		* A terminal connection that never opened: it reports one failure once the
+		* view has attached its `onExit`, so the tab shows why instead of sitting on a
+		* spinner, and every later frame is a no-op.
+		*/
+		function failedTerminal(reason) {
+			const connection = {
+				onReady: void 0,
+				onOutput: void 0,
+				onExit: void 0,
+				onAuthPrompt: void 0,
+				send: () => void 0,
+				resize: () => void 0,
+				sendAuthResponse: () => void 0,
+				detach: () => void 0,
+				close: () => void 0
+			};
+			queueMicrotask(() => {
+				connection.onExit?.(null, reason);
+			});
+			return connection;
 		}
 		/** The browser half's only data entry point. */
 		var SshApi = class {
@@ -644,39 +772,155 @@ window.__ModuleLoader__.load({
 					bytes: received
 				};
 			}
-			/** Open a WebSocket terminal session. */
+			/**
+			* Open a new host terminal session for the alias.
+			* @param alias - the configured host alias.
+			* @param cols - initial PTY width.
+			* @param rows - initial PTY height.
+			* @returns the live connection; its ready callback carries the session id
+			*   {@link attachTerminal} uses after a view detach.
+			*/
 			openTerminal(alias, cols, rows) {
-				const url = (window.location.protocol === "https:" ? "wss" : "ws") + "://" + window.location.host + SSH_API.terminal + query({
+				return this.terminalSocket(query({
 					alias,
 					cols,
 					rows
+				}));
+			}
+			/**
+			* Reattach to a host-side session that outlived its view (a panel switch, a
+			* page navigation). The host replays its scrollback before the ready frame.
+			* @param sessionId - the id the previous connection reported on ready.
+			* @param cols - the view's current width.
+			* @param rows - the view's current height.
+			*/
+			attachTerminal(sessionId, cols, rows) {
+				return this.terminalSocket(query({
+					session: sessionId,
+					cols,
+					rows
+				}));
+			}
+			/**
+			* End a host session this view is not attached to (closing a background
+			* tab). The session has no other handle from the browser: giving it a
+			* dedicated HTTP route would widen the host's surface for one frame, so this
+			* opens one short-lived attach instead and sends the close frame as soon as
+			* the socket is open.
+			*
+			* The answer is "is this session no longer running", which has three
+			* truthful answers and one lie to avoid:
+			*   - the frame went out on an open socket: the host ends the session;
+			*   - the host answered with an exit frame: an unknown id is reported as
+			*     `terminal session expired` and an ended shell also exits, and in both
+			*     cases nothing is running, so the tab really is closed;
+			*   - the socket errored, closed before opening, or never settled inside
+			*     `timeoutMs`: delivery is unproven, so the session may still be alive and
+			*     the caller must keep the tab instead of claiming it closed.
+			* @param sessionId - the session id the host reported on its ready frame.
+			* @param timeoutMs - bounded wait for the delivery signal (default 5000).
+			* @returns true when the session is known to be gone.
+			*/
+			closeTerminalSession(sessionId, timeoutMs = 5e3) {
+				const target = terminalSocketUrl(window.location, query({
+					session: sessionId,
+					cols: 2,
+					rows: 1
+				}), transportStreamBaseUrl());
+				if (target === void 0) return Promise.resolve(false);
+				let socket;
+				try {
+					socket = new WebSocket(target);
+				} catch {
+					return Promise.resolve(false);
+				}
+				return new Promise((resolve) => {
+					let settled = false;
+					let timer;
+					const finish = (gone) => {
+						if (settled) return;
+						settled = true;
+						if (timer !== void 0) clearTimeout(timer);
+						try {
+							socket.close();
+						} catch {}
+						resolve(gone);
+					};
+					timer = setTimeout(() => {
+						finish(false);
+					}, timeoutMs);
+					socket.onopen = () => {
+						const closeFrame = { type: "close" };
+						try {
+							socket.send(JSON.stringify(closeFrame));
+							finish(true);
+						} catch {}
+					};
+					socket.onmessage = (event) => {
+						let frame;
+						try {
+							frame = JSON.parse(event.data);
+						} catch {
+							return;
+						}
+						if (frame.type === "exit") finish(true);
+					};
+					socket.onerror = () => {
+						finish(false);
+					};
+					socket.onclose = () => {
+						finish(false);
+					};
 				});
-				const socket = new WebSocket(url);
+			}
+			/** One terminal socket over either an alias (open) or a session id (attach). */
+			terminalSocket(search) {
+				const target = terminalSocketUrl(window.location, search, transportStreamBaseUrl());
+				if (target === void 0) return failedTerminal(tt("terminal.noWebSocket"));
+				let socket;
+				try {
+					socket = new WebSocket(target);
+				} catch (error) {
+					return failedTerminal(error instanceof Error ? error.message : String(error));
+				}
+				let leaving = false;
+				const sendFrame = (frame) => {
+					if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(frame));
+				};
 				const connection = {
 					onReady: void 0,
 					onOutput: void 0,
 					onExit: void 0,
 					onAuthPrompt: void 0,
 					send: (data) => {
-						if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({
+						sendFrame({
 							type: "input",
 							data
-						}));
+						});
 					},
 					resize: (cols, rows) => {
-						if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({
+						sendFrame({
 							type: "resize",
 							cols,
 							rows
-						}));
+						});
 					},
 					sendAuthResponse: (responses) => {
-						if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({
+						sendFrame({
 							type: "auth_response",
 							responses
-						}));
+						});
+					},
+					detach: () => {
+						leaving = true;
+						sendFrame({ type: "detach" });
+						try {
+							socket.close();
+						} catch {}
 					},
 					close: () => {
+						leaving = true;
+						sendFrame({ type: "close" });
 						try {
 							socket.close();
 						} catch {}
@@ -689,23 +933,399 @@ window.__ModuleLoader__.load({
 					} catch {
 						return;
 					}
-					if (frame.type === "ready") connection.onReady?.();
+					if (frame.type === "ready") connection.onReady?.(frame.sessionId, frame.alias);
 					else if (frame.type === "output") connection.onOutput?.(frame.data);
 					else if (frame.type === "exit") connection.onExit?.(frame.code, frame.error);
 					else if (frame.type === "auth_prompt") connection.onAuthPrompt?.(frame.name, frame.instructions, frame.prompts);
 				};
 				socket.onclose = () => {
-					connection.onExit?.(null, "connection closed");
+					if (!leaving) connection.onExit?.(null, "connection closed");
 				};
 				socket.onerror = () => {
-					connection.onExit?.(null, "connection error");
+					if (!leaving) connection.onExit?.(null, "connection error");
 				};
 				return connection;
 			}
 		};
+		/** Byte cap for the retained screen of one tab (the host buffers 256 KiB too). */
+		const MAX_RETAINED_BYTES = 256 * 1024;
+		/**
+		* UTF-8 byte length of one chunk, without node's Buffer (this half is bundled
+		* for the browser). Surrogate pairs count as the four bytes they encode to.
+		* @param text - the output chunk.
+		* @returns its UTF-8 byte length.
+		*/
+		function utf8Bytes(text) {
+			let bytes = 0;
+			for (const char of text) {
+				const code = char.codePointAt(0) ?? 0;
+				bytes += code < 128 ? 1 : code < 2048 ? 2 : code < 65536 ? 3 : 4;
+			}
+			return bytes;
+		}
+		/** The panel state owner the sidebar row and the view both read. */
+		var PanelController = class {
+			deps;
+			panelOpen = false;
+			activeTab = "hosts";
+			terminalTabs = [];
+			activeTerminalTabId;
+			draftAlias = "";
+			nextTerminalTabSeq = 0;
+			listeners = /* @__PURE__ */ new Set();
+			/**
+			* Last screen of each tab, kept outside the snapshot: terminal output must
+			* not re-render the panel on every chunk, and only the terminal view reads
+			* this (when a tab has no session left to replay from).
+			*/
+			retainedScreens = /* @__PURE__ */ new Map();
+			/**
+			* Sockets that outlived their view while still connecting. Their session id
+			* is unknown, so they cannot be detached yet; keeping them here is what
+			* prevents a host PTY with no owner.
+			*/
+			adoptedLinks = /* @__PURE__ */ new Map();
+			/** Cached so getSnapshot is referentially stable between changes. */
+			snapshot = {
+				panelOpen: false,
+				activeTab: "hosts",
+				terminalTabs: [],
+				activeTerminalTabId: void 0,
+				draftAlias: ""
+			};
+			constructor(deps = {}) {
+				this.deps = deps;
+			}
+			getSnapshot() {
+				return this.snapshot;
+			}
+			subscribe(fn) {
+				this.listeners.add(fn);
+				return () => {
+					this.listeners.delete(fn);
+				};
+			}
+			/**
+			* Show the panel. The layout owns which panel the column renders, so the
+			* state flip and the selection travel together; the selection is requested
+			* after the snapshot flips, so a subscriber never observes "open" while the
+			* shell still shows the conversation.
+			*/
+			open() {
+				if (this.panelOpen) return;
+				this.panelOpen = true;
+				this.commit();
+				this.selectPanel("ssh");
+			}
+			/** Return the column to the conversation, asking the layout explicitly. */
+			close() {
+				if (!this.panelOpen) return;
+				this.panelOpen = false;
+				this.commit();
+				this.selectPanel(null);
+			}
+			toggle() {
+				if (this.panelOpen) this.close();
+				else this.open();
+			}
+			/**
+			* Reflect a selection made outside this controller (the user clicked another
+			* sidebar row, or the layout dropped the panel id).
+			* @param panelId - the layout's current panel id, or null for the conversation.
+			*/
+			syncPanelSelection(panelId) {
+				const open = panelId === "ssh";
+				if (open === this.panelOpen) return;
+				this.panelOpen = open;
+				this.commit();
+			}
+			/** Switch tabs, keeping every other piece of view state. */
+			setActiveTab(tab) {
+				if (this.activeTab === tab) return;
+				this.activeTab = tab;
+				this.commit();
+			}
+			/**
+			* Hand the terminal tab a host to connect to (the hosts-tab "connect"
+			* action): the tab exists before the view does, so a panel switch during the
+			* handshake still shows the connecting tab and adopts its socket.
+			* @param alias - the configured host alias.
+			*/
+			requestConnect(alias) {
+				this.activeTab = "terminal";
+				this.openTerminalTab(alias);
+			}
+			/**
+			* Add a terminal tab on the alias and make it the shown one. Several tabs
+			* may target one alias on purpose: each owns its own host PTY.
+			* @param alias - the configured host alias.
+			* @returns the new tab id.
+			*/
+			openTerminalTab(alias) {
+				this.nextTerminalTabSeq += 1;
+				const id = "tab-" + String(this.nextTerminalTabSeq);
+				this.terminalTabs = [...this.terminalTabs, {
+					id,
+					alias,
+					status: "connecting"
+				}];
+				this.activeTerminalTabId = id;
+				this.draftAlias = alias;
+				this.retainedScreens.delete(id);
+				this.commit();
+				return id;
+			}
+			/**
+			* Show an existing tab and make the toolbar follow its host, so a new tab
+			* opens on the host the user is looking at.
+			* @param id - the tab id.
+			*/
+			setActiveTerminalTab(id) {
+				if (this.activeTerminalTabId === id) return;
+				const tab = this.terminalTab(id);
+				if (tab === void 0) return;
+				this.activeTerminalTabId = id;
+				this.draftAlias = tab.alias;
+				this.commit();
+			}
+			/**
+			* Remove one tab and forget its screen. When the shown tab closes, the
+			* neighbours decide what the xterm shows next: the tab that took its place,
+			* else the one before it, else nothing.
+			* @param id - the tab id.
+			*/
+			closeTerminalTab(id) {
+				const index = this.terminalTabs.findIndex((tab) => tab.id === id);
+				this.retainedScreens.delete(id);
+				const adopted = this.adoptedLinks.get(id);
+				if (adopted !== void 0) adopted.intent = "close";
+				if (index < 0) return;
+				const wasActive = this.activeTerminalTabId === id;
+				this.terminalTabs = this.terminalTabs.filter((tab) => tab.id !== id);
+				if (wasActive) {
+					const neighbour = this.terminalTabs[index] ?? this.terminalTabs[index - 1];
+					this.activeTerminalTabId = neighbour?.id;
+					if (neighbour !== void 0) this.draftAlias = neighbour.alias;
+				}
+				this.commit();
+			}
+			/** The tab record with this id, or undefined when it no longer exists. */
+			terminalTab(id) {
+				return this.terminalTabs.find((tab) => tab.id === id);
+			}
+			/**
+			* Apply a partial update to one tab; a tab that was closed in the meantime
+			* is left alone rather than resurrected.
+			* @param id - the tab id.
+			* @param patch - the fields to change.
+			*/
+			patchTerminalTab(id, patch) {
+				let found = false;
+				const next = this.terminalTabs.map((tab) => {
+					if (tab.id !== id) return tab;
+					found = true;
+					return {
+						...tab,
+						...patch
+					};
+				});
+				if (!found) return;
+				this.terminalTabs = next;
+				this.commit();
+			}
+			/**
+			* Record the host session of a ready tab and clear the challenge it carried.
+			* @param id - the tab id.
+			* @param sessionId - the id the host reported on its ready frame.
+			*/
+			readyTerminalTab(id, sessionId) {
+				this.patchTerminalTab(id, {
+					status: "connected",
+					sessionId,
+					detail: void 0,
+					closeError: void 0,
+					authPrompt: void 0,
+					authAnswers: void 0
+				});
+			}
+			/**
+			* The remote shell ended: the tab keeps its screen and its place, and the
+			* dead session id is dropped so nothing tries to reattach to it.
+			* @param id - the tab id.
+			* @param detail - why it ended, when the transport said.
+			*/
+			exitTerminalTab(id, detail) {
+				this.patchTerminalTab(id, {
+					status: "exited",
+					sessionId: void 0,
+					detail,
+					authPrompt: void 0,
+					authAnswers: void 0,
+					closeError: void 0
+				});
+			}
+			/**
+			* The connection failed. The tab stays with the reason so the user can read
+			* it and close the tab themselves.
+			* @param id - the tab id.
+			* @param detail - the failure text.
+			*/
+			failTerminalTab(id, detail) {
+				this.patchTerminalTab(id, {
+					status: "error",
+					sessionId: void 0,
+					detail,
+					authPrompt: void 0,
+					authAnswers: void 0,
+					closeError: void 0
+				});
+			}
+			/**
+			* A background close never reached the host. The tab keeps its live session
+			* id (so a retry can still end it) and says so instead of vanishing.
+			* @param id - the tab id.
+			* @param reason - the reason code shown by the view.
+			*/
+			markTerminalCloseFailed(id, reason) {
+				this.patchTerminalTab(id, { closeError: reason });
+			}
+			/**
+			* Store the keyboard-interactive challenge this tab has to answer, with a
+			* blank answer of this challenge's own length. A prompt on another tab never
+			* touches this record, which is what keeps two challenges from sharing input.
+			* @param id - the tab id.
+			* @param prompt - the challenge the host asked for.
+			*/
+			setTerminalAuthPrompt(id, prompt) {
+				this.patchTerminalTab(id, {
+					authPrompt: prompt,
+					authAnswers: prompt.prompts.map(() => "")
+				});
+			}
+			/**
+			* Record one character typed for this tab's challenge.
+			* @param id - the tab id.
+			* @param index - which prompt of the challenge.
+			* @param value - the field's current text.
+			*/
+			setTerminalAuthAnswer(id, index, value) {
+				const tab = this.terminalTab(id);
+				if (tab === void 0 || tab.authPrompt === void 0) return;
+				const answers = [...tab.authAnswers ?? tab.authPrompt.prompts.map(() => "")];
+				answers[index] = value;
+				this.patchTerminalTab(id, { authAnswers: answers });
+			}
+			/** Drop the challenge once it was answered, cancelled, or could not apply. */
+			clearTerminalAuthPrompt(id) {
+				if (this.terminalTab(id)?.authPrompt === void 0) return;
+				this.patchTerminalTab(id, {
+					authPrompt: void 0,
+					authAnswers: void 0
+				});
+			}
+			/** Choose the alias the next terminal tab opens on. */
+			setDraftAlias(alias) {
+				if (this.draftAlias === alias) return;
+				this.draftAlias = alias;
+				this.commit();
+			}
+			/** Append one output chunk to the retained screen of a tab. */
+			appendTerminalOutput(id, chunk) {
+				const screen = this.retainedScreens.get(id) ?? {
+					chunks: [],
+					bytes: 0
+				};
+				screen.chunks.push(chunk);
+				screen.bytes += utf8Bytes(chunk);
+				while (screen.bytes > MAX_RETAINED_BYTES && screen.chunks.length > 1) {
+					const dropped = screen.chunks.shift() ?? "";
+					screen.bytes -= utf8Bytes(dropped);
+				}
+				this.retainedScreens.set(id, screen);
+			}
+			/** The retained screen of a tab, concatenated for a redraw. */
+			readTerminalOutput(id) {
+				return (this.retainedScreens.get(id)?.chunks ?? []).join("");
+			}
+			/** Forget the retained screen (a fresh replay from the host replaces it). */
+			clearTerminalOutput(id) {
+				this.retainedScreens.delete(id);
+			}
+			/**
+			* Keep a still-connecting socket alive after its view went away. The socket
+			* cannot be detached yet (no session id), so the intent is applied when the
+			* host reports it: `detach` leaves the shell for a later reattach, `close`
+			* ends the session of a tab the user closed.
+			* @param tabId - the tab the socket belongs to.
+			* @param connection - the live connection.
+			* @param intent - what to do once the session id arrives.
+			*/
+			adoptTerminalLink(tabId, connection, intent) {
+				const entry = {
+					connection,
+					intent
+				};
+				this.adoptedLinks.set(tabId, entry);
+				connection.onOutput = (data) => {
+					if (this.terminalTab(tabId) === void 0) return;
+					this.appendTerminalOutput(tabId, data);
+				};
+				connection.onAuthPrompt = (name, instructions, prompts) => {
+					if (this.terminalTab(tabId) === void 0) return;
+					this.setTerminalAuthPrompt(tabId, {
+						name,
+						instructions,
+						prompts
+					});
+				};
+				connection.onReady = (sessionId) => {
+					const decided = this.adoptedLinks.get(tabId)?.intent ?? entry.intent;
+					this.adoptedLinks.delete(tabId);
+					this.readyTerminalTab(tabId, sessionId);
+					if (decided === "close") connection.close();
+					else connection.detach();
+				};
+				connection.onExit = (_code, error) => {
+					this.adoptedLinks.delete(tabId);
+					this.failTerminalTab(tabId, error ?? "connection closed");
+				};
+			}
+			/**
+			* Take an adopted socket back when its tab is shown again, so the host never
+			* opens a second PTY for the same tab.
+			* @param tabId - the tab id.
+			* @returns the connection, or undefined when nothing was adopted.
+			*/
+			reclaimTerminalLink(tabId) {
+				const adopted = this.adoptedLinks.get(tabId);
+				if (adopted === void 0) return void 0;
+				if (adopted.intent === "close") return void 0;
+				this.adoptedLinks.delete(tabId);
+				adopted.connection.onReady = void 0;
+				adopted.connection.onExit = void 0;
+				adopted.connection.onAuthPrompt = void 0;
+				return adopted.connection;
+			}
+			commit() {
+				this.snapshot = {
+					panelOpen: this.panelOpen,
+					activeTab: this.activeTab,
+					terminalTabs: this.terminalTabs,
+					activeTerminalTabId: this.activeTerminalTabId,
+					draftAlias: this.draftAlias
+				};
+				for (const fn of [...this.listeners]) fn();
+			}
+			/** Ask the layout to select a panel; a shell without the face is a no-op. */
+			selectPanel(panelId) {
+				try {
+					this.deps.panel?.select(panelId);
+				} catch {}
+			}
+		};
 		//#endregion
 		//#region \0dsh-css:packages/dsh-ssh/src/client/panel/panel.module.css.mjs
-		const css = "[data-pane=conversation],[class*=centerCol]{position:relative}[data-dsh-ssh-view]{z-index:60;background:var(--dsw-alias-bg-base);display:none;position:absolute;inset:0}html[data-dsh-ssh-active]:not([data-dsh-taskboard-active]) [data-dsh-ssh-view]{display:block}html[data-dsh-ssh-active]:not([data-dsh-taskboard-active]) [data-pane=conversation]>:not([data-dsh-ssh-view]),html[data-dsh-ssh-active]:not([data-dsh-taskboard-active]) [class*=centerCol]>:not([data-dsh-ssh-view]){display:none!important}.mL8Uca_entry{box-sizing:border-box;width:100%;min-height:36px;color:var(--dsw-alias-label-secondary);cursor:pointer;white-space:nowrap;background:0 0;border:none;border-radius:8px;align-items:center;gap:8px;padding:0 10px;font-size:13px;display:flex}.mL8Uca_entry:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}.mL8Uca_entry[data-active]{background:var(--dsw-alias-interactive-bg-active);color:var(--dsw-alias-label-primary);font-weight:600}.mL8Uca_entryIcon{flex:none;justify-content:center;align-items:center;width:24px;height:24px;display:inline-flex}.mL8Uca_entryIcon svg{width:18px;height:18px;display:block}.mL8Uca_entryLabel{text-overflow:ellipsis;overflow:hidden}[data-dsh-frame][data-sidebar-collapsed] .mL8Uca_entry,[data-sidebar-collapsed] .mL8Uca_entry{border-radius:50%;justify-content:center;width:36px;min-height:36px;margin:0 auto 12px;padding:0}[data-dsh-frame][data-sidebar-collapsed] .mL8Uca_entryLabel,[data-sidebar-collapsed] .mL8Uca_entryLabel{display:none}.mL8Uca_view{overflow:hidden}.mL8Uca_panel{background:var(--dsw-alias-bg-base);min-width:0;height:100%;min-height:0;color:var(--dsw-alias-label-primary);font-family:var(--dsw-font-family);flex-direction:column;gap:10px;padding:14px 16px 16px;display:flex}.mL8Uca_panelHeader{flex:none;align-items:center;gap:10px;display:flex}.mL8Uca_panelTitle{color:var(--dsw-alias-label-primary);white-space:nowrap;flex:1;margin:0;font-size:16px;font-weight:700}.mL8Uca_backButton{align-items:center;gap:4px;display:inline-flex}.mL8Uca_tabBar{border-bottom:1px solid var(--dsw-alias-border-l1);flex:none;gap:2px;display:flex}.mL8Uca_tab{color:var(--dsw-alias-label-secondary);cursor:pointer;white-space:nowrap;background:0 0;border:none;border-bottom:2px solid #0000;border-radius:6px 6px 0 0;padding:7px 14px;font-size:13px}.mL8Uca_tab:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}.mL8Uca_tab[data-active]{color:var(--dsw-alias-label-primary);border-bottom-color:var(--dsw-alias-state-business-primary);font-weight:600}.mL8Uca_panelContent{flex-direction:column;flex:1;min-height:0;display:flex;overflow:hidden}.mL8Uca_tabBody{flex-direction:column;flex:1;gap:10px;min-height:0;display:flex;overflow-y:auto}.mL8Uca_fillBody{flex-direction:column;flex:1;gap:10px;min-height:0;display:flex;overflow:hidden}.mL8Uca_toolbar,.mL8Uca_controls{flex-wrap:wrap;flex:none;align-items:center;gap:8px;display:flex}.mL8Uca_controls .mL8Uca_input{flex:0 260px;min-width:150px}.mL8Uca_toolbarSpacer{flex:1}.mL8Uca_search{min-width:120px;color:var(--dsw-alias-label-primary);background:var(--dsw-specific-input-major);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;outline:none;flex:0 260px;padding:6px 10px;font-size:13px}.mL8Uca_search::placeholder{color:var(--dsw-alias-label-tertiary)}.mL8Uca_groupBySelect{color:var(--dsw-alias-label-primary);background:var(--dsw-specific-input-major);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;outline:none;padding:6px 8px;font-size:13px}.mL8Uca_groupSection+.mL8Uca_groupSection{border-top:1px solid var(--dsw-alias-border-l1)}.mL8Uca_groupHeader{background:var(--dsw-alias-bg-base,var(--dsw-specific-input-major));align-items:center;gap:8px;padding:4px 8px;display:flex;position:sticky;top:0}.mL8Uca_groupToggle{min-width:0;color:var(--dsw-alias-label-primary);cursor:pointer;text-align:left;background:0 0;border:none;border-radius:6px;flex:1;align-items:center;gap:6px;padding:4px 6px;font-size:12.5px;font-weight:500;display:flex}.mL8Uca_groupToggle:hover{background:var(--dsw-alias-interactive-bg-hover)}.mL8Uca_groupChevron{border-right:1.5px solid var(--dsw-alias-label-tertiary);border-bottom:1.5px solid var(--dsw-alias-label-tertiary);flex:none;width:7px;height:7px;margin-bottom:2px;transition:transform .12s;transform:rotate(45deg)}.mL8Uca_groupChevron[data-collapsed]{margin-bottom:0;transform:rotate(-45deg)}.mL8Uca_groupName{text-overflow:ellipsis;white-space:nowrap;overflow:hidden}.mL8Uca_groupCount{color:var(--dsw-alias-label-tertiary);flex:none;font-weight:400}.mL8Uca_tableWrap{border:1px solid var(--dsw-alias-border-l1);border-radius:10px;flex:1;min-height:0;overflow:auto}.mL8Uca_table{border-collapse:collapse;width:100%;font-size:12.5px}.mL8Uca_table th{z-index:1;text-align:left;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);border-bottom:1px solid var(--dsw-alias-border-l1);white-space:nowrap;padding:8px 10px;font-weight:600;position:sticky;top:0}.mL8Uca_table td{border-bottom:1px solid var(--dsw-alias-separator-primary);vertical-align:top;padding:7px 10px}.mL8Uca_table tbody tr:last-child td{border-bottom:none}.mL8Uca_table tbody tr:hover td{background:var(--dsw-alias-interactive-bg-hover)}.mL8Uca_mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}.mL8Uca_cellMuted{color:var(--dsw-alias-label-tertiary)}.mL8Uca_actions{white-space:nowrap;align-items:center;gap:8px;display:flex}.mL8Uca_inlineTest{color:var(--dsw-alias-label-secondary);align-items:center;gap:6px;font-size:11.5px;display:inline-flex}.mL8Uca_inlineTest[data-status=ok]{color:var(--dsw-alias-state-success-primary)}.mL8Uca_inlineTest[data-status=fail]{color:var(--dsw-alias-state-error-primary)}.mL8Uca_badge{border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary);white-space:nowrap;border-radius:999px;padding:1px 8px;font-size:11px;line-height:1.6;display:inline-block}.mL8Uca_badge[data-kind=key]{color:var(--dsw-alias-state-business-primary);border-color:var(--dsw-alias-state-business-primary)}.mL8Uca_badge[data-kind=password]{color:var(--dsw-alias-state-warn-primary);border-color:var(--dsw-alias-state-warn-primary)}.mL8Uca_badge[data-kind=agent]{color:var(--dsw-alias-state-success-primary);border-color:var(--dsw-alias-state-success-primary)}.mL8Uca_badge[data-kind=proxy]{color:var(--dsw-alias-state-business-primary);border-color:var(--dsw-alias-state-business-primary);margin-left:6px}.mL8Uca_badge[data-status=ok]{color:var(--dsw-alias-state-success-primary);border-color:var(--dsw-alias-state-success-primary)}.mL8Uca_badge[data-status=fail]{color:var(--dsw-alias-state-error-primary);border-color:var(--dsw-alias-state-error-primary)}.mL8Uca_badge[data-status=timeout]{color:var(--dsw-alias-state-warn-primary);border-color:var(--dsw-alias-state-warn-primary)}.mL8Uca_primaryButton{color:var(--dsw-alias-label-primary-foreground);background:var(--dsw-alias-button-info-fill);cursor:pointer;white-space:nowrap;border:none;border-radius:8px;padding:6px 14px;font-size:13px;font-weight:600}.mL8Uca_primaryButton:hover:not(:disabled){background:var(--dsw-alias-button-info-hover)}.mL8Uca_primaryButton:disabled{opacity:.5;cursor:default}.mL8Uca_ghostButton{color:var(--dsw-alias-label-primary);border:1px solid var(--dsw-alias-border-l2);cursor:pointer;white-space:nowrap;background:0 0;border-radius:8px;padding:5px 12px;font-size:12px}.mL8Uca_ghostButton:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}.mL8Uca_ghostButton:disabled{opacity:.45;cursor:default}.mL8Uca_iconButton{width:26px;height:26px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:6px;justify-content:center;align-items:center;padding:0;font-size:13px;display:inline-flex}.mL8Uca_iconButton:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}.mL8Uca_linkButton{color:var(--dsw-alias-state-business-primary);cursor:pointer;white-space:nowrap;background:0 0;border:none;padding:0;font-size:12px}.mL8Uca_linkButton:hover:not(:disabled){text-decoration:underline}.mL8Uca_linkButton:disabled{opacity:.45;cursor:default}.mL8Uca_linkButton[data-danger]{color:var(--dsw-alias-state-error-primary)}.mL8Uca_spinner{border:2px solid var(--dsw-alias-state-business-primary);vertical-align:-1px;border-top-color:#0000;border-radius:50%;flex:none;width:11px;height:11px;animation:.8s linear infinite mL8Uca_dshSshSpin;display:inline-block}@keyframes mL8Uca_dshSshSpin{to{transform:rotate(360deg)}}.mL8Uca_banner{border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary);overflow-wrap:anywhere;border-radius:8px;padding:8px 12px;font-size:12.5px;line-height:1.5}.mL8Uca_importSkips{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2);border-radius:8px;flex-direction:column;gap:4px;margin:6px 0 0;padding:8px 12px;list-style:none;display:flex}.mL8Uca_importSkipRow{justify-content:space-between;align-items:baseline;gap:12px;font-size:12px;display:flex}.mL8Uca_banner[data-kind=ok]{color:var(--dsw-alias-state-success-primary);border-color:var(--dsw-alias-state-success-primary)}.mL8Uca_banner[data-kind=error]{color:var(--dsw-alias-state-error-primary);border-color:var(--dsw-alias-state-error-primary)}.mL8Uca_banner[data-kind=info]{color:var(--dsw-alias-state-business-primary);border-color:var(--dsw-alias-state-business-primary)}.mL8Uca_empty,.mL8Uca_loading{text-align:center;color:var(--dsw-alias-label-tertiary);padding:28px 12px;font-size:12.5px}.mL8Uca_modalBackdrop{z-index:40;background:var(--dsw-alias-bg-mask-1);justify-content:center;align-items:center;display:flex;position:fixed;inset:0}.mL8Uca_modal{background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);width:min(560px,100vw - 48px);max-height:calc(100vh - 96px);box-shadow:var(--dsw-shadow-lv3);color:var(--dsw-alias-label-primary);border-radius:14px;flex-direction:column;gap:12px;padding:18px;display:flex;overflow-y:auto}.mL8Uca_modalTitle{margin:0;font-size:15px;font-weight:700}.mL8Uca_modalFooter{justify-content:flex-end;gap:10px;margin-top:4px;display:flex}.mL8Uca_formError{color:var(--dsw-alias-state-error-primary);margin:0;font-size:12px}.mL8Uca_hint{color:var(--dsw-alias-label-tertiary);font-size:11.5px}.mL8Uca_field{flex-direction:column;gap:5px;display:flex}.mL8Uca_fieldLabel{color:var(--dsw-alias-label-secondary);font-size:12px;font-weight:600}.mL8Uca_input{color:var(--dsw-alias-label-primary);background:var(--dsw-specific-input-major);border:1px solid var(--dsw-alias-border-l2);resize:vertical;border-radius:8px;outline:none;padding:7px 10px;font-family:inherit;font-size:13px}.mL8Uca_input:focus{border-color:var(--dsw-alias-state-business-primary)}.mL8Uca_input::placeholder{color:var(--dsw-alias-label-tertiary)}.mL8Uca_input:disabled{opacity:.55}.mL8Uca_formRow{grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px 12px;display:grid}.mL8Uca_radioRow{align-items:center;gap:16px;display:flex}.mL8Uca_radioLabel{color:var(--dsw-alias-label-primary);cursor:pointer;align-items:center;gap:6px;font-size:13px;display:inline-flex}.mL8Uca_termBody{flex-direction:column;flex:1;gap:8px;min-height:0;display:flex;overflow:hidden}.mL8Uca_termWrap{border:1px solid var(--dsw-alias-border-l1);background:#0b0e14;border-radius:10px;flex:1;min-height:0;position:relative;overflow:hidden}.mL8Uca_termContainer{position:absolute;inset:8px 10px}.mL8Uca_termPlaceholder{z-index:2;text-align:center;color:var(--dsw-alias-label-tertiary);background:var(--dsw-alias-bg-base);justify-content:center;align-items:center;padding:0 24px;font-size:12.5px;display:flex;position:absolute;inset:0}.mL8Uca_hiddenFile{display:none}.mL8Uca_browsePanel{border:1px solid var(--dsw-alias-border-l1);border-radius:10px;flex-direction:column;flex:none;display:flex;overflow:hidden}.mL8Uca_browseHeader{background:var(--dsw-alias-bg-layer-2);border-bottom:1px solid var(--dsw-alias-border-l1);align-items:center;gap:8px;padding:8px 10px;display:flex}.mL8Uca_browsePath{text-overflow:ellipsis;white-space:nowrap;min-width:0;color:var(--dsw-alias-label-secondary);flex:1;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;overflow:hidden}.mL8Uca_browseList{max-height:240px;overflow-y:auto}.mL8Uca_dirRow{text-align:left;width:100%;font:inherit;color:var(--dsw-alias-label-primary);border:none;border-bottom:1px solid var(--dsw-alias-separator-primary);cursor:pointer;background:0 0;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;padding:5px 10px;font-size:12.5px;display:grid}.mL8Uca_dirRow:hover{background:var(--dsw-alias-interactive-bg-hover)}.mL8Uca_dirRow[data-type=dir] .mL8Uca_dirName{color:var(--dsw-alias-state-business-primary)}.mL8Uca_dirRow[data-up]{color:var(--dsw-alias-label-secondary)}.mL8Uca_dirName{text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow:hidden}.mL8Uca_dirType{color:var(--dsw-alias-label-tertiary);white-space:nowrap}.mL8Uca_dirSize{color:var(--dsw-alias-label-tertiary);white-space:nowrap;text-align:right}.mL8Uca_transferBlock{flex-direction:column;flex:none;gap:6px;display:flex}.mL8Uca_progressMeta{color:var(--dsw-alias-label-secondary);flex-wrap:wrap;gap:12px;font-size:12px;display:flex}.mL8Uca_progressTrack{background:var(--dsw-alias-interactive-bg-hover);border-radius:999px;height:8px;overflow:hidden}.mL8Uca_progressBar{background:var(--dsw-alias-state-business-primary);border-radius:999px;height:100%;transition:width .12s linear}.mL8Uca_tunnelList{flex-direction:column;flex:none;gap:8px;display:flex}.mL8Uca_tunnelRow{background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l2);border-radius:10px;align-items:center;gap:10px;padding:8px 12px;display:flex}.mL8Uca_tunnelRow[data-state=forwarding]{border-color:var(--dsw-alias-state-success-primary)}.mL8Uca_tunnelRow[data-state=connecting]{border-color:var(--dsw-alias-state-warn-primary)}.mL8Uca_tunnelRow[data-state=failed]{border-color:var(--dsw-alias-state-error-primary)}.mL8Uca_tunnelLabel{text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;overflow:hidden}.mL8Uca_formCard{background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l1);border-radius:10px;flex-direction:column;flex:none;gap:10px;padding:12px;display:flex}.mL8Uca_clusterForm{flex-direction:column;flex:none;gap:8px;display:flex}.mL8Uca_clusterFilters{grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;display:grid}.mL8Uca_commandInput{min-height:96px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}.mL8Uca_cellDetails summary{cursor:pointer;color:var(--dsw-alias-label-secondary);font-size:12px}.mL8Uca_cellPre{background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l2);white-space:pre-wrap;word-break:break-all;border-radius:6px;max-height:180px;margin:4px 0 0;padding:6px 8px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;overflow:auto}";
+		const css = ".mL8Uca_view{height:100%;min-height:0;overflow:hidden}.mL8Uca_panel{background:var(--dsw-alias-bg-base);min-width:0;height:100%;min-height:0;color:var(--dsw-alias-label-primary);font-family:var(--dsw-font-family);flex-direction:column;gap:10px;padding:14px 16px 16px;display:flex}.mL8Uca_panelHeader{flex:none;align-items:center;gap:10px;display:flex}.mL8Uca_panelTitle{color:var(--dsw-alias-label-primary);white-space:nowrap;flex:1;margin:0;font-size:16px;font-weight:700}.mL8Uca_backButton{align-items:center;gap:4px;display:inline-flex}.mL8Uca_tabBar{border-bottom:1px solid var(--dsw-alias-border-l1);flex:none;gap:2px;display:flex}.mL8Uca_tab{color:var(--dsw-alias-label-secondary);cursor:pointer;white-space:nowrap;background:0 0;border:none;border-bottom:2px solid #0000;border-radius:6px 6px 0 0;padding:7px 14px;font-size:13px}.mL8Uca_tab:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}.mL8Uca_tab[data-active]{color:var(--dsw-alias-label-primary);border-bottom-color:var(--dsw-alias-state-business-primary);font-weight:600}.mL8Uca_panelContent{flex-direction:column;flex:1;min-height:0;display:flex;overflow:hidden}.mL8Uca_tabBody{flex-direction:column;flex:1;gap:10px;min-height:0;display:flex;overflow-y:auto}.mL8Uca_fillBody{flex-direction:column;flex:1;gap:10px;min-height:0;display:flex;overflow:hidden}.mL8Uca_toolbar,.mL8Uca_controls{flex-wrap:wrap;flex:none;align-items:center;gap:8px;display:flex}.mL8Uca_controls .mL8Uca_input{flex:0 260px;min-width:150px}.mL8Uca_toolbarSpacer{flex:1}.mL8Uca_search{min-width:120px;color:var(--dsw-alias-label-primary);background:var(--dsw-specific-input-major);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;outline:none;flex:0 260px;padding:6px 10px;font-size:13px}.mL8Uca_search::placeholder{color:var(--dsw-alias-label-tertiary)}.mL8Uca_groupBySelect{color:var(--dsw-alias-label-primary);background:var(--dsw-specific-input-major);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;outline:none;padding:6px 8px;font-size:13px}.mL8Uca_groupSection+.mL8Uca_groupSection{border-top:1px solid var(--dsw-alias-border-l1)}.mL8Uca_groupHeader{background:var(--dsw-alias-bg-base,var(--dsw-specific-input-major));align-items:center;gap:8px;padding:4px 8px;display:flex;position:sticky;top:0}.mL8Uca_groupToggle{min-width:0;color:var(--dsw-alias-label-primary);cursor:pointer;text-align:left;background:0 0;border:none;border-radius:6px;flex:1;align-items:center;gap:6px;padding:4px 6px;font-size:12.5px;font-weight:500;display:flex}.mL8Uca_groupToggle:hover{background:var(--dsw-alias-interactive-bg-hover)}.mL8Uca_groupChevron{border-right:1.5px solid var(--dsw-alias-label-tertiary);border-bottom:1.5px solid var(--dsw-alias-label-tertiary);flex:none;width:7px;height:7px;margin-bottom:2px;transition:transform .12s;transform:rotate(45deg)}.mL8Uca_groupChevron[data-collapsed]{margin-bottom:0;transform:rotate(-45deg)}.mL8Uca_groupName{text-overflow:ellipsis;white-space:nowrap;overflow:hidden}.mL8Uca_groupCount{color:var(--dsw-alias-label-tertiary);flex:none;font-weight:400}.mL8Uca_tableWrap{border:1px solid var(--dsw-alias-border-l1);border-radius:10px;flex:1;min-height:0;overflow:auto}.mL8Uca_table{border-collapse:collapse;width:100%;font-size:12.5px}.mL8Uca_table th{z-index:1;text-align:left;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);border-bottom:1px solid var(--dsw-alias-border-l1);white-space:nowrap;padding:8px 10px;font-weight:600;position:sticky;top:0}.mL8Uca_table td{border-bottom:1px solid var(--dsw-alias-separator-primary);vertical-align:top;padding:7px 10px}.mL8Uca_table tbody tr:last-child td{border-bottom:none}.mL8Uca_table tbody tr:hover td{background:var(--dsw-alias-interactive-bg-hover)}.mL8Uca_mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}.mL8Uca_cellMuted{color:var(--dsw-alias-label-tertiary)}.mL8Uca_actions{white-space:nowrap;align-items:center;gap:8px;display:flex}.mL8Uca_inlineTest{color:var(--dsw-alias-label-secondary);align-items:center;gap:6px;font-size:11.5px;display:inline-flex}.mL8Uca_inlineTest[data-status=ok]{color:var(--dsw-alias-state-success-primary)}.mL8Uca_inlineTest[data-status=fail]{color:var(--dsw-alias-state-error-primary)}.mL8Uca_badge{border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary);white-space:nowrap;border-radius:999px;padding:1px 8px;font-size:11px;line-height:1.6;display:inline-block}.mL8Uca_badge[data-kind=key]{color:var(--dsw-alias-state-business-primary);border-color:var(--dsw-alias-state-business-primary)}.mL8Uca_badge[data-kind=password]{color:var(--dsw-alias-state-warn-primary);border-color:var(--dsw-alias-state-warn-primary)}.mL8Uca_badge[data-kind=agent]{color:var(--dsw-alias-state-success-primary);border-color:var(--dsw-alias-state-success-primary)}.mL8Uca_badge[data-kind=proxy]{color:var(--dsw-alias-state-business-primary);border-color:var(--dsw-alias-state-business-primary);margin-left:6px}.mL8Uca_badge[data-kind=forward-agent]{color:var(--dsw-alias-state-warn-primary);border-color:var(--dsw-alias-state-warn-primary);margin-left:6px}.mL8Uca_badge[data-status=ok]{color:var(--dsw-alias-state-success-primary);border-color:var(--dsw-alias-state-success-primary)}.mL8Uca_badge[data-status=fail]{color:var(--dsw-alias-state-error-primary);border-color:var(--dsw-alias-state-error-primary)}.mL8Uca_badge[data-status=timeout]{color:var(--dsw-alias-state-warn-primary);border-color:var(--dsw-alias-state-warn-primary)}.mL8Uca_primaryButton{color:var(--dsw-alias-label-primary-foreground);background:var(--dsw-alias-button-info-fill);cursor:pointer;white-space:nowrap;border:none;border-radius:8px;padding:6px 14px;font-size:13px;font-weight:600}.mL8Uca_primaryButton:hover:not(:disabled){background:var(--dsw-alias-button-info-hover)}.mL8Uca_primaryButton:disabled{opacity:.5;cursor:default}.mL8Uca_ghostButton{color:var(--dsw-alias-label-primary);border:1px solid var(--dsw-alias-border-l2);cursor:pointer;white-space:nowrap;background:0 0;border-radius:8px;padding:5px 12px;font-size:12px}.mL8Uca_ghostButton:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}.mL8Uca_ghostButton:disabled{opacity:.45;cursor:default}.mL8Uca_iconButton{width:26px;height:26px;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;border-radius:6px;justify-content:center;align-items:center;padding:0;font-size:13px;display:inline-flex}.mL8Uca_iconButton:hover{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}.mL8Uca_linkButton{color:var(--dsw-alias-state-business-primary);cursor:pointer;white-space:nowrap;background:0 0;border:none;padding:0;font-size:12px}.mL8Uca_linkButton:hover:not(:disabled){text-decoration:underline}.mL8Uca_linkButton:disabled{opacity:.45;cursor:default}.mL8Uca_linkButton[data-danger]{color:var(--dsw-alias-state-error-primary)}.mL8Uca_spinner{border:2px solid var(--dsw-alias-state-business-primary);vertical-align:-1px;border-top-color:#0000;border-radius:50%;flex:none;width:11px;height:11px;animation:.8s linear infinite mL8Uca_dshSshSpin;display:inline-block}@keyframes mL8Uca_dshSshSpin{to{transform:rotate(360deg)}}.mL8Uca_banner{border:1px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary);overflow-wrap:anywhere;border-radius:8px;padding:8px 12px;font-size:12.5px;line-height:1.5}.mL8Uca_importSkips{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2);border-radius:8px;flex-direction:column;gap:4px;margin:6px 0 0;padding:8px 12px;list-style:none;display:flex}.mL8Uca_importSkipRow{justify-content:space-between;align-items:baseline;gap:12px;font-size:12px;display:flex}.mL8Uca_banner[data-kind=ok]{color:var(--dsw-alias-state-success-primary);border-color:var(--dsw-alias-state-success-primary)}.mL8Uca_banner[data-kind=error]{color:var(--dsw-alias-state-error-primary);border-color:var(--dsw-alias-state-error-primary)}.mL8Uca_banner[data-kind=info]{color:var(--dsw-alias-state-business-primary);border-color:var(--dsw-alias-state-business-primary)}.mL8Uca_empty,.mL8Uca_loading{text-align:center;color:var(--dsw-alias-label-tertiary);padding:28px 12px;font-size:12.5px}.mL8Uca_modalBackdrop{z-index:40;background:var(--dsw-alias-bg-mask-1);justify-content:center;align-items:center;display:flex;position:fixed;inset:0}.mL8Uca_modal{background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l2);width:min(560px,100vw - 48px);max-height:calc(100vh - 96px);box-shadow:var(--dsw-shadow-lv3);color:var(--dsw-alias-label-primary);border-radius:14px;flex-direction:column;gap:12px;padding:18px;display:flex;overflow-y:auto}.mL8Uca_modalTitle{margin:0;font-size:15px;font-weight:700}.mL8Uca_modalFooter{justify-content:flex-end;gap:10px;margin-top:4px;display:flex}.mL8Uca_formError{color:var(--dsw-alias-state-error-primary);margin:0;font-size:12px}.mL8Uca_hint{color:var(--dsw-alias-label-tertiary);font-size:11.5px}.mL8Uca_field{flex-direction:column;gap:5px;display:flex}.mL8Uca_fieldLabel{color:var(--dsw-alias-label-secondary);font-size:12px;font-weight:600}.mL8Uca_input{color:var(--dsw-alias-label-primary);background:var(--dsw-specific-input-major);border:1px solid var(--dsw-alias-border-l2);resize:vertical;border-radius:8px;outline:none;padding:7px 10px;font-family:inherit;font-size:13px}.mL8Uca_input:focus{border-color:var(--dsw-alias-state-business-primary)}.mL8Uca_input::placeholder{color:var(--dsw-alias-label-tertiary)}.mL8Uca_input:disabled{opacity:.55}.mL8Uca_formRow{grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px 12px;display:grid}.mL8Uca_radioRow{align-items:center;gap:16px;display:flex}.mL8Uca_radioLabel{color:var(--dsw-alias-label-primary);cursor:pointer;align-items:center;gap:6px;font-size:13px;display:inline-flex}.mL8Uca_termBody{flex-direction:column;flex:1;gap:8px;min-height:0;display:flex;overflow:hidden}.mL8Uca_termTabs{scrollbar-width:thin;border-bottom:1px solid var(--dsw-alias-border-l1);flex:none;align-items:stretch;gap:2px;display:flex;overflow-x:auto}.mL8Uca_termTab{border-bottom:2px solid #0000;border-radius:6px 6px 0 0;flex:none;align-items:center;max-width:200px;display:inline-flex}.mL8Uca_termTab[data-active]{background:var(--dsw-alias-bg-layer-2);border-bottom-color:var(--dsw-alias-state-business-primary)}.mL8Uca_termTabLabel{min-width:0;color:var(--dsw-alias-label-secondary);cursor:pointer;background:0 0;border:none;align-items:baseline;gap:6px;padding:5px 4px 5px 10px;font-size:12.5px;display:inline-flex}.mL8Uca_termTab[data-active] .mL8Uca_termTabLabel{color:var(--dsw-alias-label-primary);font-weight:600}.mL8Uca_termTabAlias{text-overflow:ellipsis;white-space:nowrap;overflow:hidden}.mL8Uca_termTabState{color:var(--dsw-alias-label-tertiary);flex:none;font-size:11px;font-weight:400}.mL8Uca_termTabState[data-state=error]{color:var(--dsw-alias-state-error-primary)}.mL8Uca_termTabState[data-state=exited]{color:var(--dsw-alias-label-secondary)}.mL8Uca_termTabClose,.mL8Uca_termTabNew{width:20px;height:20px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;border-radius:5px;flex:none;justify-content:center;align-items:center;margin-right:4px;padding:0;font-size:13px;line-height:1;display:inline-flex}.mL8Uca_termTabNew{width:24px;margin:2px 0 2px 4px;font-size:15px}.mL8Uca_termTabClose:hover,.mL8Uca_termTabNew:hover:not(:disabled){color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover)}.mL8Uca_termTabNew:disabled{opacity:.45;cursor:default}.mL8Uca_termWrap{border:1px solid var(--dsw-alias-border-l1);background:#0b0e14;border-radius:10px;flex:1;min-height:0;position:relative;overflow:hidden}.mL8Uca_termContainer{position:absolute;inset:8px 10px}.mL8Uca_termPlaceholder{z-index:2;text-align:center;color:var(--dsw-alias-label-tertiary);background:var(--dsw-alias-bg-base);justify-content:center;align-items:center;padding:0 24px;font-size:12.5px;display:flex;position:absolute;inset:0}.mL8Uca_hiddenFile{display:none}.mL8Uca_browsePanel{border:1px solid var(--dsw-alias-border-l1);border-radius:10px;flex-direction:column;flex:none;display:flex;overflow:hidden}.mL8Uca_browseHeader{background:var(--dsw-alias-bg-layer-2);border-bottom:1px solid var(--dsw-alias-border-l1);align-items:center;gap:8px;padding:8px 10px;display:flex}.mL8Uca_browsePath{text-overflow:ellipsis;white-space:nowrap;min-width:0;color:var(--dsw-alias-label-secondary);flex:1;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;overflow:hidden}.mL8Uca_browseList{max-height:240px;overflow-y:auto}.mL8Uca_dirRow{text-align:left;width:100%;font:inherit;color:var(--dsw-alias-label-primary);border:none;border-bottom:1px solid var(--dsw-alias-separator-primary);cursor:pointer;background:0 0;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;padding:5px 10px;font-size:12.5px;display:grid}.mL8Uca_dirRow:hover{background:var(--dsw-alias-interactive-bg-hover)}.mL8Uca_dirRow[data-type=dir] .mL8Uca_dirName{color:var(--dsw-alias-state-business-primary)}.mL8Uca_dirRow[data-up]{color:var(--dsw-alias-label-secondary)}.mL8Uca_dirName{text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow:hidden}.mL8Uca_dirType{color:var(--dsw-alias-label-tertiary);white-space:nowrap}.mL8Uca_dirSize{color:var(--dsw-alias-label-tertiary);white-space:nowrap;text-align:right}.mL8Uca_transferBlock{flex-direction:column;flex:none;gap:6px;display:flex}.mL8Uca_progressMeta{color:var(--dsw-alias-label-secondary);flex-wrap:wrap;gap:12px;font-size:12px;display:flex}.mL8Uca_progressTrack{background:var(--dsw-alias-interactive-bg-hover);border-radius:999px;height:8px;overflow:hidden}.mL8Uca_progressBar{background:var(--dsw-alias-state-business-primary);border-radius:999px;height:100%;transition:width .12s linear}.mL8Uca_tunnelList{flex-direction:column;flex:none;gap:8px;display:flex}.mL8Uca_tunnelRow{background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l2);border-radius:10px;align-items:center;gap:10px;padding:8px 12px;display:flex}.mL8Uca_tunnelRow[data-state=forwarding]{border-color:var(--dsw-alias-state-success-primary)}.mL8Uca_tunnelRow[data-state=connecting]{border-color:var(--dsw-alias-state-warn-primary)}.mL8Uca_tunnelRow[data-state=failed]{border-color:var(--dsw-alias-state-error-primary)}.mL8Uca_tunnelLabel{text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;overflow:hidden}.mL8Uca_formCard{background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l1);border-radius:10px;flex-direction:column;flex:none;gap:10px;padding:12px;display:flex}.mL8Uca_clusterForm{flex-direction:column;flex:none;gap:8px;display:flex}.mL8Uca_clusterFilters{grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;display:grid}.mL8Uca_commandInput{min-height:96px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}.mL8Uca_cellDetails summary{cursor:pointer;color:var(--dsw-alias-label-secondary);font-size:12px}.mL8Uca_cellPre{background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l2);white-space:pre-wrap;word-break:break-all;border-radius:6px;max-height:180px;margin:4px 0 0;padding:6px 8px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;overflow:auto}";
 		const tagId = "@linxin666/dsh-ssh/packages/dsh-ssh/src/client/panel/panel.module.css";
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]") === null) {
 			const tag = document.createElement("style");
@@ -736,9 +1356,6 @@ window.__ModuleLoader__.load({
 			"dirType": "mL8Uca_dirType",
 			"dshSshSpin": "mL8Uca_dshSshSpin",
 			"empty": "mL8Uca_empty",
-			"entry": "mL8Uca_entry",
-			"entryIcon": "mL8Uca_entryIcon",
-			"entryLabel": "mL8Uca_entryLabel",
 			"field": "mL8Uca_field",
 			"fieldLabel": "mL8Uca_fieldLabel",
 			"fillBody": "mL8Uca_fillBody",
@@ -787,6 +1404,13 @@ window.__ModuleLoader__.load({
 			"termBody": "mL8Uca_termBody",
 			"termContainer": "mL8Uca_termContainer",
 			"termPlaceholder": "mL8Uca_termPlaceholder",
+			"termTab": "mL8Uca_termTab",
+			"termTabAlias": "mL8Uca_termTabAlias",
+			"termTabClose": "mL8Uca_termTabClose",
+			"termTabLabel": "mL8Uca_termTabLabel",
+			"termTabNew": "mL8Uca_termTabNew",
+			"termTabState": "mL8Uca_termTabState",
+			"termTabs": "mL8Uca_termTabs",
 			"termWrap": "mL8Uca_termWrap",
 			"toolbar": "mL8Uca_toolbar",
 			"toolbarSpacer": "mL8Uca_toolbarSpacer",
@@ -993,6 +1617,7 @@ window.__ModuleLoader__.load({
 				agentPath: "",
 				proxyJump: (editing?.proxyJump ?? []).join(", "),
 				proxyCommand: editing?.proxyCommand ?? "",
+				forwardAgent: editing?.forwardAgent === true,
 				description: editing?.description ?? "",
 				environment: editing?.environment ?? "",
 				tags: (editing?.tags ?? []).join(", "),
@@ -1036,7 +1661,7 @@ window.__ModuleLoader__.load({
 					setError(tt("form.passwordRequired"));
 					return;
 				}
-				const secretEmpty = form.authKind === "password" ? form.password === "" : form.authKind === "key" ? form.keyPath.trim() === "" : form.agentPath.trim() === "";
+				const secretEmpty = form.authKind === "password" ? form.password === "" : form.authKind === "key" ? form.keyPath.trim() === "" : false;
 				const payload = {
 					host,
 					port,
@@ -1054,6 +1679,7 @@ window.__ModuleLoader__.load({
 					},
 					proxyJump: splitList(form.proxyJump),
 					proxyCommand: form.proxyCommand.trim(),
+					forwardAgent: form.forwardAgent,
 					description: form.description.trim() === "" ? void 0 : form.description.trim(),
 					environment: form.environment.trim() === "" ? void 0 : form.environment.trim(),
 					tags: splitList(form.tags),
@@ -1320,6 +1946,26 @@ window.__ModuleLoader__.load({
 								})
 							]
 						}),
+						/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("label", {
+							className: panel_module_css_default.field,
+							children: [
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+									className: panel_module_css_default.fieldLabel,
+									children: tt("form.forwardAgent")
+								}),
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
+									type: "checkbox",
+									checked: form.forwardAgent,
+									onChange: (event) => {
+										set("forwardAgent", event.target.checked);
+									}
+								}),
+								/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+									className: panel_module_css_default.hint,
+									children: tt("form.forwardAgentHint")
+								})
+							]
+						}),
 						/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 							className: panel_module_css_default.formRow,
 							children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("label", {
@@ -1580,6 +2226,12 @@ window.__ModuleLoader__.load({
 								"data-kind": "proxy",
 								title: host.proxyCommand,
 								children: tt("hosts.proxyBadge")
+							}),
+							host.forwardAgent === true && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+								className: panel_module_css_default.badge,
+								"data-kind": "forward-agent",
+								title: tt("hosts.forwardAgentHint"),
+								children: tt("hosts.forwardAgentBadge")
 							})
 						]
 					}),
@@ -14870,11 +15522,22 @@ window.__ModuleLoader__.load({
 		//#endregion
 		//#region src/client/panel/TerminalTab.tsx
 		/**
-		* Terminal tab: an xterm.js PTY view over the host's WebSocket terminal route.
-		* A host <select> plus connect/disconnect controls; the terminal container is
-		* sized by FitAddon (default 80x24 before first fit). On remote exit the last
-		* output stays visible and input is disabled. xterm's stylesheet is injected
-		* once per page load (module-level guard).
+		* Terminal tab: ONE xterm.js view over the host's WebSocket terminal route,
+		* with a tab strip over host-side PTY sessions.
+		*
+		* Session ownership stays on the Host (\`src/engine/terminal-sessions.ts\`): a
+		* view that is not showing a session detaches its socket, and the host keeps
+		* the shell alive plus a bounded scrollback that a reattach replays. That is
+		* what lets the panel hold several tabs while this component keeps a single
+		* xterm instance: switching a tab rebinds the one terminal instead of stacking
+		* terminals, and every tab's alias, host session id, status and pending
+		* keyboard-interactive challenge lives in the panel controller because the
+		* layout unmounts this page whenever another panel is selected.
+		*
+		* A tab that has NOT reported its session id yet cannot be detached (there is
+		* no id to reattach with), so switching away or unmounting hands the socket to
+		* the controller, which applies "detach" or "close" the moment the id arrives.
+		* That is the orphan-free rule: no host PTY is ever left without an owner.
 		*/
 		/** Injected-once guard for the xterm stylesheet (one tag per page load). */
 		let xtermCssInjected = false;
@@ -14892,20 +15555,48 @@ window.__ModuleLoader__.load({
 			get: () => void 0,
 			subscribe: () => () => void 0
 		};
-		/** The xterm terminal view. */
-		function TerminalTab({ api, presetAlias, requestId, terminalFont }) {
+		/**
+		* The state word a tab shows in the strip, or undefined when it is simply up.
+		* A pending challenge wins over the lifecycle word: it is the one state the
+		* user has to act on.
+		* @param tab - the tab record.
+		* @returns the short label, or undefined for a connected tab.
+		*/
+		function tabStateLabel(tab) {
+			if (tab.authPrompt !== void 0) return tt("terminal.authPending");
+			if (tab.status === "connecting") return tt("terminal.connecting");
+			if (tab.status === "exited") return tt("terminal.tabExited");
+			if (tab.closeError !== void 0) return tt("terminal.tabError");
+			if (tab.status === "error") return tt("terminal.tabError");
+		}
+		/**
+		* Whether the visible challenge form may answer on the bound socket: the form
+		* and the socket must belong to the same tab. Both are read at submit time, and
+		* the window between a tab switch's commit and the effect that rebinds the
+		* socket is exactly when they can disagree.
+		* @param linkTabId - the tab the bound socket belongs to.
+		* @param formTabId - the tab whose challenge form is on screen.
+		*/
+		function challengeBelongsToLink(linkTabId, formTabId) {
+			return linkTabId !== void 0 && linkTabId === formTabId;
+		}
+		/** The terminal view with its tab strip. */
+		function TerminalTab({ api, controller, presetAlias, terminalFont }) {
+			const { terminalTabs, activeTerminalTabId, draftAlias } = (0, react.useSyncExternalStore)((0, react.useCallback)((listener) => controller.subscribe(listener), [controller]), (0, react.useCallback)(() => controller.getSnapshot(), [controller]));
 			const [hosts, setHosts] = (0, react.useState)([]);
-			const [alias, setAlias] = (0, react.useState)(presetAlias ?? "");
-			const [status, setStatus] = (0, react.useState)({ kind: "idle" });
-			const [authPrompt, setAuthPrompt] = (0, react.useState)(void 0);
-			const [authInputs, setAuthInputs] = (0, react.useState)([]);
+			const [listError, setListError] = (0, react.useState)(void 0);
 			const containerRef = (0, react.useRef)(null);
 			const termRef = (0, react.useRef)(null);
 			const fitRef = (0, react.useRef)(null);
-			const connRef = (0, react.useRef)(null);
+			const linkRef = (0, react.useRef)(null);
 			const dataSubRef = (0, react.useRef)(null);
+			/** Tab whose screen the terminal currently holds. */
+			const renderedRef = (0, react.useRef)(void 0);
+			/** Tabs with a background close in flight, so one click cannot open two. */
+			const closingRef = (0, react.useRef)(/* @__PURE__ */ new Set());
 			const fontSource = terminalFont ?? NO_FONT_SOURCE;
 			const fontOverride = (0, react.useSyncExternalStore)(fontSource.subscribe, fontSource.get);
+			const activeTab = terminalTabs.find((tab) => tab.id === activeTerminalTabId);
 			(0, react.useEffect)(() => {
 				ensureXtermCss();
 			}, []);
@@ -14916,7 +15607,8 @@ window.__ModuleLoader__.load({
 				if (term.options.fontFamily === next) return;
 				term.options.fontFamily = next;
 				fitRef.current?.fit();
-				connRef.current?.resize(term.cols, term.rows);
+				const link = linkRef.current;
+				if (link !== null) link.connection.resize(term.cols, term.rows);
 			}, [fontOverride]);
 			(0, react.useEffect)(() => {
 				let disposed = false;
@@ -14925,10 +15617,7 @@ window.__ModuleLoader__.load({
 						const list = await api.listHosts();
 						if (!disposed) setHosts(list);
 					} catch (cause) {
-						if (!disposed) setStatus({
-							kind: "error",
-							detail: errorMessage(cause)
-						});
+						if (!disposed) setListError(errorMessage(cause));
 					}
 				})();
 				return () => {
@@ -14936,29 +15625,9 @@ window.__ModuleLoader__.load({
 				};
 			}, [api]);
 			(0, react.useEffect)(() => {
-				if (presetAlias !== void 0) setAlias(presetAlias);
-			}, [presetAlias, requestId]);
-			const teardown = () => {
-				setAuthPrompt(void 0);
-				setAuthInputs([]);
-				const connection = connRef.current;
-				connRef.current = null;
-				if (connection !== null) {
-					connection.onReady = void 0;
-					connection.onOutput = void 0;
-					connection.onExit = void 0;
-					connection.onAuthPrompt = void 0;
-					connection.close();
-				}
-				dataSubRef.current?.dispose();
-				dataSubRef.current = null;
-				termRef.current?.dispose();
-				termRef.current = null;
-				fitRef.current = null;
-			};
-			(0, react.useEffect)(() => () => {
-				teardown();
-			}, []);
+				if (presetAlias === void 0 || presetAlias === "") return;
+				controller.setDraftAlias(presetAlias);
+			}, [presetAlias, controller]);
 			(0, react.useEffect)(() => {
 				let lastCols = -1;
 				let lastRows = -1;
@@ -14967,11 +15636,11 @@ window.__ModuleLoader__.load({
 					const fit = fitRef.current;
 					if (term === null || fit === null) return;
 					fit.fit();
-					const conn = connRef.current;
-					if (conn !== null && (term.cols !== lastCols || term.rows !== lastRows)) {
+					const link = linkRef.current;
+					if (link !== null && (term.cols !== lastCols || term.rows !== lastRows)) {
 						lastCols = term.cols;
 						lastRows = term.rows;
-						conn.resize(term.cols, term.rows);
+						link.connection.resize(term.cols, term.rows);
 					}
 				};
 				window.addEventListener("resize", sync);
@@ -14988,13 +15657,16 @@ window.__ModuleLoader__.load({
 					window.removeEventListener("resize", sync);
 				};
 			}, []);
-			const connect = () => {
-				const target = alias;
+			/** Build the one xterm instance and its input subscription, once. */
+			const ensureTerm = () => {
+				const openTerm = termRef.current;
+				const openFit = fitRef.current;
+				if (openTerm !== null && openFit !== null) return {
+					term: openTerm,
+					fit: openFit
+				};
 				const container = containerRef.current;
-				if (target === "" || container === null) return;
-				if (status.kind === "connecting" || status.kind === "connected") return;
-				teardown();
-				setStatus({ kind: "connecting" });
+				if (container === null) return void 0;
 				const term = new import_xterm.Terminal({
 					convertEol: false,
 					cursorBlink: true,
@@ -15010,71 +15682,282 @@ window.__ModuleLoader__.load({
 				term.loadAddon(fit);
 				term.open(container);
 				fit.fit();
-				const connection = api.openTerminal(target, term.cols, term.rows);
 				termRef.current = term;
 				fitRef.current = fit;
-				connRef.current = connection;
-				let settled = false;
 				dataSubRef.current = term.onData((data) => {
-					connection.send(data);
+					linkRef.current?.connection.send(data);
 				});
+				return {
+					term,
+					fit
+				};
+			};
+			/** Dispose the xterm and its subscription (no tabs left, or unmount). */
+			const disposeTerm = () => {
+				dataSubRef.current?.dispose();
+				dataSubRef.current = null;
+				termRef.current?.dispose();
+				termRef.current = null;
+				fitRef.current = null;
+				renderedRef.current = void 0;
+			};
+			/** Release the bound socket: detach it, or adopt it while it connects. */
+			const releaseLink = () => {
+				const link = linkRef.current;
+				linkRef.current = null;
+				if (link === null) return;
+				const connection = link.connection;
+				connection.onReady = void 0;
+				connection.onOutput = void 0;
+				connection.onExit = void 0;
+				connection.onAuthPrompt = void 0;
+				const tab = controller.terminalTab(link.tabId);
+				if (tab === void 0) {
+					controller.adoptTerminalLink(link.tabId, connection, "close");
+					return;
+				}
+				if (tab.status === "connecting") {
+					controller.adoptTerminalLink(link.tabId, connection, "detach");
+					return;
+				}
+				connection.detach();
+			};
+			/**
+			* Whether the single terminal still shows another tab. A terminal that was
+			* just created (or disposed) holds nothing, so it needs no clear; every other
+			* rebind must start from a blank screen or the previous tab's output and
+			* cursor stay on it.
+			* @param tabId - the tab about to be bound.
+			*/
+			const needsScreenClear = (tabId) => {
+				const rendered = renderedRef.current;
+				return rendered !== void 0 && rendered !== tabId;
+			};
+			/**
+			* Draw a retained screen the host cannot replay (adopted output, or a tab
+			* whose session is gone) and mark the terminal as this tab's.
+			* @param term - the single terminal.
+			* @param tabId - the tab that owns the text.
+			* @param retained - the text to draw; empty leaves a blank screen.
+			*/
+			const drawRetained = (term, tabId, retained) => {
+				if (needsScreenClear(tabId)) term.reset();
+				if (retained !== "") term.write(retained);
+				renderedRef.current = tabId;
+			};
+			/** Bind one connection's frames onto the single terminal. */
+			const bindConnection = (tab, connection) => {
+				const view = ensureTerm();
+				if (view === void 0) return;
+				linkRef.current = {
+					tabId: tab.id,
+					connection
+				};
+				renderedRef.current = tab.id;
+				view.term.options.disableStdin = false;
+				connection.onReady = (sessionId) => {
+					controller.clearTerminalAuthPrompt(tab.id);
+					controller.readyTerminalTab(tab.id, sessionId);
+				};
+				connection.onOutput = (data) => {
+					view.term.write(data);
+					controller.appendTerminalOutput(tab.id, data);
+				};
 				connection.onAuthPrompt = (name, instructions, prompts) => {
-					setAuthPrompt({
+					controller.setTerminalAuthPrompt(tab.id, {
 						name,
 						instructions,
 						prompts
 					});
-					setAuthInputs(prompts.map(() => ""));
-				};
-				connection.onReady = () => {
-					setAuthPrompt(void 0);
-					setAuthInputs([]);
-					setStatus({
-						kind: "connected",
-						alias: target
-					});
-				};
-				connection.onOutput = (data) => {
-					term.write(data);
 				};
 				connection.onExit = (_code, error) => {
-					if (settled) return;
-					settled = true;
-					setAuthPrompt(void 0);
-					setAuthInputs([]);
-					dataSubRef.current?.dispose();
-					dataSubRef.current = null;
-					term.options.disableStdin = true;
-					connRef.current = null;
-					setStatus({
-						kind: "exited",
-						alias: target,
-						detail: error
-					});
+					const bound = linkRef.current;
+					const wasBound = bound !== null && bound.connection === connection;
+					if (wasBound) linkRef.current = null;
+					connection.onReady = void 0;
+					connection.onOutput = void 0;
+					connection.onAuthPrompt = void 0;
+					connection.onExit = void 0;
+					view.term.options.disableStdin = true;
+					if (!wasBound) return;
+					controller.exitTerminalTab(tab.id, error);
 				};
 			};
-			const disconnect = () => {
-				teardown();
-				setStatus({ kind: "idle" });
+			/** Bind the tab the controller says is current, without opening a second PTY. */
+			const bindTab = (tab) => {
+				const view = ensureTerm();
+				if (view === void 0) return;
+				if (tab.status === "connecting" || tab.status === "connected" && tab.sessionId !== void 0) {
+					const adopted = controller.reclaimTerminalLink(tab.id);
+					if (adopted !== void 0) {
+						drawRetained(view.term, tab.id, controller.readTerminalOutput(tab.id));
+						bindConnection(tab, adopted);
+						return;
+					}
+				}
+				if (tab.status === "connecting") {
+					drawRetained(view.term, tab.id, "");
+					controller.clearTerminalOutput(tab.id);
+					bindConnection(tab, api.openTerminal(tab.alias, view.term.cols, view.term.rows));
+					return;
+				}
+				if (tab.status === "connected" && tab.sessionId !== void 0) {
+					const sessionId = tab.sessionId;
+					if (needsScreenClear(tab.id)) {
+						view.term.reset();
+						controller.clearTerminalOutput(tab.id);
+						renderedRef.current = tab.id;
+					}
+					bindConnection(tab, api.attachTerminal(sessionId, view.term.cols, view.term.rows));
+					return;
+				}
+				view.term.options.disableStdin = true;
+				if (renderedRef.current === tab.id) return;
+				drawRetained(view.term, tab.id, controller.readTerminalOutput(tab.id));
+			};
+			(0, react.useEffect)(() => {
+				const bound = linkRef.current;
+				if (bound !== null && bound.tabId === activeTerminalTabId) return;
+				releaseLink();
+				if (activeTerminalTabId === void 0) {
+					disposeTerm();
+					return;
+				}
+				const tab = controller.terminalTab(activeTerminalTabId);
+				if (tab === void 0) return;
+				bindTab(tab);
+			}, [
+				activeTerminalTabId,
+				activeTab?.status,
+				activeTab?.sessionId
+			]);
+			(0, react.useEffect)(() => () => {
+				releaseLink();
+				disposeTerm();
+			}, []);
+			/** Open a tab on the toolbar's host (the "+"/Connect control). */
+			const connect = () => {
+				const target = draftAlias;
+				if (target === "") return;
+				controller.openTerminalTab(target);
+			};
+			/**
+			* Close one tab. The shown one ends its session over its own socket; a
+			* background tab is ended through one short-lived attach, and a close that
+			* cannot be delivered keeps the tab instead of pretending it is gone.
+			* @param tabId - the tab to close.
+			*/
+			const closeTab = (tabId) => {
+				const tab = controller.terminalTab(tabId);
+				if (tab === void 0) return;
+				const bound = linkRef.current;
+				if (bound !== null && bound.tabId === tabId) {
+					linkRef.current = null;
+					const connection = bound.connection;
+					connection.onReady = void 0;
+					connection.onOutput = void 0;
+					connection.onExit = void 0;
+					connection.onAuthPrompt = void 0;
+					if (tab.status === "connecting") controller.adoptTerminalLink(tabId, connection, "close");
+					else connection.close();
+					controller.closeTerminalTab(tabId);
+					return;
+				}
+				if (tab.status === "connected" && tab.sessionId !== void 0) {
+					if (closingRef.current.has(tabId)) return;
+					closingRef.current.add(tabId);
+					const sessionId = tab.sessionId;
+					(async () => {
+						try {
+							if (await api.closeTerminalSession(sessionId)) {
+								controller.closeTerminalTab(tabId);
+								return;
+							}
+							controller.markTerminalCloseFailed(tabId, "undelivered");
+						} finally {
+							closingRef.current.delete(tabId);
+						}
+					})();
+					return;
+				}
+				controller.closeTerminalTab(tabId);
 			};
 			const submitAuth = (e) => {
 				e?.preventDefault();
-				if (connRef.current === null || authPrompt === void 0) return;
-				connRef.current.sendAuthResponse(authInputs);
-				setAuthPrompt(void 0);
+				const link = linkRef.current;
+				const tab = activeTab;
+				if (link === null || tab === void 0 || tab.authPrompt === void 0) return;
+				if (!challengeBelongsToLink(link.tabId, tab.id)) return;
+				link.connection.sendAuthResponse(tab.authAnswers ?? []);
+				controller.clearTerminalAuthPrompt(tab.id);
 			};
-			const active = status.kind === "connecting" || status.kind === "connected";
+			const stateLabel = activeTab === void 0 ? void 0 : tabStateLabel(activeTab);
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 				className: panel_module_css_default.termBody,
 				children: [
+					terminalTabs.length > 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+						className: panel_module_css_default.termTabs,
+						role: "tablist",
+						"aria-label": tt("terminal.tabs"),
+						"data-dsh-part": "tab-bar",
+						children: [terminalTabs.map((tab) => {
+							const label = tabStateLabel(tab);
+							return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+								className: panel_module_css_default.termTab,
+								"data-active": tab.id === activeTab?.id ? "" : void 0,
+								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("button", {
+									type: "button",
+									role: "tab",
+									className: panel_module_css_default.termTabLabel,
+									"aria-selected": tab.id === activeTab?.id,
+									"data-dsh-part": "tab",
+									title: tab.alias,
+									onClick: () => {
+										controller.setActiveTerminalTab(tab.id);
+									},
+									children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+										className: panel_module_css_default.termTabAlias,
+										children: tab.alias
+									}), label !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+										className: panel_module_css_default.termTabState,
+										"data-state": tab.status,
+										children: label
+									})]
+								}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+									type: "button",
+									className: panel_module_css_default.termTabClose,
+									"aria-label": tt("terminal.closeTab"),
+									title: tt("terminal.closeTab"),
+									onClick: () => {
+										closeTab(tab.id);
+									},
+									children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+										"aria-hidden": "true",
+										children: "×"
+									})
+								})]
+							}, tab.id);
+						}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
+							type: "button",
+							className: panel_module_css_default.termTabNew,
+							"aria-label": tt("terminal.newTab"),
+							title: tt("terminal.newTab"),
+							disabled: draftAlias === "",
+							onClick: connect,
+							children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
+								"aria-hidden": "true",
+								children: "+"
+							})
+						})]
+					}),
 					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 						className: panel_module_css_default.controls,
 						children: [
 							/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("select", {
 								className: panel_module_css_default.input,
-								value: alias,
+								value: draftAlias,
 								onChange: (event) => {
-									setAlias(event.target.value);
+									controller.setDraftAlias(event.target.value);
 								},
 								children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("option", {
 									value: "",
@@ -15092,38 +15975,50 @@ window.__ModuleLoader__.load({
 							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 								type: "button",
 								className: panel_module_css_default.primaryButton,
-								disabled: alias === "" || active,
+								disabled: draftAlias === "",
 								onClick: connect,
 								children: tt("terminal.connect")
 							}),
 							/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 								type: "button",
 								className: panel_module_css_default.ghostButton,
-								disabled: !active,
-								onClick: disconnect,
+								disabled: activeTab === void 0,
+								onClick: () => {
+									if (activeTab !== void 0) closeTab(activeTab.id);
+								},
 								children: tt("terminal.disconnect")
 							})
 						]
 					}),
-					status.kind === "connecting" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+					activeTab?.status === "connecting" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 						className: panel_module_css_default.banner,
 						"data-kind": "info",
 						children: tt("terminal.connecting")
 					}),
-					status.kind === "connected" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+					activeTab?.status === "connected" && stateLabel === void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 						className: panel_module_css_default.banner,
 						"data-kind": "ok",
-						children: tt("terminal.ready", { alias: status.alias })
+						children: tt("terminal.ready", { alias: activeTab.alias })
 					}),
-					status.kind === "exited" && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+					activeTab?.status === "exited" && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 						className: panel_module_css_default.banner,
 						"data-kind": "info",
-						children: [tt("terminal.exited", { alias: status.alias }), status.detail !== void 0 ? " (" + status.detail + ")" : ""]
+						children: [tt("terminal.exited", { alias: activeTab.alias }), activeTab.detail !== void 0 ? " (" + activeTab.detail + ")" : ""]
 					}),
-					status.kind === "error" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+					activeTab?.status === "error" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 						className: panel_module_css_default.banner,
 						"data-kind": "error",
-						children: tt("terminal.error", { error: status.detail })
+						children: tt("terminal.error", { error: activeTab.detail ?? "" })
+					}),
+					activeTab?.closeError !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+						className: panel_module_css_default.banner,
+						"data-kind": "error",
+						children: tt("terminal.closeFailed")
+					}),
+					listError !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+						className: panel_module_css_default.banner,
+						"data-kind": "error",
+						children: tt("terminal.error", { error: listError })
 					}),
 					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 						className: panel_module_css_default.termWrap,
@@ -15133,11 +16028,11 @@ window.__ModuleLoader__.load({
 								className: panel_module_css_default.termContainer,
 								"data-dsh-part": "terminal"
 							}),
-							status.kind === "idle" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+							terminalTabs.length === 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 								className: panel_module_css_default.termPlaceholder,
 								children: hosts.length === 0 ? tt("hosts.empty") : tt("terminal.placeholder")
 							}),
-							authPrompt !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+							activeTab?.authPrompt !== void 0 && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
 								className: panel_module_css_default.modalBackdrop,
 								style: {
 									position: "absolute",
@@ -15152,14 +16047,14 @@ window.__ModuleLoader__.load({
 											className: panel_module_css_default.modalHeader,
 											children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)("h3", {
 												className: panel_module_css_default.modalTitle,
-												children: authPrompt.name || tt("terminal.auth.title")
+												children: activeTab.authPrompt.name || tt("terminal.auth.title")
 											})
 										}),
 										/* @__PURE__ */ (0, react_jsx_runtime.jsx)("p", {
 											className: panel_module_css_default.hint,
-											children: authPrompt.instructions || tt("terminal.auth.hint")
+											children: activeTab.authPrompt.instructions || tt("terminal.auth.hint")
 										}),
-										authPrompt.prompts.map((p, idx) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("label", {
+										activeTab.authPrompt.prompts.map((p, idx) => /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("label", {
 											className: panel_module_css_default.field,
 											children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("span", {
 												className: panel_module_css_default.fieldLabel,
@@ -15169,11 +16064,9 @@ window.__ModuleLoader__.load({
 												className: panel_module_css_default.input,
 												type: p.echo ? "text" : "password",
 												placeholder: tt("terminal.auth.placeholder"),
-												value: authInputs[idx] ?? "",
+												value: activeTab.authAnswers?.[idx] ?? "",
 												onChange: (event) => {
-													const next = [...authInputs];
-													next[idx] = event.target.value;
-													setAuthInputs(next);
+													controller.setTerminalAuthAnswer(activeTab.id, idx, event.target.value);
 												}
 											})]
 										}, idx)),
@@ -15182,7 +16075,9 @@ window.__ModuleLoader__.load({
 											children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 												type: "button",
 												className: panel_module_css_default.ghostButton,
-												onClick: disconnect,
+												onClick: () => {
+													if (activeTab !== void 0) closeTab(activeTab.id);
+												},
 												children: tt("terminal.auth.cancel")
 											}), /* @__PURE__ */ (0, react_jsx_runtime.jsx)("button", {
 												type: "submit",
@@ -15830,10 +16725,13 @@ window.__ModuleLoader__.load({
 		//#region src/client/panel/SshPanel.tsx
 		/**
 		* The SSH operations panel shell: a header with a close control, a five-tab
-		* bar, and the active tab's content. Tab state lives here (browser session
-		* state); inactive tabs unmount, so each tab fetches its own data on
-		* activation. The hosts tab's connect action switches here to the terminal
-		* tab with the chosen alias preselected.
+		* bar, and the active tab's content.
+		*
+		* The active tab and the terminal tabs live in the controller, not in
+		* component state: the layout mounts this page only while the panel is
+		* selected, so local state would reset the tab on every panel switch and lose
+		* the ids the terminal tab needs to reattach its host-side sessions. Inactive
+		* tabs unmount, so each tab fetches its own data on activation.
 		*/
 		/** The tab bar definition (labels resolved at render time). */
 		const TABS = [
@@ -15860,16 +16758,7 @@ window.__ModuleLoader__.load({
 		];
 		/** The tabbed SSH panel. */
 		function SshPanel({ controller, api, terminalFont }) {
-			const panelOpen = (0, react.useSyncExternalStore)((0, react.useCallback)((listener) => controller.subscribe(listener), [controller]), (0, react.useCallback)(() => controller.getSnapshot().panelOpen, [controller]));
-			const [activeTab, setActiveTab] = (0, react.useState)("hosts");
-			const [connectRequest, setConnectRequest] = (0, react.useState)(null);
-			const handleConnect = (alias) => {
-				setActiveTab("terminal");
-				setConnectRequest((prev) => ({
-					alias,
-					nonce: (prev?.nonce ?? 0) + 1
-				}));
-			};
+			const { panelOpen, activeTab } = (0, react.useSyncExternalStore)((0, react.useCallback)((listener) => controller.subscribe(listener), [controller]), (0, react.useCallback)(() => controller.getSnapshot(), [controller]));
 			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
 				className: panel_module_css_default.panel,
 				"data-dsh-plugin": "ssh",
@@ -15905,7 +16794,7 @@ window.__ModuleLoader__.load({
 							"data-dsh-part": "tab",
 							className: panel_module_css_default.tab,
 							onClick: () => {
-								setActiveTab(tab.id);
+								controller.setActiveTab(tab.id);
 							},
 							children: tab.label()
 						}, tab.id))
@@ -15915,12 +16804,13 @@ window.__ModuleLoader__.load({
 						children: [
 							activeTab === "hosts" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(HostsTab, {
 								api,
-								onConnect: handleConnect
+								onConnect: (alias) => {
+									controller.requestConnect(alias);
+								}
 							}),
 							activeTab === "terminal" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(TerminalTab, {
 								api,
-								presetAlias: connectRequest?.alias,
-								requestId: connectRequest?.nonce,
+								controller,
 								terminalFont
 							}),
 							activeTab === "transfer" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)(TransferTab, { api }),
@@ -15935,441 +16825,235 @@ window.__ModuleLoader__.load({
 			});
 		}
 		//#endregion
-		//#region src/client/body-mutations.ts
-		/** Cross-bundle registry key; `Symbol.for` so every module copy agrees. */
-		const HUB_KEY = Symbol.for("dsh-web.body-mutation-hub");
-		const INVALIDATION_ONLY = Symbol.for("dsh-web.body-mutation-invalidation");
-		function needsRecords(subscribers) {
-			for (const listener of subscribers) if (!listener[INVALIDATION_ONLY]) return true;
-			return false;
-		}
+		//#region src/client/native-panel.tsx
+		/** Row order among the shell's global panel rows (Plugins 0, Schedule 10, board 20, skill center 30). */
+		const PANEL_ORDER = 40;
 		/**
-		* Subscribe to a coalesced DOM re-check without retaining mutation records.
-		* The marked wrapper also works with an older hub, which delivers records
-		* that it simply ignores until a page reload picks up the updated hub.
-		*/
-		function subscribeBodyInvalidations(subscriber) {
-			const listener = () => {
-				subscriber();
-			};
-			listener[INVALIDATION_ONLY] = true;
-			return subscribeBodyMutations(listener);
-		}
-		/**
-		* Subscribe to body-level childList mutations.
-		* @param subscriber - called at most once per animation frame with the records
-		*   collected since the previous flush; must be safe to run repeatedly.
-		* @returns the disposer removing this subscriber (and the observer when it was
-		*   the last one).
-		*/
-		function subscribeBodyMutations(subscriber) {
-			if (typeof globalThis === "undefined" || typeof document === "undefined") return () => {};
-			if (typeof MutationObserver !== "function") return () => {};
-			const registry = globalThis;
-			let hub = registry[HUB_KEY];
-			if (hub === void 0) {
-				const subscribers = /* @__PURE__ */ new Set();
-				const created = {
-					observer: void 0,
-					subscribers,
-					pending: [],
-					scheduled: false
-				};
-				const flush = () => {
-					created.frame = void 0;
-					created.scheduled = false;
-					const batch = created.pending;
-					created.pending = [];
-					for (const listener of [...subscribers]) {
-						if (!subscribers.has(listener)) continue;
-						try {
-							listener(batch);
-						} catch {}
-					}
-				};
-				const schedule = () => {
-					if (created.scheduled) return;
-					created.scheduled = true;
-					if (typeof requestAnimationFrame === "function") created.frame = requestAnimationFrame(flush);
-					else flush();
-				};
-				created.observer = new MutationObserver((records) => {
-					if (needsRecords(subscribers)) for (const record of records) created.pending.push(record);
-					schedule();
-				});
-				created.observer.observe(document.body ?? document.documentElement, {
-					childList: true,
-					subtree: true
-				});
-				registry[HUB_KEY] = created;
-				hub = created;
-			}
-			const active = hub;
-			active.subscribers.add(subscriber);
-			let subscribed = true;
-			return () => {
-				if (!subscribed) return;
-				subscribed = false;
-				active.subscribers.delete(subscriber);
-				if (!needsRecords(active.subscribers)) active.pending = [];
-				if (active.subscribers.size === 0 && registry[HUB_KEY] === active) {
-					active.observer.disconnect();
-					if (active.frame !== void 0 && typeof cancelAnimationFrame === "function") cancelAnimationFrame(active.frame);
-					active.frame = void 0;
-					active.pending = [];
-					active.scheduled = false;
-					delete registry[HUB_KEY];
-				}
-			};
-		}
-		//#endregion
-		//#region src/client/panel-mount-core.ts
-		/**
-		* Center-column panel takeover lifecycle.
+		* The sidebar row glyph the shell asks for at its own size and active state.
+		* The shell owns the button, label, tooltip and rail geometry; this component
+		* draws only the glyph, like every other panel row.
 		*
-		* The `conversation` slot is single-occupant (ui-conversation) and external
-		* plugins cannot declare slots, so a family panel takes over the center
-		* column at the DOM level: a container is appended inside the center column
-		* (`[class*="centerCol"]`, the 0.1.0-rc.6+ AppFrame layout; previously
-		* `[data-pane="conversation"]` on older shells — the mount selector keeps
-		* both, ssh #243 / task-board #107) as an extra trailing child React never
-		* manages, and a stylesheet rule hides the conversation content while the
-		* panel is active. Toggling is a data attribute on <html> — no React
-		* involvement, so the conversation subtree underneath stays mounted and
-		* stateful.
-		*
-		* Consuming plugins keep a thin wrapper that supplies the panel tree,
-		* container attribute names, and stylesheet class; those names are pinned by
-		* each package's CSS, skins, and the semantic-attributes contract. The
-		* sidebar row toggling the panel shares its core the same way
-		* (shared/client/sidebar-entry-core.ts, synced copy).
+		* The glyph carries `data-dsh-panel-entry` because it is the only DOM this
+		* panel's own code owns inside that shell-owned row: the L2 contract (skins)
+		* resolves which row belongs to which plugin through it, since the shell
+		* stamps no per-entry hook of its own (see contracts/semantic-attrs-v1.md).
+		* @param props - the shell's icon share: square edge and selection state.
+		* @returns the decorative terminal glyph.
 		*/
-		const CONVERSATION_COLUMN_SELECTOR = "[data-pane=\"conversation\"], [class*=\"centerCol\"]";
-		/** Cross-plugin activation event; detail is the activating panel name. */
-		const ACTIVATE_EVENT = "dsh-panel-activate";
-		const SIDEBAR_ROW_SELECTOR = "[class*=\"sessionRow\"], [class*=\"projectRow\"], [class*=\"searchResultRow\"], [class*=\"searchResultWorkspace\"], [class*=\"newSession\"]";
-		/** Find the center column, or undefined while the frame is not mounted. */
-		function conversationColumn() {
-			return document.querySelector(CONVERSATION_COLUMN_SELECTOR) ?? void 0;
-		}
-		/**
-		* Mount a family panel into the center column and bind its visibility to the
-		* owning controller's open state.
-		* @returns disposer unmounting the tree and restoring the column.
-		*/
-		function mountCenterPanel(options) {
-			let root;
-			let container;
-			let unsubscribeLocale;
-			try {
-				unsubscribeLocale = options.locale?.subscribe(() => {
-					if (root !== void 0) options.render(root);
-				});
-			} catch {}
-			const ensure = () => {
-				if (container !== void 0 && !container.isConnected) {
-					root?.unmount();
-					root = void 0;
-					container.remove();
-					container = void 0;
-				}
-				if (container === void 0) {
-					const column = conversationColumn();
-					if (column === void 0) return;
-					container = document.createElement("div");
-					container.dataset[options.viewDatasetKey] = "";
-					container.dataset.dshPlugin = options.pluginName;
-					container.className = options.viewClassName;
-					column.appendChild(container);
-				}
-				if (root !== void 0 || !options.isOpen()) return;
-				root = (0, react_dom_client.createRoot)(container);
-				options.render(root);
-			};
-			const unsubscribeBody = subscribeBodyInvalidations(() => {
-				ensure();
+		function SshPanelIcon({ size }) {
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("svg", {
+				"data-dsh-panel-entry": "ssh",
+				viewBox: "0 0 16 16",
+				width: size,
+				height: size,
+				fill: "none",
+				stroke: "currentColor",
+				strokeWidth: "1.5",
+				strokeLinecap: "round",
+				strokeLinejoin: "round",
+				"aria-hidden": "true",
+				children: [
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("rect", {
+						x: "1.75",
+						y: "2.25",
+						width: "12.5",
+						height: "11.5",
+						rx: "1.75"
+					}),
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", { d: "M4.25 5.25l2.75 2.75-2.75 2.75" }),
+					/* @__PURE__ */ (0, react_jsx_runtime.jsx)("path", { d: "M8.5 10.75h3.25" })
+				]
 			});
-			const applyActive = () => {
-				if (options.isOpen()) {
-					ensure();
-					document.documentElement.removeAttribute(options.siblingActiveAttribute);
-					document.documentElement.setAttribute(options.activeAttribute, "");
-					document.dispatchEvent(new CustomEvent(ACTIVATE_EVENT, { detail: options.panelName }));
-				} else document.documentElement.removeAttribute(options.activeAttribute);
-			};
-			const onOtherActivate = (event) => {
-				if (event.detail === options.siblingPanelName && options.isOpen()) options.close();
-			};
-			const onClickSidebarRow = (event) => {
-				if (!options.isOpen()) return;
-				const target = event.target;
-				if (target === null) return;
-				if (target.closest(SIDEBAR_ROW_SELECTOR) !== null) options.close();
-			};
-			document.addEventListener("click", onClickSidebarRow, true);
-			document.addEventListener(ACTIVATE_EVENT, onOtherActivate);
-			const unsubscribe = options.subscribe(applyActive);
-			applyActive();
-			ensure();
-			return () => {
-				document.removeEventListener("click", onClickSidebarRow, true);
-				document.removeEventListener(ACTIVATE_EVENT, onOtherActivate);
-				unsubscribeBody();
-				unsubscribe();
-				unsubscribeLocale?.();
-				document.documentElement.removeAttribute(options.activeAttribute);
-				root?.unmount();
-				root = void 0;
-				container?.remove();
-				container = void 0;
-			};
 		}
-		//#endregion
-		//#region src/client/mount.tsx
 		/**
-		* Mount the panel React tree into the center column and bind its visibility
-		* to the controller's panelOpen state.
-		* @param controller - the panel controller driving the view.
-		* @param api - the SSH API client the tabs operate through.
-		* @param terminalFont - live terminal-font setting source (issue #577).
-		* @param locale - locale-change source; when given, re-renders an open panel
-		*   on a Language switch.
-		* @returns disposer unmounting the tree and restoring the column.
+		* The main-slot page. The layout mounts it only while this panel is selected;
+		* the wrapper carries the pinned `data-dsh-ssh-view` semantic anchor (L2
+		* contract, skins) the takeover container used to own.
+		* @param props - the framework main-slot share plus this entry's injected face.
+		* @returns the SSH panel page.
 		*/
-		function mountPanel(controller, api, terminalFont, locale) {
-			return mountCenterPanel({
-				render: (root) => root.render(/* @__PURE__ */ (0, react_jsx_runtime.jsx)(SshPanel, {
+		function SshPanelPage({ controller, api, terminalFont }) {
+			return /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+				className: panel_module_css_default.view,
+				"data-dsh-ssh-view": "",
+				"data-dsh-plugin": "ssh",
+				children: /* @__PURE__ */ (0, react_jsx_runtime.jsx)(SshPanel, {
 					controller,
 					api,
 					terminalFont
-				})),
-				viewDatasetKey: "dshSshView",
-				pluginName: "ssh",
-				viewClassName: panel_module_css_default.view,
-				activeAttribute: "data-dsh-ssh-active",
-				siblingActiveAttribute: "data-dsh-taskboard-active",
-				panelName: "ssh",
-				siblingPanelName: "taskboard",
-				isOpen: () => controller.getSnapshot().panelOpen,
-				close: () => controller.close(),
-				subscribe: (listener) => controller.subscribe(listener),
-				locale
+				})
 			});
 		}
+		/**
+		* Register the SSH panel's sidebar row and center-column page.
+		*
+		* Both seats are declared by shell plugins this package does not depend on at
+		* runtime, so each registration is wrapped in `ctx.slots.inject`: the callback
+		* runs only after the owning entry declares the seat, and a shell that never
+		* declares it leaves the panel simply absent instead of failing boot.
+		* @param ctx - client root context (services: slots).
+		* @param controller - the controller the page and the row drive.
+		* @param api - the SSH API client the page operates through.
+		* @param terminalFont - live terminal-font setting source (issue #577).
+		* @returns disposer releasing both registrations.
+		*/
+		function registerSshPanel(ctx, controller, api, terminalFont) {
+			const slots = ctx.slots;
+			const disposers = [];
+			disposers.push(slots.inject("sidebar.panellist", () => slots.register({
+				name: "sidebar.panellist",
+				id: "ssh",
+				order: PANEL_ORDER,
+				label: () => tt("entry.label")
+			}, SshPanelIcon)));
+			disposers.push(slots.inject("main", () => slots.register({
+				name: "main",
+				key: "ssh",
+				inject: () => ({
+					controller,
+					api,
+					terminalFont
+				})
+			}, SshPanelPage)));
+			return () => {
+				for (const dispose of disposers.splice(0)) dispose();
+			};
+		}
 		//#endregion
-		//#region src/client/panel/controller.ts
-		/** The panel state owner the sidebar entry toggles and the view renders from. */
-		var PanelController = class {
-			panelOpen = false;
+		//#region src/client/settings-binding.ts
+		/**
+		* The snapshot a reader reports before the Host has answered with this
+		* plugin's entry: nothing is readable yet, and no write is attempted.
+		*/
+		const PENDING_SNAPSHOT = {
+			status: "loading",
+			value: void 0,
+			base: void 0,
+			user: void 0,
+			revision: void 0,
+			writable: false
+		};
+		/** Whether one Host namespace section carries a field this plugin's schema declares. */
+		function carriesField(section, field) {
+			return typeof section === "object" && section !== null && Object.hasOwn(section, field);
+		}
+		/**
+		* Reader over the shared configuration forms service.
+		*
+		* The 0.1.7 surface carries no package identity, so this plugin recognises its
+		* own entry by the field its Config schema declares. The entry list arrives
+		* asynchronously with the shared describe mirror, and an id the Host has not
+		* answered with yet is not evidence of absence: the reader re-resolves on every
+		* mirror change and reports `loading` until it holds a form.
+		*/
+		var SharedFormsReader = class {
+			forms;
+			field;
 			listeners = /* @__PURE__ */ new Set();
-			getSnapshot() {
-				return { panelOpen: this.panelOpen };
+			unsubscribeMirror;
+			unsubscribeForm;
+			form;
+			snapshot = PENDING_SNAPSHOT;
+			/**
+			* @param forms - the shared configuration forms service (`ctx.configForms`).
+			* @param field - the field this plugin's own schema declares, which is what identifies its entry.
+			*/
+			constructor(forms, field) {
+				this.forms = forms;
+				this.field = field;
+				this.unsubscribeMirror = forms.describe().subscribe(() => {
+					this.bind();
+					this.publish();
+				});
+				this.bind();
 			}
-			subscribe(fn) {
-				this.listeners.add(fn);
+			getSnapshot() {
+				return this.snapshot;
+			}
+			subscribe(listener) {
+				this.listeners.add(listener);
 				return () => {
-					this.listeners.delete(fn);
+					this.listeners.delete(listener);
 				};
 			}
-			open() {
-				if (this.panelOpen) return;
-				this.panelOpen = true;
-				this.notify();
+			/** Release the mirror and form subscriptions and drop every listener. */
+			dispose() {
+				this.unsubscribeMirror();
+				this.unsubscribeForm?.();
+				this.unsubscribeForm = void 0;
+				this.listeners.clear();
 			}
-			close() {
-				if (!this.panelOpen) return;
-				this.panelOpen = false;
-				this.notify();
+			/** Bind the entry form once the shared mirror names this plugin's entry. */
+			bind() {
+				if (this.form !== void 0) return;
+				const entry = (this.forms.describe().getSnapshot().view?.namespaces)?.find((candidate) => carriesField(candidate.value, this.field));
+				if (entry === void 0) return;
+				const form = this.forms.get(entry.ns);
+				if (form === void 0) return;
+				this.form = form;
+				this.snapshot = form.getSnapshot();
+				this.unsubscribeForm = form.subscribe(() => {
+					this.snapshot = form.getSnapshot();
+					this.publish();
+				});
 			}
-			toggle() {
-				if (this.panelOpen) this.close();
-				else this.open();
-			}
-			notify() {
-				for (const fn of [...this.listeners]) fn();
+			publish() {
+				for (const listener of this.listeners) listener();
 			}
 		};
-		//#endregion
-		//#region src/client/sidebar-entry-core.ts
 		/**
-		* Shared sidebar entry injection core.
-		*
-		* dsh's sidebar shell exposes no slot an external plugin can register into,
-		* so the entry row is injected between the shell's New Session button and the
-		* workspace browser. The injection self-heals: a MutationObserver watches the
-		* sidebar root and re-inserts the row whenever a React re-render displaces it
-		* (re-insertion happens in the same frame, before paint, so no flicker).
-		*
-		* The row is plain DOM (no React tree) so it can never disturb the shell's
-		* reconciliation; the view it toggles is a separate root owned by the caller.
-		*
-		* Packages receive this file as a generated copy via scripts/sync-shared.mjs;
-		* edit the shared source and re-run the sync instead of editing a copy.
+		* Bind this plugin's settings reader.
+		* @param ctx - client context carrying the family binder and/or the shared forms service.
+		* @param namespace - the family settings namespace this plugin owns.
+		* @param field - the field this plugin's own schema declares, used to recognise its entry when the family binder is absent.
+		* @returns the reader and the release of its subscriptions.
 		*/
-		/** Find the sidebar shell root element, or undefined while not yet mounted. */
-		function sidebarRoot() {
-			const column = document.querySelector("[data-pane=\"sidebar\"], [class*=\"sidebarCol\"]");
-			if (column === null) return void 0;
-			return column.querySelector("[class*=\"logoRow\"]")?.parentElement ?? column.firstElementChild;
-		}
-		/** The New Session button: nested in the logo row on current shells, a direct child on legacy shells. */
-		function newSessionButton(root) {
-			const nested = root.querySelector("button[class*=\"newSession\"]");
-			if (nested !== null) return nested;
-			for (const child of root.children) if (child.tagName === "BUTTON") return child;
-		}
-		/** Build the entry row (a detached button; insert once the shell is up). */
-		function createEntry(options) {
-			const entry = document.createElement("button");
-			entry.type = "button";
-			entry.setAttribute(options.rowAttribute, "");
-			if (options.plugin !== void 0) {
-				entry.setAttribute("data-dsh-plugin", options.plugin);
-				entry.setAttribute("data-dsh-part", "sidebar-entry");
-			}
-			entry.className = options.css["entry"] ?? "";
-			const labelSpan = document.createElement("span");
-			labelSpan.className = options.css["entryLabel"] ?? "";
-			const iconSpan = document.createElement("span");
-			iconSpan.className = options.css["entryIcon"] ?? "";
-			iconSpan.innerHTML = options.icon;
-			entry.append(iconSpan, labelSpan);
-			const applyLabel = () => {
-				entry.setAttribute("aria-label", options.label());
-				if (options.tooltip !== void 0) entry.setAttribute("title", options.tooltip());
-				labelSpan.textContent = options.label();
-			};
-			applyLabel();
-			entry.addEventListener("click", options.onToggle);
-			return {
-				entry,
-				applyLabel
-			};
-		}
-		/** Re-insert the entry after the New Session row (before the browser region). */
-		function placeEntry(root, entry, options) {
-			const button = newSessionButton(root);
-			if (button === void 0) return false;
-			if (entry.parentElement !== root) {
-				const row = button.closest("[class*=\"logoRow\"]");
-				const base = row !== null && row.parentElement === root ? row : button;
-				const family = Array.from(root.children).filter((el) => el instanceof HTMLElement && el.matches(options.familySelectors.join(", ")));
-				const anchor = options.position === "before" ? family.length > 0 ? family[0] : base.nextElementSibling : family.length > 0 ? family[family.length - 1].nextElementSibling : base.nextElementSibling;
-				root.insertBefore(entry, anchor);
-			}
-			return true;
-		}
-		/**
-		* Mount the sidebar entry, waiting for the shell to render and self-healing
-		* on later React re-renders.
-		* @param options - the row's attribute/icon/copy/action/ordering configuration.
-		* @returns disposer removing the entry and its observers.
-		*/
-		function mountSidebarEntry$1(options) {
-			if (typeof document !== "undefined" && document.querySelector(options.rowSelector) !== null) return () => {};
-			const { entry, applyLabel } = createEntry(options);
-			let root;
-			let placed = false;
-			let unsubscribeRefresh;
-			if (options.refresh !== void 0) try {
-				unsubscribeRefresh = options.refresh.subscribe(applyLabel);
-			} catch {}
-			const tryPlace = () => {
-				if (root !== void 0 && !root.isConnected) {
-					rootObserver.disconnect();
-					root = void 0;
-					placed = false;
-				}
-				if (placed) {
-					if (document.body.contains(entry)) return;
-					rootObserver.disconnect();
-					root = void 0;
-					placed = false;
-				}
-				root ??= sidebarRoot();
-				if (root === void 0) return;
-				placed = placeEntry(root, entry, options);
-				if (placed) rootObserver.observe(root, {
-					childList: true,
-					subtree: true
-				});
-			};
-			const unsubscribeBody = subscribeBodyInvalidations(() => {
-				tryPlace();
-			});
-			const rootObserver = new MutationObserver(() => {
-				if (root === void 0 || !root.isConnected) {
-					placed = false;
-					tryPlace();
-					return;
-				}
-				if (!root.contains(entry)) placed = placeEntry(root, entry, options);
-			});
-			const unsubscribeActive = options.active === void 0 ? void 0 : (() => {
-				const syncActive = () => {
-					if (options.active.isOpen()) entry.dataset.active = "true";
-					else delete entry.dataset.active;
+		function bindSettingsReader(ctx, namespace, field) {
+			const family = ctx.get("webUiSettings");
+			if (family !== void 0) {
+				const form = family.bind({ namespace });
+				return {
+					getSnapshot: () => form.getSnapshot(),
+					subscribe: (listener) => form.subscribe(listener),
+					dispose: () => {}
 				};
-				const unsubscribe = options.active.subscribe(syncActive);
-				syncActive();
-				return unsubscribe;
-			})();
-			tryPlace();
-			return () => {
-				unsubscribeBody();
-				rootObserver.disconnect();
-				unsubscribeRefresh?.();
-				unsubscribeActive?.();
-				entry.remove();
-			};
-		}
-		//#endregion
-		//#region src/client/sidebar-entry.ts
-		/** Stable data attribute identifying the injected entry row. */
-		const ENTRY_SELECTOR = "[data-dsh-ssh-entry]";
-		/** Inline terminal glyph sized to the shell's current sidebar navigation icons. */
-		const ICON = "<svg viewBox=\"0 0 16 16\" width=\"18\" height=\"18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"1.75\" y=\"2.25\" width=\"12.5\" height=\"11.5\" rx=\"1.75\"/><path d=\"M4.25 5.25l2.75 2.75-2.75 2.75\"/><path d=\"M8.5 10.75h3.25\"/></svg>";
-		/**
-		* Mount the sidebar entry, waiting for the shell to render and self-healing
-		* on later React re-renders.
-		* @param controller - the panel controller the entry toggles.
-		* @param locale - locale-change source; when given, re-applies the label on
-		*   a Language switch (the plain-DOM row otherwise keeps the mount-time copy).
-		* @returns disposer removing the entry and its observers.
-		*/
-		function mountSidebarEntry(controller, locale) {
-			return mountSidebarEntry$1({
-				rowAttribute: "data-dsh-ssh-entry",
-				rowSelector: ENTRY_SELECTOR,
-				plugin: "ssh",
-				icon: ICON,
-				css: panel_module_css_default,
-				label: () => tt("entry.label"),
-				tooltip: () => tt("entry.tooltip"),
-				refresh: locale === void 0 ? void 0 : { subscribe: (listener) => locale.subscribe(listener) },
-				onToggle: () => {
-					controller.toggle();
-				},
-				position: "after",
-				familySelectors: ["[data-dsh-taskboard-entry]", "[data-dsh-ssh-entry]"],
-				active: {
-					subscribe: (listener) => controller.subscribe(listener),
-					isOpen: () => controller.getSnapshot().panelOpen
-				}
-			});
+			}
+			return new SharedFormsReader(ctx.configForms, field);
 		}
 		//#endregion
 		//#region src/client/telemetry.ts
+		/** localStorage key carrying the family-wide telemetry opt-out ('1' = off). */
+		const TELEMETRY_OPT_OUT_KEY = "dsh-web-ui-telemetry-opt-out";
 		const VISITOR_KEY = "dsh-web-ui-telemetry-visitor";
 		const DAY_KEY_PREFIX = "dsh-web-ui-telemetry-day:";
 		const ENDPOINT = "https://dsh-market.com/api/telemetry/event";
 		/** The building package's version, when the bundle carries it. */
 		function bakedVersion() {
 			try {
-				return "0.3.23";
+				return "0.4.18";
 			} catch {
 				return;
 			}
+		}
+		/** Whether the user switched the family-wide opt-out on (reads storage only). */
+		function isTelemetryOptedOut() {
+			try {
+				return localStorage.getItem(TELEMETRY_OPT_OUT_KEY) === "1";
+			} catch {
+				return false;
+			}
+		}
+		/** Whether the browser itself asks not to be tracked; a failed read means no signal. */
+		function doNotTrackRequested() {
+			try {
+				return navigator.doNotTrack === "1" || navigator.doNotTrack === "yes";
+			} catch {
+				return false;
+			}
+		}
+		/** Whether a heartbeat must be suppressed right now: opt-out stored, or the browser asks not to be tracked. */
+		function isTelemetrySuppressed() {
+			return isTelemetryOptedOut() || doNotTrackRequested();
 		}
 		/** Read or lazily create the anonymous visitor id; null when storage is unavailable. */
 		function visitorId() {
@@ -16399,6 +17083,7 @@ window.__ModuleLoader__.load({
 		*/
 		function reportDailyHeartbeat(items) {
 			try {
+				if (isTelemetrySuppressed()) return;
 				if (items.length === 0) return;
 				const today = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
 				if (navigator.webdriver) return;
@@ -16432,13 +17117,19 @@ window.__ModuleLoader__.load({
 		//#region src/client/index.ts
 		/** Locale namespace this plugin owns. */
 		const NS = "dsh-ssh";
-		/** Settings namespace the terminal-font preference lives in (issue #577). */
+		/**
+		* Family settings namespace the terminal-font preference is addressed by
+		* (issue #577); dsh-web-settings maps it to the owning profile entry id.
+		*/
 		const SETTINGS_NS = "dsh-ssh";
+		/** The one field this plugin's own Config schema declares (its entry identity on the shared settings surface). */
+		const TERMINAL_FONT_FIELD = "terminalFontFamily";
 		/** Required services (fiber inject waiting — the runtime must be up first). */
 		const inject = [
 			"slots",
 			"locale",
-			"settingsScope"
+			"configForms",
+			"layout"
 		];
 		/**
 		* Mount the SSH panel.
@@ -16459,22 +17150,35 @@ window.__ModuleLoader__.load({
 			try {
 				setRuntimeTranslate(ctx.locale.bind(NS));
 			} catch {}
-			const controller = new PanelController();
+			const controller = new PanelController({ panel: { select: (panelId) => {
+				(ctx.get?.("layout"))?.selectPanel?.(panelId);
+			} } });
 			const api = new SshApi();
-			const scope = (ctx.get("webUiSettings") ?? ctx.settingsScope).bind({ namespace: SETTINGS_NS });
+			const settings = bindSettingsReader(ctx, SETTINGS_NS, TERMINAL_FONT_FIELD);
 			const terminalFont = {
 				get: () => {
-					const snapshot = scope.getSnapshot();
+					const snapshot = settings.getSnapshot();
 					return snapshot.status === "ready" ? snapshot.value?.terminalFontFamily : void 0;
 				},
-				subscribe: (listener) => scope.subscribe(listener)
+				subscribe: (listener) => settings.subscribe(listener)
 			};
+			ctx.effect(() => () => {
+				settings.dispose();
+			}, "dsh-ssh: settings binding");
 			const disposers = [];
 			try {
-				disposers.push(mountSidebarEntry(controller, ctx.locale));
-				disposers.push(mountPanel(controller, api, terminalFont, ctx.locale));
+				disposers.push(registerSshPanel(ctx, controller, api, terminalFont));
+				const layoutFace = ctx.get?.("layout");
+				if (layoutFace?.panelInfo !== void 0) {
+					const sync = () => {
+						const active = layoutFace.panelInfo.getSnapshot().activePanelId;
+						controller.syncPanelSelection(active === "ssh" ? "ssh" : null);
+					};
+					sync();
+					disposers.push(layoutFace.panelInfo.subscribe(sync));
+				}
 			} catch (error) {
-				console.warn("[dsh-ssh] mount failed:", error);
+				console.warn("[dsh-ssh] panel registration failed:", error);
 			}
 			ctx.effect(() => () => {
 				for (const dispose of disposers.splice(0)) dispose();

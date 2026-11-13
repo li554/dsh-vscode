@@ -112,10 +112,24 @@ console.log(`sessions found: ${dirs.length} under ${input}`);
 let rowsValidated = 0, refused = 0;
 const reasons = new Map();
 const badSessions = [];
+// 0.2.2 renamed the log to `session.v<N>.jsonl.zstd` (N = the stored format
+// version); 0.1.x wrote the unversioned `session.jsonl.zstd`, which IS format
+// v0. Only v0 files are meaningful here: the v0->v1 migration is what refuses
+// plugin-authored payloads, while a v3/v4 file has already been through it.
+// (The v<N> chains are exercised by the platform on load, not by this script.)
+const LEGACY_LOG = /^session\.jsonl\.zstd$/;
+const VERSIONED_LOG = /^session\.v(\d+)\.jsonl\.zstd$/;
+let newerFormatSkipped = 0;
 
 for (const dir of dirs) {
-  const file = path.join(dir, "session.jsonl.zstd");
-  if (!fs.existsSync(file)) continue;
+  let entries;
+  try { entries = fs.readdirSync(dir); } catch { continue; }
+  const v0Name = entries.find((name) => LEGACY_LOG.test(name) || (VERSIONED_LOG.exec(name)?.[1] === "0"));
+  if (!v0Name) {
+    if (entries.some((name) => VERSIONED_LOG.test(name))) newerFormatSkipped++;
+    continue;
+  }
+  const file = path.join(dir, v0Name);
   let text;
   try { text = decodeSessionLog(file); } catch (error) { badSessions.push({ id: path.basename(dir), refusals: 1, why: "undecodable: " + error.message }); continue; }
   let sessionRefused = 0;
@@ -144,7 +158,9 @@ for (const dir of dirs) {
 }
 
 console.log(`rows validated: ${rowsValidated}`);
-console.log(`rows refused:   ${refused}\n`);
+console.log(`rows refused:   ${refused}`);
+if (newerFormatSkipped) console.log(`already-migrated sessions skipped (format v1+): ${newerFormatSkipped}`);
+console.log();
 if (reasons.size) {
   console.log("refusal reasons (digits -> <n>):");
   for (const [r, n] of [...reasons].sort((a, b) => b[1] - a[1])) console.log(`  x${n}  ${r}`);
@@ -153,6 +169,10 @@ if (reasons.size) {
 if (badSessions.length) {
   console.log(`sessions that will FAIL to load (${badSessions.length}):`);
   for (const s of badSessions) console.log(`  ${s.id}: ${s.refusals} event(s)\n     ${s.why.join("\n     ")}`);
+} else if (rowsValidated === 0 && newerFormatSkipped > 0) {
+  console.log(`no format-v0 logs remain here (${newerFormatSkipped} session(s) are already v1+), so the`);
+  console.log("v0 tolerance patch has no local corpus to exercise — point this script at an old backup");
+  console.log("or a DSH_HOME written by 0.1.x to test the migration tolerances themselves.");
 } else {
   console.log("every session validates against the released v0 set");
 }

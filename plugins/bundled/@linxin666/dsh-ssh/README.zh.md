@@ -1,32 +1,48 @@
-# dsh-ssh — 远程 SSH 运维插件（DSH 版 ssh-skill）
+# dsh-ssh · DeepSeek Harness (DSH) 网页版 SSH 终端、SFTP 文件传输与集群运维插件
 
 [English](README.md) | 中文
 
-基于 [badseal/ssh-skill](https://github.com/badseal/ssh-skill) 的能力清单，为 DeepSeek Harness（DSH）定制的远程 SSH 插件：Host 进程内的持久连接池 + Web GUI 主机管理面板 + Web 终端 + Agent 工具，全部通过官方 NPM SDK 实现，不修改 DSH 源码。
+<p align="center">
+  <img src="https://img.shields.io/npm/v/@linxin666/dsh-ssh?style=flat-square" alt="Version">
+  &nbsp;
+  <img src="https://img.shields.io/badge/DSH-%3E%3D0.2.2--rc.2-4c6ef5?style=flat-square&amp;labelColor=454a54" alt="DSH">
+  &nbsp;
+  <img src="https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square" alt="License">
+</p>
+
+<p align="center">
+  <strong>DeepSeek Harness（DSH）官方 Web GUI 与桌面客户端专属远程 Linux 服务器运维套件</strong><br>
+  <em>xterm.js Web 终端 · 可视化 SFTP 传输 · 本地端口转发隧道 · 集群并发命令 · 6 大 Agent 工具</em>
+</p>
+
+专为 DeepSeek Harness（DSH）Web GUI 与官方桌面客户端定制的远程 Linux 服务器运维与集群管理插件：Host 进程内的持久连接池 + Web GUI 主机管理面板 + 基于 xterm.js 的 Web 终端 + 可视化 SFTP 传输 + 6 大专用 Agent 工具，全部通过官方 NPM SDK 实现，零修改侵入 DSH 官方源码。
 
 ## 能力
 
 | 能力 | 说明 |
 | --- | --- |
-| 主机管理 | 增删改查、搜索、连接测试；支持按环境 / 标签分组折叠与组内批量测试；配置存 `~/.dsh/dsh-ssh.json`；支持密钥 / 密码 / ssh-agent 认证（OpenSSH agent / Pageant）、passphrase 密钥、ProxyJump 跳板机（多级）与 OpenSSH `ProxyCommand` 传输层（堡垒机客户端场景） |
-| 配置导入 | 一键解析标准 `~/.ssh/config`（Host/HostName/User/Port/IdentityFile/IdentityAgent/ProxyJump/ProxyCommand、`Include` 文件、无 HostName 的块）；被跳过的块逐条列出原因（通配符 pattern、别名已存在、Match 条件块、字段不合法） |
+| 主机管理 | 增删改查、搜索、连接测试；支持按环境 / 标签分组折叠与组内批量测试；配置存 `~/.dsh/dsh-ssh.json`；支持密钥 / 密码 / ssh-agent 认证（OpenSSH agent，Windows 上仍可选 Pageant）、passphrase 密钥、ProxyJump 跳板机（多级）与 OpenSSH `ProxyCommand` 传输层（堡垒机客户端场景） |
+| 配置导入 | 一键解析标准 `~/.ssh/config`（Host/HostName/User/Port/IdentityFile/IdentityAgent/ForwardAgent/ProxyJump/ProxyCommand、`Include` 文件、无 HostName 的块）；`ForwardAgent yes|true|on` 导入为启用，`no|false|off` 或没有该指令导入为关闭；被跳过的块逐条列出原因（通配符 pattern、别名已存在、Match 条件块、字段不合法） |
 | 持久连接池 | 每台主机复用长连接（对应 ssh-skill 的守护进程），空闲 30 分钟自动断开，断线自动重连（最多 3 次） |
+| Agent 转发 | 按主机选择性启用（`ssh -A`）：主机表单提供「启用 Agent 转发」勾选框，主机列表为已启用的主机显示「Agent 转发」标记；`ssh_list` 输出带 `forwardAgent`，渲染表格中对应一列。转发的本地端点依次取主机配置的 agent 路径、`SSH_AUTH_SOCK`、Windows 上的原生 OpenSSH 命名管道（`\\.\pipe\openssh-ssh-agent`）；三者都拿不到时连接直接报错，不会静默地不转发。服务端拒绝该请求（`AllowAgentForwarding no`）时原样呈现服务端错误，绝不静默降级为未转发的会话。关闭时不写入配置文件 |
 | 命令执行 | exec 带超时（默认 60s），stdout/stderr 分离，输出截断保护（2MB） |
-| Web 终端 | xterm.js + WebSocket PTY 终端，自适应尺寸，实时输出 |
+| Web 终端 | xterm.js + WebSocket PTY 终端，自适应尺寸，实时输出；面板内可开多个终端标签，每个标签各自持有一个 Host PTY——可切换、可单独关闭、可对同一主机开多个标签，「+」按工具栏当前主机新开一个标签 |
 | 文件传输 | SFTP 上传（浏览器选文件，NDJSON 进度流）、下载（进度条 + 浏览器保存）；远程目录浏览 |
 | 端口转发 | 本地端口转发隧道（仅监听 127.0.0.1），访问远程数据库 / 内网服务，支持列表 / 停止 |
 | 集群执行 | 一条命令并发跑多台主机（按别名 / 环境 / 标签过滤，默认并发 8） |
 | Agent 工具 | `ssh_list` / `ssh_exec` / `ssh_upload` / `ssh_download` / `ssh_tunnel` / `ssh_cluster`，GUI 与 Agent 共享同一份主机配置 |
 
-面板在首次打开时加载内容。关闭后重新打开会保留选中的页签、表单草稿和终端会话。隧道列表仅在隧道页签、面板和浏览器页面都可见时每五秒刷新；隐藏时暂停自动查询，恢复可见时立即刷新，慢查询期间不叠加请求。端口转发本身继续在 Host 中运行。
+面板在首次打开时加载内容。关闭后重新打开会保留选中的页签、表单草稿与全部终端标签。不在前台的终端标签仍由 Host 保活：视图只做 detach，切回该标签时按 session id 重新 attach，并把 Host 的滚动缓冲回放进同一个 xterm。远端 shell 退出后标签与最后一屏内容保留、不会消失；关闭后台标签只在 Host 确认关闭后才移除标签，关闭帧送不到 Host 时标签保留并给出提示。隧道列表仅在隧道页签、面板和浏览器页面都可见时每五秒刷新；隐藏时暂停自动查询，恢复可见时立即刷新，慢查询期间不叠加请求。端口转发本身继续在 Host 中运行。
 
 ## 安全模型
 
 - 所有 `/api/dsh-ssh/*` 路由仅限 loopback 访问（含同源校验）——对远程服务器执行命令的接口不会暴露给局域网。
 - 密码 / 密钥口令以明文保存在 `~/.dsh/dsh-ssh.json`，文件权限 0600、目录 0700（与 ssh-skill 把密码写进 ssh-config 注释同一信任模型）。
-- ssh-agent 认证仅保存 agent socket 路径（或 `pageant` 特殊值），不读取也不保存任何私钥材料。
+- ssh-agent 认证仅保存 agent socket 路径（或 `pageant` 特殊值），不读取也不保存任何私钥材料。空的 agent 路径不是机密，任何时候都会提交：它表示自动检测（`SSH_AUTH_SOCK`，Windows 上再退到原生 OpenSSH 命名管道），因此把主机改成 SSH Agent 后即使路径留空也会生效。
+- Agent 转发是按主机选择性启用的能力，默认关闭。启用 `forwardAgent` 后，该主机上的每个 exec 与 PTY 会话都会向服务端请求 `auth-agent-req@openssh.com`，这意味着远端主机可以用你本机的密钥以这台机器的身份完成认证。只为你信任的主机启用，并记住这类主机上的每个会话都能使用被转发的 agent。本地端点（主机配置的 agent 路径、`SSH_AUTH_SOCK`、Windows 上的原生 OpenSSH 命名管道）解析不出来时连接直接失败，而不是什么都不转发；服务端拒绝该请求时，其错误原样呈现。
 - 隧道只监听 `127.0.0.1`。
-- 删除主机或修改其连接字段（host / port / user / auth / proxyJump / proxyCommand）会立即断开该别名的池化连接与隧道，后续操作按新配置重新建连，不会复用旧凭据的已认证连接。
+- 删除主机或修改其连接字段（host / port / user / auth / proxyJump / proxyCommand / forwardAgent）会立即断开该别名的池化连接与隧道，后续操作按新配置重新建连，不会复用旧凭据的已认证连接。
+- 隧道背后的 SSH 连接一旦断开，隧道会自行退役：本地端口不再接受连接，隧道从列表中消失；断开期间到达的连接被直接关闭且没有流量，不会打断宿主进程。
 - `proxyCommand` 是一条由 DSH 宿主进程以其自身权限执行的 shell 命令——与 `ssh(1)` 执行 `~/.ssh/config` 里同一行的信任模型一致。它只能来自用户自己的 0600 配置文件：Agent 无法创建或修改主机，`ssh_list` 只报告该主机是否配置了 ProxyCommand，不返回命令原文。
 - Agent 使用工具前，主机需先在 GUI 中配置（或从 ~/.ssh/config 导入）。
 - `ssh_upload` / `ssh_download` 以宿主进程权限直接读写本机任意路径（不经 bash 沙箱）——与 ssh-skill 的宿主本地路径语义一致，注意该权限面。
@@ -53,7 +69,7 @@ dsh plugin --profile web add link:$(pwd)/packages/dsh-ssh
 
 ## 配置
 
-设置面板（插件配置）可开关 `announceToAgent`（是否向 Agent 宣告插件；默认关闭，保持系统提示词干净）与 `enabled`（总开关），并可设置 `terminalFontFamily`（Web 终端字体，留空则按 CSS 链解析：`--dsh-ssh-terminal-font` → 官方 `--ds-font-family-code` token → 内置 monospace 栈）。终端字体写死在 xterm 构造参数里，CSS 无法直接覆盖；要渲染 powerline / Nerd Font 图标，请在此填入对应 Nerd Font 栈（如 `"SauceCodePro Nerd Font", monospace`），修改对已打开的终端即时生效，无需重连。
+设置面板（插件配置）可开关 `announceToAgent`（是否向 Agent 宣告插件；默认关闭，保持系统提示词干净）与 `enabled`（总开关），设置 `terminalFontFamily`（Web 终端字体，留空则按 CSS 链解析：`--dsh-ssh-terminal-font` → 官方 `--ds-font-family-code` token → 内置 monospace 栈），并设置 `connectTimeoutMs`（TCP 连接、SSH 密钥交换与用户认证三个阶段共用的上限，默认 30000 毫秒，允许 1000-600000）。认证较慢的主机（例如 PAM 或 LDAP 位于较远的目录服务后面）应调大 `connectTimeoutMs`：`ssh_exec`、Web 终端、SFTP 传输、隧道与集群执行等所有连接入口都读取该值，而 `ssh_exec` / `ssh_cluster` 的 `timeoutMs` 只约束连接就绪后的远程命令。终端字体写死在 xterm 构造参数里，CSS 无法直接覆盖；要渲染 powerline / Nerd Font 图标，请在此填入对应 Nerd Font 栈（如 `"SauceCodePro Nerd Font", monospace`），修改对已打开的终端即时生效，无需重连；新的 `connectTimeoutMs` 对之后建立的连接生效，池化连接在重连前不受影响。
 
 ## 数据
 

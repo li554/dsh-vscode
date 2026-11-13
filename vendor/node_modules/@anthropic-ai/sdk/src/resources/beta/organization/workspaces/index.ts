@@ -1,5 +1,3 @@
-// File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
-
 export {
   Members,
   type MemberRemoveResponse,
@@ -12,7 +10,9 @@ export {
 export {
   RateLimits,
   type BetaWorkspaceRateLimit,
+  type BetaWorkspaceRateLimitOrganizationSource,
   type BetaWorkspaceRateLimitValue,
+  type BetaWorkspaceRateLimitWorkspaceSource,
   type RateLimitListParams,
   type BetaWorkspaceRateLimitsPageCursor,
 } from './rate-limits';

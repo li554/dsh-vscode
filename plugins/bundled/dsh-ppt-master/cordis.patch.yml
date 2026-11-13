@@ -1,14 +1,22 @@
-# dsh-ppt-master's original patch inserted a profile-level preset declaration:
+# dsh-ppt-master on dsh 0.2.2 is a BUNDLE-ONLY SHELL: this patch intentionally
+# inserts nothing.
 #
-#   - id: preset-ppt-master
-#     name: '@deepseek-ai/dsh-agent-preset'
-#     config: { id: ppt-master, ..., plugins: [...] }
+# The PPT Master agent preset (id `ppt-master`) is declared by the generated
+# `@dsh-vscode/presets` bundle, which converts plugins/presets/ppt-master/
+# (preset.yml + agent.cordis.yml) into an `@deepseek-ai/dsh-agent-preset` row.
+# That is the single owner of the declaration: a second insert of id
+# `ppt-master` here would make the preset registry refuse it with
+# `Duplicate agent preset: ppt-master`.
 #
-# `@deepseek-ai/dsh-agent-preset` (singular) only exists on dsh >= 0.1.7 — this
-# profile runs 0.1.5, where presets are declared the platform way: a
-# .agent-presets/<id>/{preset.yml,agent.cordis.yml} pair. That conversion lives
-# in plugins/presets/ppt-master/ (shipped by syncBakedPresets), so this bundle
-# patch intentionally inserts nothing — the package is only transplanted into
-# the profile's node_modules so the preset's `name: dsh-ppt-master` row can
-# resolve it.
+# This package still ships in BUNDLED_PLUGINS because the preset mounts its
+# rows from it: the `ppt-master-tools` row in the generated preset names
+# `dsh-ppt-master` (resolved from <profile>/node_modules) and its `skills/`
+# directory is read at runtime by the plugin's skill provider.
+#
+# History: upstream dsh-ppt-master@1.0.8 ships a full cordis.patch.yml whose
+# `- id: preset-ppt-master` insert targets '@deepseek-ai/dsh-agent-preset'.
+# That package did not exist on dsh 0.1.5, so the insert was emptied and the
+# preset moved to the platform .agent-presets/ mechanism. On 0.2.2 the
+# agent-preset package exists but presets are declared from bundle patches, so
+# the generated @dsh-vscode/presets bundle owns the single declaration.
 []

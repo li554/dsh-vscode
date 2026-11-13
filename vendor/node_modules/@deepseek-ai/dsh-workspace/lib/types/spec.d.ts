@@ -28,12 +28,17 @@ export type WorkspaceRecord = z.infer<typeof workspaceRecord>;
  * the registry-global archive set layered over workspace accounting: an
  * archived session keeps its `sessionIds` slot (unarchiving must restore the
  * position), so the set never participates in the one-owner accounting
- * invariant. Defaulted so records written before the field parse unchanged.
+ * invariant. `pinnedSessionIds` is the registry-global pin set in pin order
+ * (most recently pinned first); pinning and archival are mutually
+ * exclusive, so archiving drops the session's pin. Both session sets are
+ * defaulted so records written before the fields parse unchanged.
  */
 export declare const workspaceDomainState: z.ZodObject<{
     initialized: z.ZodBoolean;
+    defaultWorkspaceId: z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<WorkspaceId, string>>>;
     workspaceIds: z.ZodArray<z.ZodPipe<z.ZodString, z.ZodTransform<WorkspaceId, string>>>;
     archivedSessionIds: z.ZodDefault<z.ZodArray<z.ZodPipe<z.ZodString, z.ZodTransform<SessionId, string>>>>;
+    pinnedSessionIds: z.ZodDefault<z.ZodArray<z.ZodPipe<z.ZodString, z.ZodTransform<SessionId, string>>>>;
     pendingMutation: z.ZodOptional<z.ZodDiscriminatedUnion<[z.ZodObject<{
         operation: z.ZodLiteral<"create">;
         workspaceId: z.ZodPipe<z.ZodString, z.ZodTransform<WorkspaceId, string>>;
@@ -56,8 +61,10 @@ export declare const workspaceDomainSpec: {
     global: {
         schema: z.ZodObject<{
             initialized: z.ZodBoolean;
+            defaultWorkspaceId: z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<WorkspaceId, string>>>;
             workspaceIds: z.ZodArray<z.ZodPipe<z.ZodString, z.ZodTransform<WorkspaceId, string>>>;
             archivedSessionIds: z.ZodDefault<z.ZodArray<z.ZodPipe<z.ZodString, z.ZodTransform<SessionId, string>>>>;
+            pinnedSessionIds: z.ZodDefault<z.ZodArray<z.ZodPipe<z.ZodString, z.ZodTransform<SessionId, string>>>>;
             pendingMutation: z.ZodOptional<z.ZodDiscriminatedUnion<[z.ZodObject<{
                 operation: z.ZodLiteral<"create">;
                 workspaceId: z.ZodPipe<z.ZodString, z.ZodTransform<WorkspaceId, string>>;
@@ -70,6 +77,7 @@ export declare const workspaceDomainSpec: {
             initialized: boolean;
             workspaceIds: never[];
             archivedSessionIds: never[];
+            pinnedSessionIds: never[];
         };
     };
     tables: {

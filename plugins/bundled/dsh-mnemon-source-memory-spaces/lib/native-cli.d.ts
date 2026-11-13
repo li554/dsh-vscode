@@ -2,6 +2,12 @@
 /** Execute JavaScript with the Host binary even when it is Electron's GUI executable. */
 declare function nodeLauncherEnvironment(environment?: NodeJS.ProcessEnv): NodeJS.ProcessEnv;
 declare function mnemonNpmLauncher(command: string): string | undefined;
+/** Keep CLI subprocesses under our windowsHide, timeout and cancellation policy. */
+declare function resolveMnemonInvocation(command: string, args: readonly string[], env?: NodeJS.ProcessEnv): {
+  command: string;
+  args: string[];
+  env?: NodeJS.ProcessEnv;
+};
 interface CommandDiscoveryOptions {
   platform?: NodeJS.Platform;
   env?: NodeJS.ProcessEnv;
@@ -14,4 +20,4 @@ declare function findMnemonCommand(config: {
   cliPath?: string | undefined;
 }, options?: CommandDiscoveryOptions): string | undefined;
 //#endregion
-export { CommandDiscoveryOptions, findMnemonCommand, isMnemonExecutable, mnemonNpmLauncher, nodeLauncherEnvironment };
+export { CommandDiscoveryOptions, findMnemonCommand, isMnemonExecutable, mnemonNpmLauncher, nodeLauncherEnvironment, resolveMnemonInvocation };

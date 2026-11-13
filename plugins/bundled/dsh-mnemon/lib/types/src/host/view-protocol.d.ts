@@ -8,9 +8,14 @@ export interface MemoryPluginPreference {
     enabled: boolean;
     config: Record<string, MemoryJsonValue>;
 }
+/** Saved form: enablement lives in the DSH profile patch once the plugin manager can write it. */
+export interface MemoryPluginSavedPreference {
+    enabled?: boolean;
+    config: Record<string, MemoryJsonValue>;
+}
 export interface MemoryViewPreferences {
     strategyTypeId?: string;
-    entries: Record<string, MemoryPluginPreference>;
+    entries: Record<string, MemoryPluginSavedPreference>;
 }
 export interface MemoryPluginEntryView {
     entryId: string;

@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### 何时使用
 
-当组合中任何包需要持久化会话事件日志以外的数据——工作区记录、会话伴随数据——时就挂载枢纽。领域数据形式与两个内置后端都依赖它，因此组合的存储行是 `storage` 加一个后端加 `storage-domain`。没有任何此类数据的组合可以省略整个组；agent loop 永远不需要它。
+当组合中任何包需要持久化会话事件日志以外的数据——工作区记录、会话伴随数据——时就挂载枢纽。领域数据形式与两个内置后端都依赖它，因此组合的存储行是 `storage` 加一个后端加 `storage-domain`。没有任何此类数据的组合可以省略整个组；agent loop（智能体循环）永远不需要它。
 
 ### 最小组合
 
@@ -76,7 +76,7 @@ kind: "package-reference"
 
 ### 后端约定
 
-[`src/backend.ts`](src/backend.ts) 是后端实现者的规范性约定，由 `tests/contract.ts` 中的共享一致性套件逐条款检查。一个后端只拥有一种介质，并暴露可选的数据形状分面；`kv` 是唯一的分面，打开单元即可获得一个带版本、全局单例的 schema 句柄，其每次单独调用都是原子的，且 resolve 后即已持久。单元名与表名必须匹配 `UNIT_NAME_RE`；记录键是任意字符串，绝不进入文件路径。单元不对并发写入做串行化——顺序由调用方负责——介质上记录的版本与描述符不同时拒绝 `version-mismatch`（不做迁移）。
+[`src/backend.ts`](src/backend.ts) 是后端实现者的规范性约定；`tests/contract.ts` 中的共享一致性套件检查两个已交付后端的整单元行为。一个后端只拥有一种介质，并暴露可选的数据形状分面；`kv` 是唯一的分面。打开单元即可获得一个把 JSON 视为不透明值的句柄，其原子性与持久性按所选布局界定。单元名与表名必须匹配 `UNIT_NAME_RE`。整单元布局的键保持不透明；JSON 逐记录布局的键会成为路径安全的文件路径片段。调用方负责安排并发写入的顺序。读取接受当前版本或已声明的 `compatibleVersions`；不支持的单元版本戳以 `version-mismatch` 拒绝，不支持的 JSON 逐记录文档则读作不存在。修改将当前版本戳与数据原子提交；删除不存在的键不会重新盖戳。领域负责值转换，后端实现者必须保持这些语义；混合值、失败恢复与升级参阅[领域版本](../../../docs/subsystems/storage.zh.md#domain-versioning)。
 
 ### 源码地图
 
@@ -86,7 +86,6 @@ kind: "package-reference"
 | [`src/registry.ts`](src/registry.ts) | `BackendRegistry`：名称 → 后端表、注册资源释放函数 |
 | [`src/backend.ts`](src/backend.ts) | 后端约定：分面、单元、`UNIT_NAME_RE` |
 | [`src/error.ts`](src/error.ts) | 枢纽与每个后端共享的 `StorageError` 代码 |
-| — | 不发布运行时不变式伴生入口；纯注册表。 |
 | [`tests/contract.ts`](tests/contract.ts) | 针对每个后端运行的共享一致性套件 |
 
 </details>

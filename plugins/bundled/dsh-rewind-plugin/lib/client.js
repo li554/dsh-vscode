@@ -9,6 +9,7 @@ var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
 var __export = (target, all) => {
   for (var name2 in all)
     __defProp(target, name2, { get: all[name2], enumerable: true });
@@ -22,93 +23,16 @@ var __copyProps = (to, from, except, desc) => {
   return to;
 };
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
 
 // src/client/index.ts
 var index_exports = {};
 __export(index_exports, {
   apply: () => apply,
-  hiddenSeqsOf: () => hiddenSeqsOf,
   inject: () => inject,
-  name: () => name,
-  targetSeqOfArgs: () => targetSeqOfArgs
+  name: () => name
 });
 module.exports = __toCommonJS(index_exports);
-
-// src/client/hidden.ts
-function resolveChatWatch(resolveView, sessionId, cb) {
-  const view = resolveView(sessionId);
-  return view?.subscribe?.(cb) ?? (() => {
-  });
-}
-function chatSnapshotOf(chatView) {
-  return chatView?.getSnapshot() ?? void 0;
-}
-function messageTextAt(chat, seq) {
-  if (chat === void 0) return void 0;
-  for (const key of chat.order) {
-    const node = chat.nodes.get(key);
-    if (node === void 0 || node.kind !== "user" && node.kind !== "steering") continue;
-    const data = node.data;
-    if (data.seq === seq) {
-      return data.content?.map((block) => block.type === "text" && typeof block.text === "string" ? block.text : "").join("");
-    }
-  }
-  return void 0;
-}
-function targetSeqOfArgs(args) {
-  if (args === void 0 || args === null) return void 0;
-  const match = args.match(/@(\d+)/);
-  return match !== null ? Number(match[1]) : void 0;
-}
-function isExecutedRewindCommand(node, seq) {
-  if (node.name !== "rewind" || node.outcome?.kind !== "success") return false;
-  if (node.outcome.sourceEventSeq === void 0) return false;
-  const args = node.args ?? "";
-  return new RegExp(`(?:^|\\s)@${seq}(?:\\s|$)`).test(args);
-}
-function hasFileImpact(text) {
-  if (text === void 0) return true;
-  const match = text.match(/impact=(\d+)/);
-  if (match !== null) return Number(match[1]) > 0;
-  return false;
-}
-function isPreviewCommand(command) {
-  return (command.args ?? "").includes("preview");
-}
-function isCandidateCommand(command) {
-  return (command.args ?? "").includes("__candidates");
-}
-function hiddenSeqsOf(snap) {
-  const hidden = /* @__PURE__ */ new Set();
-  const spans = [];
-  for (const key of snap.order) {
-    const node = snap.nodes.get(key);
-    if (node === void 0 || node.kind !== "command") continue;
-    const command = node.data;
-    if (command.name !== "rewind") continue;
-    if (isPreviewCommand(command) || isCandidateCommand(command)) {
-      hidden.add(command.seq);
-      continue;
-    }
-    if (command.outcome?.kind !== "success") continue;
-    const marker = command.outcome.sourceEventSeq;
-    if (marker === void 0) continue;
-    hidden.add(command.seq);
-    const target = targetSeqOfArgs(command.args);
-    if (target !== void 0) {
-      spans.push({ start: target, end: marker });
-    }
-  }
-  for (const key of snap.order) {
-    const node = snap.nodes.get(key);
-    if (node === void 0) continue;
-    const anchor = node.anchorSeq;
-    if (spans.some((span) => anchor >= span.start && anchor <= span.end)) {
-      hidden.add(anchor);
-    }
-  }
-  return hidden;
-}
 
 // src/client/candidates.ts
 var PREVIEW_CHARS = 80;
@@ -123,14 +47,13 @@ function formatCandidateTime(time) {
   const mm = String(d.getMinutes()).padStart(2, "0");
   return `${hh}:${mm}`;
 }
-function rewindCandidatesOf(snap, hidden, limit = DEFAULT_CANDIDATE_LIMIT) {
+function rewindCandidatesOf(snap, limit = DEFAULT_CANDIDATE_LIMIT) {
   const candidates = [];
   for (let i = snap.order.length - 1; i >= 0 && candidates.length < limit; i--) {
     const key = snap.order[i];
     if (key === void 0) continue;
     const node = snap.nodes.get(key);
     if (node === void 0 || node.kind !== "user" && node.kind !== "steering") continue;
-    if (hidden.has(node.anchorSeq ?? node.data.seq)) continue;
     candidates.push({
       seq: node.data.seq,
       time: node.data.time,
@@ -140,24 +63,7 @@ function rewindCandidatesOf(snap, hidden, limit = DEFAULT_CANDIDATE_LIMIT) {
   return candidates;
 }
 function rewindCandidatesOfChat(snap) {
-  return rewindCandidatesOf(snap, hiddenSeqsOf(snap));
-}
-var CANDIDATE_LIST_HEADER = "candidates=";
-function rewindCandidatesFromHostText(text) {
-  if (!text.startsWith(CANDIDATE_LIST_HEADER)) return [];
-  const lines = text.split("\n").slice(1);
-  const candidates = [];
-  for (const line of lines) {
-    if (line === "") continue;
-    const parts = line.split("	");
-    if (parts.length !== 3) continue;
-    const seq = Number(parts[0]);
-    const time = Number(parts[1]);
-    const preview = parts[2] ?? "";
-    if (!Number.isSafeInteger(seq) || !Number.isFinite(time)) continue;
-    candidates.push({ seq, time, preview });
-  }
-  return candidates;
+  return rewindCandidatesOf(snap);
 }
 function rewindOptionsFromCandidates(candidates, t) {
   return candidates.map((candidate) => ({
@@ -165,6 +71,747 @@ function rewindOptionsFromCandidates(candidates, t) {
     label: candidate.preview || t("popover.noText"),
     detail: formatCandidateTime(candidate.time)
   }));
+}
+
+// src/client/hidden.ts
+var ENGINE_COMMAND = "rewind-plugin";
+var LEGACY_ENGINE_COMMAND = "rewind";
+var ENGINE_COMMANDS = /* @__PURE__ */ new Set([ENGINE_COMMAND, LEGACY_ENGINE_COMMAND]);
+function chatNodesOf(chat) {
+  if (chat === void 0) return EMPTY_NODES;
+  const values = chat.nodes.values;
+  if (typeof values === "function") return [...values.call(chat.nodes)];
+  const nodes = [];
+  for (const key of chat.order) {
+    const node = chat.nodes.get(key);
+    if (node !== void 0) nodes.push(node);
+  }
+  return nodes;
+}
+var EMPTY_NODES = [];
+function resolveChatWatch(resolveView, sessionId, cb) {
+  const view = resolveView(sessionId);
+  return view?.subscribe?.(cb) ?? (() => {
+  });
+}
+function chatSnapshotOf(chatView) {
+  return chatView?.getSnapshot() ?? void 0;
+}
+function messageTextAt(chat, seq) {
+  if (chat === void 0) return void 0;
+  for (const node of chatNodesOf(chat)) {
+    if (node.kind !== "user" && node.kind !== "steering") continue;
+    const data = node.data;
+    if (data.seq === seq) {
+      return data.content?.map((block) => block.type === "text" && typeof block.text === "string" ? block.text : "").join("");
+    }
+  }
+  return void 0;
+}
+function imageRefsOf(content) {
+  const images = [];
+  for (const block of content ?? []) {
+    if (block.type !== "image") continue;
+    const attachment = block.attachment;
+    if (typeof attachment?.attachmentId !== "string" || typeof attachment.mediaType !== "string") continue;
+    images.push({
+      attachmentId: attachment.attachmentId,
+      mediaType: attachment.mediaType,
+      bytes: typeof attachment.bytes === "number" ? attachment.bytes : void 0,
+      width: typeof attachment.width === "number" ? attachment.width : void 0,
+      height: typeof attachment.height === "number" ? attachment.height : void 0,
+      name: typeof attachment.name === "string" ? attachment.name : void 0
+    });
+  }
+  return images;
+}
+function messageAttachmentsAt(chat, seq) {
+  if (chat === void 0) return void 0;
+  for (const node of chatNodesOf(chat)) {
+    if (node.kind !== "user" && node.kind !== "steering") continue;
+    const data = node.data;
+    if (data.seq !== seq) continue;
+    return imageRefsOf(data.content);
+  }
+  return void 0;
+}
+function targetSeqOfArgs(args) {
+  if (args === void 0 || args === null) return void 0;
+  const match = args.match(/@(\d+)/);
+  return match !== null ? Number(match[1]) : void 0;
+}
+function isExecutedRewindCommand(node, seq) {
+  if (node.name === null || !ENGINE_COMMANDS.has(node.name) || node.outcome?.kind !== "success") return false;
+  if (node.outcome.sourceEventSeq === void 0) return false;
+  const args = node.args ?? "";
+  return new RegExp(`(?:^|\\s)@${seq}(?:\\s|$)`).test(args);
+}
+function isPreviewCommand(command) {
+  return (command.args ?? "").includes("preview");
+}
+function isCandidateCommand(command) {
+  return (command.args ?? "").includes("__candidates");
+}
+function rewindCutsOf(nodes) {
+  const cuts = [];
+  for (const node of nodes) {
+    if (node.kind !== "command") continue;
+    const command = node.data;
+    if (command.name === null || !ENGINE_COMMANDS.has(command.name)) continue;
+    if (isPreviewCommand(command) || isCandidateCommand(command)) continue;
+    if (command.outcome?.kind !== "success") continue;
+    const marker = command.outcome.sourceEventSeq;
+    if (marker === void 0) continue;
+    const target = targetSeqOfArgs(command.args);
+    if (target === void 0 || target > marker) continue;
+    cuts.push({ target, marker });
+  }
+  return cuts;
+}
+
+// src/client/styles.ts
+var CLASS = {
+  action: "dsh-rewind-action",
+  popover: "dsh-rewind-popover",
+  popoverBelow: "dsh-rewind-popover-below",
+  popoverTitle: "dsh-rewind-popover-title",
+  popoverTarget: "dsh-rewind-popover-target",
+  popoverOption: "dsh-rewind-popover-option",
+  popoverOptionLabel: "dsh-rewind-popover-option-label",
+  popoverOptionHint: "dsh-rewind-popover-option-hint",
+  popoverImpact: "dsh-rewind-popover-impact",
+  popoverNote: "dsh-rewind-popover-note",
+  popoverActions: "dsh-rewind-popover-actions",
+  popoverPrimary: "dsh-rewind-popover-primary",
+  popoverGhost: "dsh-rewind-popover-ghost",
+  guardHint: "dsh-rewind-guard-hint"
+};
+var STYLE = `
+/* The official action chrome, value for value: the action is Copy's peer in the
+   same 28px row, so a different box, glyph scale, or resting tier would read as
+   a different kind of control. */
+.dsh-rewind-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(28px + var(--dsh-content-font-delta, 0px));
+  height: calc(28px + var(--dsh-content-font-delta, 0px));
+  padding: 6px;
+  border: none;
+  border-radius: var(--dsw-radius-sm, 8px);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+.dsh-rewind-action svg {
+  width: calc(15px + var(--dsh-content-font-delta, 0px));
+  height: calc(15px + var(--dsh-content-font-delta, 0px));
+}
+@media (hover: hover) {
+  .dsh-rewind-action:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-secondary);
+  }
+}
+
+.dsh-rewind-popover {
+  position: fixed;
+  z-index: 1100;
+  box-sizing: border-box;
+  /* Keep the plugin's 300px panel width while using the official anchor
+     sizing model; max-content lets long impact paths size up to that cap. */
+  width: max-content;
+  min-width: min(300px, calc(100vw - 24px));
+  max-width: min(300px, calc(100vw - 24px));
+  padding: 16px;
+  border: 0;
+  border-radius: var(--dsw-radius-lg);
+  background: var(--dsw-specific-menu, var(--dsw-alias-bg-layer-3));
+  backdrop-filter: var(--dsw-menu-backdrop-filter);
+  isolation: isolate;
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
+  /* Elevated surface: match the menu cards' l2 scrollbar tokens. */
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+  box-shadow: var(--dsw-elevation-prominent);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+  max-height: calc(100dvh - 12px - max(12px, var(--dsh-frame-overlay-top, 12px)));
+  overflow-x: hidden;
+  overflow-y: auto;
+  position-area: none;
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: max(12px, calc(anchor(top) + 4px));
+  left: max(12px, anchor(left));
+  right: 12px;
+  position-try-fallbacks: --dsh-rewind-window, --dsh-rewind-opposite, --dsh-rewind-wide-opposite, --dsh-rewind-tall, --dsh-rewind-viewport;
+  align-self: end;
+  justify-self: start;
+  height: fit-content;
+  min-height: 0;
+  margin: 0;
+}
+/* Below-first mirror of the official fallback order: same-side wide, opposite
+   anchored, opposite wide (the official window rule), tall, viewport. */
+.dsh-rewind-popover.dsh-rewind-popover-below {
+  top: max(12px, calc(anchor(bottom) + 4px));
+  bottom: 12px;
+  align-self: start;
+  position-try-fallbacks: --dsh-rewind-below-window, --dsh-rewind-below-opposite, --dsh-rewind-window, --dsh-rewind-tall, --dsh-rewind-viewport;
+}
+@position-try --dsh-rewind-below-window {
+  position-area: none;
+  top: max(12px, calc(anchor(bottom) + 4px));
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  margin: 0;
+  align-self: start;
+  justify-self: safe end;
+}
+@position-try --dsh-rewind-below-opposite {
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: max(12px, calc(anchor(top) + 4px));
+  align-self: end;
+}
+@position-try --dsh-rewind-window {
+  position-area: none;
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: max(12px, calc(anchor(top) + 4px));
+  left: 12px;
+  right: 12px;
+  margin: 0;
+  align-self: safe end;
+  justify-self: safe end;
+}
+@position-try --dsh-rewind-opposite {
+  top: max(12px, calc(anchor(bottom) + 4px));
+  bottom: 12px;
+  align-self: start;
+}
+@position-try --dsh-rewind-wide-opposite {
+  top: max(12px, calc(anchor(bottom) + 4px));
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  align-self: start;
+  justify-self: safe end;
+}
+@position-try --dsh-rewind-tall {
+  position-area: none;
+  top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  bottom: 12px;
+  left: max(12px, anchor(left));
+  right: 12px;
+  margin: 0;
+  align-self: safe start;
+  justify-self: start;
+}
+@position-try --dsh-rewind-viewport {
+  position-area: none;
+  inset: max(12px, var(--dsh-frame-overlay-top, 12px)) 12px 12px;
+  margin: 0;
+  align-self: safe start;
+  justify-self: safe end;
+}
+.dsh-rewind-popover-title {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+}
+.dsh-rewind-popover-target {
+  margin: 2px 0 10px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  word-break: break-all;
+  /* The full message sits above the popover; two lines are enough context. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.dsh-rewind-popover-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  margin: 0 0 2px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.dsh-rewind-popover-option:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+/* Arrow navigation moves real focus, so the focused row carries the pointer's
+   fill and the browser ring is suppressed: in dark mode the UA two-tone ring
+   draws its dark half against the filled row and reads as a residue edge (the
+   harness Menu suppresses it the same way). */
+.dsh-rewind-popover-option:focus-visible:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+  outline: none;
+}
+.dsh-rewind-popover-option:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.dsh-rewind-popover-option-label {
+  font-weight: 500;
+}
+.dsh-rewind-popover-option-hint {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+}
+.dsh-rewind-popover-impact {
+  margin: 4px 0 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: pre-wrap;
+  max-height: 160px;
+  overflow: auto;
+}
+.dsh-rewind-popover-note {
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 15px;
+  color: var(--dsw-alias-label-tertiary);
+}
+.dsh-rewind-popover-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+.dsh-rewind-popover-primary,
+.dsh-rewind-popover-ghost {
+  height: 28px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 8px;
+  font: inherit;
+  cursor: pointer;
+}
+.dsh-rewind-popover-primary {
+  background: var(--dsw-alias-button-primary-fill);
+  color: var(--dsw-alias-label-primary-foreground);
+}
+.dsh-rewind-popover-primary:hover:not(:disabled) {
+  background: var(--dsw-alias-button-primary-hover);
+}
+.dsh-rewind-popover-primary:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.dsh-rewind-popover-ghost {
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+}
+.dsh-rewind-popover-ghost:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+.dsh-rewind-popover-ghost:active {
+  background: var(--dsw-alias-interactive-bg-active);
+}
+
+.dsh-rewind-guard-hint {
+  position: fixed;
+  z-index: 1000;
+  max-width: min(440px, calc(100vw - 24px));
+  padding: 8px 12px;
+  border: 0;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-specific-menu, var(--dsw-alias-bg-layer-3));
+  backdrop-filter: var(--dsw-menu-backdrop-filter);
+  isolation: isolate;
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
+  box-shadow: var(--dsw-elevation-panel);
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+  pointer-events: none;
+}
+
+/* ---- Plugin configuration form ---- */
+/* Only the card's own controls: the two switch rows, their hints, and the divider. */
+.dsh-rewind-settings-divider {
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}
+.dsh-rewind-settings-section {
+  display: grid;
+  gap: 6px;
+  padding: 12px 0;
+}
+.dsh-rewind-settings-toggle-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-primary);
+}
+.dsh-rewind-settings-toggle-label {
+  flex: 1;
+  min-width: 0;
+}
+.dsh-rewind-settings-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-tertiary);
+}
+`;
+
+// src/client/popover.ts
+var popoverEl = null;
+var popoverAnchor = null;
+var disposeOutside = null;
+var liveSessionId = null;
+var composerFocuser = null;
+var anchorSequence = 0;
+function registerComposerFocuser(focus) {
+  composerFocuser = focus;
+}
+function markOpen(anchor) {
+  popoverAnchor = anchor;
+  anchor.setAttribute("aria-expanded", "true");
+}
+function markClosed() {
+  popoverAnchor?.setAttribute("aria-expanded", "false");
+  popoverAnchor = null;
+}
+function closePopover() {
+  if (popoverEl !== null) {
+    popoverEl.remove();
+    popoverEl = null;
+  }
+  if (disposeOutside !== null) {
+    disposeOutside();
+    disposeOutside = null;
+  }
+  markClosed();
+  const sessionId = liveSessionId;
+  liveSessionId = null;
+  if (sessionId !== null) {
+    try {
+      composerFocuser?.(sessionId);
+    } catch {
+    }
+  }
+}
+function findCommand(chat, match) {
+  if (chat === void 0) return void 0;
+  let found;
+  for (const node of chatNodesOf(chat)) {
+    if (node.kind !== "command") continue;
+    const command = node.data;
+    if (!match(command)) continue;
+    if (found === void 0 || command.seq >= found.seq) found = command;
+  }
+  return found;
+}
+function knownCommandSeqs(session, chatOf, match) {
+  const known = /* @__PURE__ */ new Set();
+  const chat = chatOf(session);
+  if (chat === void 0) return known;
+  for (const node of chatNodesOf(chat)) {
+    if (node.kind !== "command") continue;
+    const command = node.data;
+    if (match(command)) known.add(command.seq);
+  }
+  return known;
+}
+function waitForCommand(session, chatOf, match, timeoutMs = 8e3, watch) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const settle = (value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      unsubscribe();
+      resolve(value);
+    };
+    const check = () => {
+      const node = findCommand(chatOf(session), match);
+      if (node?.outcome !== null && node?.outcome !== void 0) {
+        settle({ kind: node.outcome.kind, text: node.outcome.text });
+      }
+    };
+    const unsubscribe = watch(check);
+    const timer = setTimeout(() => settle(null), timeoutMs);
+    check();
+  });
+}
+var UNAVAILABLE = () => Promise.resolve({ kind: "error", text: "host query is unavailable" });
+var previewCall = UNAVAILABLE;
+function registerPreviewCall(call) {
+  previewCall = call ?? UNAVAILABLE;
+}
+function previewImpact(sessionId, seq) {
+  return previewCall(sessionId, seq);
+}
+function el(tag2, className, text) {
+  const node = document.createElement(tag2);
+  node.className = className;
+  if (text !== void 0) node.textContent = text;
+  return node;
+}
+function modeOption(label, hint, onClick) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = CLASS.popoverOption;
+  const labelEl = el("span", CLASS.popoverOptionLabel, label);
+  const hintEl = el("span", CLASS.popoverOptionHint, hint);
+  button.append(labelEl, hintEl);
+  button.addEventListener("click", onClick);
+  return button;
+}
+function focusableButtons(root) {
+  return Array.from(root.querySelectorAll("button")).filter((button) => !button.disabled && !button.classList.contains(CLASS.popoverGhost));
+}
+function focusFirst(root) {
+  focusableButtons(root)[0]?.focus();
+}
+function moveFocus(root, dir) {
+  const buttons = focusableButtons(root);
+  if (buttons.length === 0) return;
+  const active = document.activeElement;
+  const index = active instanceof HTMLButtonElement ? buttons.indexOf(active) : -1;
+  const next = index === -1 ? dir === 1 ? 0 : buttons.length - 1 : (index + dir + buttons.length) % buttons.length;
+  buttons[next]?.focus();
+}
+function moveFocusByKey(root, event) {
+  if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return false;
+  event.preventDefault();
+  event.stopPropagation();
+  moveFocus(root, event.key === "ArrowDown" ? 1 : -1);
+  return true;
+}
+function renderImpactStep(root, opts, back, recheck, cached) {
+  const { session, seq, t } = opts;
+  const impact = el("div", CLASS.popoverImpact, t("popover.impact.loading"));
+  const actions = el("div", CLASS.popoverActions);
+  const backButton = document.createElement("button");
+  backButton.type = "button";
+  backButton.className = CLASS.popoverGhost;
+  backButton.textContent = t("popover.back");
+  backButton.addEventListener("click", back);
+  actions.append(backButton);
+  const confirm = document.createElement("button");
+  confirm.type = "button";
+  confirm.className = CLASS.popoverPrimary;
+  confirm.textContent = t("popover.confirm");
+  confirm.disabled = true;
+  actions.append(confirm);
+  root.replaceChildren(impact, actions);
+  focusFirst(root);
+  recheck();
+  void (async () => {
+    const outcome = cached ?? await previewImpact(session.sessionId, seq);
+    if (outcome === null) {
+      impact.textContent = t("popover.impact.failed", { message: "preview request timed out" });
+      return;
+    }
+    if (outcome.kind === "error") {
+      impact.textContent = t("popover.impact.failed", { message: outcome.text });
+      return;
+    }
+    const restores = outcome.files.filter((file) => file.action === "restore").map((file) => file.path);
+    const deletes = outcome.files.filter((file) => file.action === "delete").map((file) => file.path);
+    if (restores.length === 0 && deletes.length === 0) {
+      impact.textContent = t("popover.impact.none");
+    } else {
+      const lines = [
+        ...restores.map((path) => t("popover.impact.restore", { path })),
+        ...deletes.map((path) => t("popover.impact.delete", { path }))
+      ];
+      if (outcome.backupOff) {
+        const list = document.createElement("div");
+        list.textContent = lines.join("\n");
+        impact.replaceChildren(list, el("div", CLASS.popoverNote, t("popover.backupDisabled")));
+      } else {
+        impact.textContent = lines.join("\n");
+      }
+    }
+    confirm.disabled = false;
+    confirm.focus();
+    confirm.addEventListener("click", () => {
+      closePopover();
+      opts.onRewind("both");
+    });
+  })().catch(() => {
+    impact.textContent = t("popover.impact.failed", { message: "unexpected error" });
+  }).finally(() => {
+    recheck();
+  });
+}
+function mountShell(root, anchor, onKeyDown, placement = "above") {
+  if (placement === "below") root.classList.add(CLASS.popoverBelow);
+  const anchorName = `--dsh-rewind-popover-${++anchorSequence}`;
+  const previousAnchorName = anchor.style.getPropertyValue("anchor-name");
+  const previousPriority = anchor.style.getPropertyPriority("anchor-name");
+  const previousList = previousAnchorName.trim();
+  const ownAnchorName = previousList === "" || previousList === "none" ? anchorName : `${previousList} ${anchorName}`;
+  anchor.style.setProperty("anchor-name", ownAnchorName);
+  root.style.setProperty("position-anchor", anchorName);
+  const recheck = () => {
+    if (!root.isConnected) return;
+    if (!anchor.isConnected && popoverEl === root) closePopover();
+  };
+  const onPointerDown = (event) => {
+    const target = event.target;
+    if (root.contains(target) || anchor.contains(target)) return;
+    closePopover();
+  };
+  const deferred = setTimeout(() => {
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown, true);
+  }, 0);
+  document.body.append(root);
+  recheck();
+  const dispose = () => {
+    clearTimeout(deferred);
+    document.removeEventListener("pointerdown", onPointerDown);
+    document.removeEventListener("keydown", onKeyDown, true);
+    if (anchor.style.getPropertyValue("anchor-name") === ownAnchorName) {
+      anchor.style.setProperty("anchor-name", previousAnchorName, previousPriority);
+    }
+  };
+  return { recheck, dispose };
+}
+function openRetractPopover(opts) {
+  const { preview, anchor, t, retract, onRetract } = opts;
+  if (retract === void 0 || onRetract === void 0) return;
+  markOpen(anchor);
+  const root = el("div", CLASS.popover);
+  root.setAttribute("role", "dialog");
+  root.setAttribute("aria-label", t("popover.retract.title"));
+  const onKeyDown = (event) => {
+    if (moveFocusByKey(root, event)) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      closePopover();
+    }
+  };
+  const previewText = preview.length > 0 ? preview : t("popover.noText");
+  const actions = el("div", CLASS.popoverActions);
+  const confirm = document.createElement("button");
+  confirm.type = "button";
+  confirm.className = CLASS.popoverPrimary;
+  confirm.textContent = t("popover.confirm");
+  confirm.addEventListener("click", () => {
+    closePopover();
+    onRetract();
+  });
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.className = CLASS.popoverGhost;
+  cancel.textContent = t("popover.cancel");
+  cancel.addEventListener("click", closePopover);
+  actions.append(confirm, cancel);
+  root.replaceChildren(
+    el("div", CLASS.popoverTitle, t("popover.retract.title")),
+    el("div", CLASS.popoverTarget, t("popover.retract.target", { preview: previewText })),
+    el("div", CLASS.popoverImpact, t("popover.retract.hint")),
+    actions
+  );
+  const shell = mountShell(root, anchor, onKeyDown, opts.placement ?? "above");
+  popoverEl = root;
+  disposeOutside = shell.dispose;
+  focusFirst(root);
+}
+function openPopover(opts) {
+  closePopover();
+  liveSessionId = opts.session.sessionId;
+  if (opts.retract !== void 0) {
+    openRetractPopover(opts);
+    return;
+  }
+  const { session, seq, time, preview, anchor, t } = opts;
+  const onRewind = opts.onRewind;
+  if (seq === void 0 || time === void 0 || onRewind === void 0) return;
+  markOpen(anchor);
+  const durableOpts = { session, seq, time, preview, anchor, t, onRewind };
+  const root = el("div", CLASS.popover);
+  root.setAttribute("role", "dialog");
+  root.setAttribute("aria-label", t("popover.title"));
+  let bothState = { state: "loading" };
+  let impactOutcome = null;
+  let step = "modes";
+  let recheck = () => {
+  };
+  const renderModes = () => {
+    step = "modes";
+    const previewText = preview.length > 0 ? preview : t("popover.noText");
+    const children = [
+      el("div", CLASS.popoverTitle, t("popover.title")),
+      el("div", CLASS.popoverTarget, previewText),
+      modeOption(t("popover.chat"), t("popover.chat.hint"), () => {
+        closePopover();
+        durableOpts.onRewind("chat");
+      })
+    ];
+    if (bothState.state === "noChanges") {
+      children.push(el("div", CLASS.popoverImpact, t("popover.noChanges")));
+    } else if (bothState.state === "error") {
+      children.push(el("div", CLASS.popoverImpact, t("popover.impact.failed", { message: bothState.message })));
+    } else {
+      const option = modeOption(
+        t("popover.both"),
+        bothState.state === "loading" ? t("popover.checking") : t("popover.both.hint"),
+        renderImpact
+      );
+      if (bothState.state === "loading") option.disabled = true;
+      children.push(option);
+    }
+    root.replaceChildren(...children);
+    focusFirst(root);
+    recheck();
+  };
+  const renderImpact = () => {
+    step = "impact";
+    renderImpactStep(root, durableOpts, renderModes, recheck, impactOutcome);
+  };
+  const onKeyDown = (event) => {
+    if (moveFocusByKey(root, event)) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      if (step === "impact") renderModes();
+      else closePopover();
+    }
+  };
+  renderModes();
+  const shell = mountShell(root, anchor, onKeyDown, opts.placement ?? "above");
+  recheck = shell.recheck;
+  popoverEl = root;
+  disposeOutside = shell.dispose;
+  void (async () => {
+    const outcome = await previewImpact(session.sessionId, seq);
+    impactOutcome = outcome;
+    if (outcome !== null && outcome.kind === "success") {
+      bothState = { state: outcome.files.length > 0 ? "hasChanges" : "noChanges" };
+    } else {
+      bothState = { state: "error", message: outcome?.kind === "error" ? outcome.text : "preview request timed out" };
+    }
+    renderModes();
+  })().catch(() => {
+    bothState = { state: "error", message: "unexpected error" };
+    renderModes();
+  });
 }
 
 // src/client/log.ts
@@ -209,793 +856,417 @@ var rewindLog = {
   debug: (scope, message, data) => log("debug", scope, message, data)
 };
 
-// src/client/styles.ts
-var CLASS = {
-  button: "dsh-rewind-btn",
-  popover: "dsh-rewind-popover",
-  popoverTitle: "dsh-rewind-popover-title",
-  popoverTarget: "dsh-rewind-popover-target",
-  popoverOption: "dsh-rewind-popover-option",
-  popoverOptionLabel: "dsh-rewind-popover-option-label",
-  popoverOptionHint: "dsh-rewind-popover-option-hint",
-  popoverImpact: "dsh-rewind-popover-impact",
-  popoverActions: "dsh-rewind-popover-actions",
-  popoverPrimary: "dsh-rewind-popover-primary",
-  popoverGhost: "dsh-rewind-popover-ghost",
-  guardHint: "dsh-rewind-guard-hint"
-};
-var REWIND_ICON_SVG = [
-  '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">',
-  '  <path d="M6.5 2.5 2.5 6.5l4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>',
-  '  <path d="M2.5 6.5h7a4 4 0 0 1 4 4v1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>',
-  "</svg>"
-].join("");
-var STYLE = `
-.dsh-rewind-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 6px;
-  border: none;
-  border-radius: 28px;
-  background: transparent;
-  color: var(--dsw-alias-label-tertiary);
-  cursor: pointer;
-}
-.dsh-rewind-btn:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-secondary);
-}
-
-.dsh-rewind-popover {
-  position: fixed;
-  z-index: 1000;
-  width: 288px;
-  padding: 12px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 12px;
-  background: var(--dsw-specific-menu, var(--dsw-alias-bg-layer-3));
-  box-shadow: var(--dsw-shadow-lv3);
-  font-size: 14px;
-  line-height: 20px;
-  color: var(--dsw-alias-label-primary);
-}
-.dsh-rewind-popover-title {
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 20px;
-}
-.dsh-rewind-popover-target {
-  margin: 4px 0 10px;
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--dsw-alias-label-tertiary);
-  word-break: break-all;
-}
-.dsh-rewind-popover-option {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: 100%;
-  margin: 0 0 6px;
-  padding: 8px 10px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.dsh-rewind-popover-option:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
-.dsh-rewind-popover-option:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-.dsh-rewind-popover-option-label {
-  font-weight: 500;
-}
-.dsh-rewind-popover-option-hint {
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--dsw-alias-label-tertiary);
-}
-.dsh-rewind-popover-impact {
-  margin: 4px 0 10px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: var(--dsw-alias-interactive-bg-hover);
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--dsw-alias-label-secondary);
-  white-space: pre-wrap;
-  max-height: 160px;
-  overflow: auto;
-}
-.dsh-rewind-popover-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-.dsh-rewind-popover-primary,
-.dsh-rewind-popover-ghost {
-  padding: 5px 12px;
-  border: none;
-  border-radius: 8px;
-  font: inherit;
-  font-size: 13px;
-  line-height: 18px;
-  cursor: pointer;
-}
-.dsh-rewind-popover-primary {
-  background: var(--dsw-alias-button-primary-fill);
-  color: var(--dsw-alias-label-primary-foreground);
-}
-.dsh-rewind-popover-primary:hover:not(:disabled) {
-  background: var(--dsw-alias-button-primary-hover);
-}
-.dsh-rewind-popover-primary:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-.dsh-rewind-popover-ghost {
-  background: transparent;
-  color: var(--dsw-alias-label-secondary);
-}
-.dsh-rewind-popover-ghost:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
-
-.dsh-rewind-guard-hint {
-  position: fixed;
-  z-index: 1000;
-  max-width: min(440px, calc(100vw - 24px));
-  padding: 8px 12px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 10px;
-  background: var(--dsw-specific-menu, var(--dsw-alias-bg-layer-3));
-  box-shadow: var(--dsw-shadow-lv3);
-  font-size: 13px;
-  line-height: 18px;
-  color: var(--dsw-alias-label-primary);
-  pointer-events: none;
-}
-
-/* ---- Snapshot-cleanup settings card (mirrors the harness PluginCard look) ---- */
-/* Standardized on the 0.1.2 harness card look (border-radius 16px + 0.5px
-   border-l4, 0.5px internal separators). */
-.dsh-rewind-cleanup-card {
-  list-style: none;
-  border: 0.5px solid var(--dsw-alias-border-l4);
-  border-radius: 16px;
-  background: var(--dsw-alias-bg-layer-3);
-  transition: border-color .16s, background .16s;
-}
-.dsh-rewind-cleanup-card:hover {
-  border-color: var(--dsw-alias-label-dimmed);
-}
-.dsh-rewind-cleanup-card-open {
-  background: var(--dsw-alias-bg-layer-2);
-  border-color: var(--dsw-alias-label-dimmed);
-}
-.dsh-rewind-cleanup-header {
-  width: 100%;
-  appearance: none;
-  border: 0;
-  background: none;
-  font: inherit;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  border-radius: 12px;
-}
-.dsh-rewind-cleanup-header:focus-visible {
-  outline: 2px solid var(--dsw-alias-brand-primary);
-  outline-offset: -2px;
-}
-.dsh-rewind-cleanup-head-text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.dsh-rewind-cleanup-name {
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.4;
-  color: var(--dsw-alias-label-primary);
-}
-.dsh-rewind-cleanup-desc {
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--dsw-alias-label-tertiary);
-}
-.dsh-rewind-cleanup-chevron {
-  flex: none;
-  color: var(--dsw-alias-label-tertiary);
-  transition: transform .16s;
-}
-.dsh-rewind-cleanup-chevron-open {
-  transform: rotate(180deg);
-}
-.dsh-rewind-cleanup-pending {
-  flex: none;
-  border-radius: 999px;
-  padding: 1px 8px;
-  font-size: 11px;
-  line-height: 17px;
-  font-weight: 500;
-  white-space: nowrap;
-  background: var(--dsw-alias-bg-module-platform);
-  color: var(--dsw-alias-label-secondary);
-}
-.dsh-rewind-cleanup-body {
-  border-top: 0.5px solid var(--dsw-alias-border-l2);
-  margin: 0 16px;
-  padding: 0 0 8px;
-}
-.dsh-rewind-cleanup-readonly {
-  margin: 12px 0 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--dsw-alias-label-tertiary);
-}
-.dsh-rewind-cleanup-permission {
-  display: grid;
-  gap: 6px;
-  padding: 12px 0;
-}
-.dsh-rewind-cleanup-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 12px 0;
-}
-.dsh-rewind-cleanup-field + .dsh-rewind-cleanup-field {
-  border-top: 0.5px solid var(--dsw-alias-border-l2);
-}
-/* Auto-cleanup (permission) block and the max-age field are consecutive control
- * sections of the open card \u2014 give them the same 0.5px divider the harness gives
- * every pair of config fields (fields.module.css field + field). */
-.dsh-rewind-cleanup-permission + .dsh-rewind-cleanup-field {
-  border-top: 0.5px solid var(--dsw-alias-border-l2);
-}
-.dsh-rewind-cleanup-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.dsh-rewind-cleanup-label {
-  flex: 1;
-  min-width: 0;
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.5;
-  color: var(--dsw-alias-label-primary);
-}
-.dsh-rewind-cleanup-hint {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--dsw-alias-label-tertiary);
-}
-.dsh-rewind-cleanup-error {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--dsw-alias-label-error);
-}
-/* Switch row: label left, role=switch button right, hint below (Subagent module).
- * The track mirrors the harness ui-primitives Switch (0.1.3-alpha.2 line): the
- * on/off appearance keys off aria-checked rather than a parallel class, so the
- * visual state cannot disagree with the state assistive technology reads, and
- * corner-shape: round opts the capsule track out of the global superellipse
- * (which would square the capsule ends off against the round thumb inside). */
-.dsh-rewind-cleanup-toggle-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--dsw-alias-label-primary);
-}
-.dsh-rewind-cleanup-toggle-label {
-  flex: 1;
-  min-width: 0;
-}
-.dsh-rewind-cleanup-switch {
-  box-sizing: border-box;
-  position: relative;
-  flex: 0 0 auto;
-  width: 36px;
-  height: 20px;
-  padding: 2px;
-  border: 0;
-  border-radius: 10px;
-  corner-shape: round;
-  background: var(--dsw-alias-border-l3);
-  cursor: pointer;
-}
-.dsh-rewind-cleanup-switch[aria-checked='true'] {
-  background: var(--dsw-alias-brand-primary);
-}
-.dsh-rewind-cleanup-switch:disabled {
-  cursor: default;
-  opacity: 0.5;
-}
-.dsh-rewind-cleanup-switch:focus-visible {
-  outline: 2px solid var(--dsw-alias-brand-primary);
-  outline-offset: 2px;
-}
-.dsh-rewind-cleanup-thumb {
-  display: block;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  corner-shape: round;
-  background: var(--dsw-alias-label-primary-foreground);
-  transition: transform 120ms ease;
-}
-.dsh-rewind-cleanup-switch[aria-checked='true'] .dsh-rewind-cleanup-thumb {
-  transform: translateX(16px);
-}
-.dsh-rewind-cleanup-input {
-  box-sizing: border-box;
-  height: 34px;
-  padding: 0 12px;
-  border: 0.5px solid var(--dsw-alias-border-l4);
-  border-radius: 8px;
-  background: var(--dsw-alias-bg-layer-3);
-  font: inherit;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--dsw-alias-label-primary);
-}
-.dsh-rewind-cleanup-input:focus-visible {
-  outline: none;
-  border-color: var(--dsw-alias-brand-primary);
-}
-.dsh-rewind-cleanup-input:disabled {
-  color: var(--dsw-alias-label-tertiary);
-  cursor: default;
-}
-.dsh-rewind-cleanup-input-invalid {
-  border-color: var(--dsw-alias-label-error);
-}
-.dsh-rewind-cleanup-footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 12px 0 4px;
-  border-top: 0.5px solid var(--dsw-alias-border-l2);
-}
-.dsh-rewind-cleanup-failed {
-  flex: 1;
-  min-width: 0;
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--dsw-alias-label-error);
-}
-.dsh-rewind-cleanup-discard,
-.dsh-rewind-cleanup-save {
-  appearance: none;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  padding: 5px 14px;
-  font: inherit;
-  font-size: 13px;
-  line-height: 1.5;
-  cursor: pointer;
-}
-.dsh-rewind-cleanup-discard {
-  border-color: var(--dsw-alias-border-l2);
-  background: none;
-  color: var(--dsw-alias-label-secondary);
-}
-.dsh-rewind-cleanup-discard:hover:not(:disabled) {
-  color: var(--dsw-alias-label-primary);
-  border-color: var(--dsw-alias-label-dimmed);
-}
-.dsh-rewind-cleanup-save {
-  background: var(--dsw-alias-label-primary);
-  color: var(--dsw-alias-bg-layer-3);
-}
-.dsh-rewind-cleanup-discard:disabled,
-.dsh-rewind-cleanup-save:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-.dsh-rewind-cleanup-discard:focus-visible,
-.dsh-rewind-cleanup-save:focus-visible {
-  outline: 2px solid var(--dsw-alias-brand-primary);
-  outline-offset: 1px;
-}
-`;
-
-// src/client/popover.ts
-var popoverEl = null;
-var disposeOutside = null;
-function closePopover() {
-  if (popoverEl !== null) {
-    popoverEl.remove();
-    popoverEl = null;
-  }
-  if (disposeOutside !== null) {
-    disposeOutside();
-    disposeOutside = null;
-  }
-}
-function formatTarget(t, seq, time, preview) {
-  const d = new Date(time);
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  const previewText = preview.length > 0 ? preview : t("popover.noText");
-  return `seq ${seq} \xB7 ${hh}:${mm} \xB7 ${previewText}`;
-}
-function parseImpactList(text) {
-  const restores = [];
-  const deletes = [];
-  for (const line of text.split("\n")) {
-    if (line.startsWith("restore:")) restores.push(line.slice("restore:".length));
-    else if (line.startsWith("delete:")) deletes.push(line.slice("delete:".length));
-  }
-  return { restores, deletes };
-}
-function findCommand(chat, match) {
-  if (chat === void 0) return void 0;
-  let found;
-  for (const key of chat.order) {
-    const node = chat.nodes.get(key);
-    if (node !== void 0 && node.kind === "command") {
-      const command = node.data;
-      if (match(command)) found = command;
-    }
-  }
-  return found;
-}
-function knownCommandSeqs(session, chatOf, match) {
-  const known = /* @__PURE__ */ new Set();
-  const chat = chatOf(session);
-  if (chat === void 0) return known;
-  for (const key of chat.order) {
-    const node = chat.nodes.get(key);
-    if (node !== void 0 && node.kind === "command") {
-      const command = node.data;
-      if (match(command)) known.add(command.seq);
-    }
-  }
-  return known;
-}
-function waitForCommand(session, chatOf, match, timeoutMs = 8e3, watch) {
-  return new Promise((resolve) => {
-    let settled = false;
-    const settle = (value) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      unsubscribe();
-      resolve(value);
-    };
-    const check = () => {
-      const node = findCommand(chatOf(session), match);
-      if (node?.outcome !== null && node?.outcome !== void 0) {
-        settle({ kind: node.outcome.kind, text: node.outcome.text });
-      }
-    };
-    const unsubscribe = watch(check);
-    const timer = setTimeout(() => settle(null), timeoutMs);
-    check();
-  });
-}
-function isPreviewFor(node, seq) {
-  const args = node.args ?? "";
-  return node.name === "rewind" && args.includes("preview") && new RegExp(`(?:^|\\s)@${seq}(?=\\s|$)`).test(args);
-}
-async function previewImpact(session, chatOf, seq, watch) {
-  const known = knownCommandSeqs(session, chatOf, (node) => isPreviewFor(node, seq));
-  let result;
-  try {
-    result = await session.command(`/rewind preview @${seq} both`);
-  } catch (error) {
-    rewindLog.warn("preview", `preview command threw for @${seq}`, error);
-    return { kind: "error", text: error instanceof Error ? error.message : String(error) };
-  }
-  if (!result.ok) {
-    rewindLog.warn("preview", `preview command rejected for @${seq}`, result.error);
-    return { kind: "error", text: `${result.error.code}: ${result.error.message}` };
-  }
-  if (result.value?.matched !== true) {
-    rewindLog.warn("preview", `preview command was not matched for @${seq}`);
-    return { kind: "error", text: "the rewind command is not registered on this host" };
-  }
-  return waitForCommand(session, chatOf, (node) => isPreviewFor(node, seq) && !known.has(node.seq), 8e3, watch);
-}
-function el(tag2, className, text) {
-  const node = document.createElement(tag2);
-  node.className = className;
-  if (text !== void 0) node.textContent = text;
-  return node;
-}
-function modeOption(label, hint, onClick) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = CLASS.popoverOption;
-  const labelEl = el("span", CLASS.popoverOptionLabel, label);
-  const hintEl = el("span", CLASS.popoverOptionHint, hint);
-  button.append(labelEl, hintEl);
-  button.addEventListener("click", onClick);
-  return button;
-}
-function focusableButtons(root) {
-  return Array.from(root.querySelectorAll("button")).filter((button) => !button.disabled && !button.classList.contains(CLASS.popoverGhost));
-}
-function focusFirst(root) {
-  focusableButtons(root)[0]?.focus();
-}
-function moveFocus(root, dir) {
-  const buttons = focusableButtons(root);
-  if (buttons.length === 0) return;
-  const active = document.activeElement;
-  const index = active instanceof HTMLButtonElement ? buttons.indexOf(active) : -1;
-  const next = index === -1 ? dir === 1 ? 0 : buttons.length - 1 : (index + dir + buttons.length) % buttons.length;
-  buttons[next]?.focus();
-}
-function renderImpactStep(root, opts, back, cached) {
-  const { session, seq, t } = opts;
-  const impact = el("div", CLASS.popoverImpact, t("popover.impact.loading"));
-  const actions = el("div", CLASS.popoverActions);
-  const backButton = document.createElement("button");
-  backButton.type = "button";
-  backButton.className = CLASS.popoverGhost;
-  backButton.textContent = t("popover.back");
-  backButton.addEventListener("click", back);
-  actions.append(backButton);
-  const confirm = document.createElement("button");
-  confirm.type = "button";
-  confirm.className = CLASS.popoverPrimary;
-  confirm.textContent = t("popover.confirm");
-  confirm.disabled = true;
-  actions.append(confirm);
-  root.replaceChildren(impact, actions);
-  focusFirst(root);
-  void (async () => {
-    const outcome = cached ?? await previewImpact(session, opts.chatOf, seq, (cb) => opts.watchChat(session.sessionId, cb));
-    if (outcome === null) {
-      impact.textContent = t("popover.impact.failed", { message: "preview command failed or timed out" });
-      return;
-    }
-    if (outcome.kind === "error") {
-      impact.textContent = t("popover.impact.failed", { message: outcome.text ?? "unknown error" });
-      return;
-    }
-    if (outcome.text === void 0) {
-      impact.textContent = t("popover.impact.none");
-    } else {
-      const { restores, deletes } = parseImpactList(outcome.text);
-      if (restores.length === 0 && deletes.length === 0) {
-        impact.textContent = t("popover.impact.none");
-      } else {
-        const lines = [
-          ...restores.map((path) => t("popover.impact.restore", { path })),
-          ...deletes.map((path) => t("popover.impact.delete", { path }))
-        ];
-        impact.textContent = lines.join("\n");
-      }
-    }
-    confirm.disabled = false;
-    confirm.focus();
-    confirm.addEventListener("click", () => {
-      closePopover();
-      opts.onRewind("both");
+// src/client/visibility.ts
+var patches = /* @__PURE__ */ new Map();
+var currentCleanup;
+function installChatViewVisibility(ctx) {
+  let stopped = false;
+  const start = () => {
+    const scope = ctx.inject?.(["uiConversation"], (child) => {
+      if (!stopped) installOn(child.get("uiConversation"), ctx.sessions);
     });
-  })().catch(() => {
-    impact.textContent = t("popover.impact.failed", { message: "unexpected error" });
-  });
-}
-function mountShell(root, anchor, onKeyDown) {
-  const position = () => {
-    const rect = anchor.getBoundingClientRect();
-    const gap = 4;
-    const height = root.offsetHeight;
-    const top = rect.bottom + gap + height <= window.innerHeight - 8 ? rect.bottom + gap : Math.max(8, rect.top - gap - height);
-    root.style.top = `${Math.round(top)}px`;
-    root.style.left = `${Math.round(Math.min(rect.right, window.innerWidth - 8 - root.offsetWidth))}px`;
-  };
-  const onPointerDown = (event) => {
-    const target = event.target;
-    if (root.contains(target) || anchor.contains(target)) return;
-    closePopover();
-  };
-  const deferred = setTimeout(() => {
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown, true);
-  }, 0);
-  const dispose = () => {
-    clearTimeout(deferred);
-    document.removeEventListener("pointerdown", onPointerDown);
-    document.removeEventListener("keydown", onKeyDown, true);
-  };
-  document.body.append(root);
-  position();
-  return { position, dispose };
-}
-function openRetractPopover(opts) {
-  closePopover();
-  const { preview, anchor, t, retract, onRetract } = opts;
-  if (retract === void 0 || onRetract === void 0) return;
-  const root = el("div", CLASS.popover);
-  root.setAttribute("role", "dialog");
-  root.setAttribute("aria-label", t("popover.retract.title"));
-  const onKeyDown = (event) => {
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      event.stopPropagation();
-      moveFocus(root, 1);
-      return;
+    if (ctx.inject === void 0) {
+      installOn(ctx.get("uiConversation"), ctx.sessions);
     }
-    if (event.key === "ArrowUp") {
-      event.preventDefault();
-      event.stopPropagation();
-      moveFocus(root, -1);
-      return;
-    }
-    if (event.key === "Escape") {
-      event.preventDefault();
-      event.stopPropagation();
-      closePopover();
-    }
+    return () => {
+      stopped = true;
+      currentCleanup?.();
+      currentCleanup = void 0;
+      if (typeof scope === "function") scope();
+    };
   };
-  const previewText = preview.length > 0 ? preview : t("popover.noText");
-  const actions = el("div", CLASS.popoverActions);
-  const confirm = document.createElement("button");
-  confirm.type = "button";
-  confirm.className = CLASS.popoverPrimary;
-  confirm.textContent = t("popover.retract.confirm");
-  confirm.addEventListener("click", () => {
-    closePopover();
-    onRetract();
-  });
-  const cancel = document.createElement("button");
-  cancel.type = "button";
-  cancel.className = CLASS.popoverGhost;
-  cancel.textContent = t("popover.cancel");
-  cancel.addEventListener("click", closePopover);
-  actions.append(confirm, cancel);
-  root.replaceChildren(
-    el("div", CLASS.popoverTitle, t("popover.retract.title")),
-    el("div", CLASS.popoverTarget, t("popover.retract.target", { preview: previewText })),
-    el("div", CLASS.popoverImpact, t("popover.retract.hint")),
-    actions
-  );
-  const shell = mountShell(root, anchor, onKeyDown);
-  popoverEl = root;
-  disposeOutside = shell.dispose;
-  focusFirst(root);
-}
-function openPopover(opts) {
-  closePopover();
-  if (opts.retract !== void 0) {
-    openRetractPopover(opts);
+  if (ctx.effect === void 0) {
+    start();
     return;
   }
-  const { session, seq, time, preview, anchor, t, chatOf } = opts;
-  const onRewind = opts.onRewind;
-  if (seq === void 0 || time === void 0 || onRewind === void 0) return;
-  const durableOpts = { session, seq, time, preview, anchor, t, chatOf, watchChat: opts.watchChat, onRewind };
-  const root = el("div", CLASS.popover);
-  root.setAttribute("role", "dialog");
-  root.setAttribute("aria-label", t("popover.title"));
-  let bothState = { state: "loading" };
-  let impactOutcome = null;
-  let step = "modes";
-  const renderModes = () => {
-    step = "modes";
-    const children = [
-      el("div", CLASS.popoverTitle, t("popover.title")),
-      el("div", CLASS.popoverTarget, formatTarget(t, seq, time, preview)),
-      modeOption(t("popover.chat"), t("popover.chat.hint"), () => {
-        closePopover();
-        durableOpts.onRewind("chat");
-      })
-    ];
-    if (bothState.state === "noChanges") {
-      children.push(el("div", CLASS.popoverImpact, t("popover.noChanges")));
-    } else if (bothState.state === "error") {
-      children.push(el("div", CLASS.popoverImpact, t("popover.impact.failed", { message: bothState.message })));
-    } else {
-      const option = modeOption(
-        t("popover.both"),
-        bothState.state === "loading" ? t("popover.checking") : t("popover.both.hint"),
-        renderImpact
-      );
-      if (bothState.state === "loading") option.disabled = true;
-      children.push(option);
-    }
-    const actions = el("div", CLASS.popoverActions);
-    const cancel = document.createElement("button");
-    cancel.type = "button";
-    cancel.className = CLASS.popoverGhost;
-    cancel.textContent = t("popover.cancel");
-    cancel.addEventListener("click", closePopover);
-    actions.append(cancel);
-    children.push(actions);
-    root.replaceChildren(...children);
-    focusFirst(root);
-  };
-  const renderImpact = () => {
-    step = "impact";
-    renderImpactStep(root, durableOpts, renderModes, impactOutcome);
-  };
-  const onKeyDown = (event) => {
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      event.stopPropagation();
-      moveFocus(root, 1);
-      return;
-    }
-    if (event.key === "ArrowUp") {
-      event.preventDefault();
-      event.stopPropagation();
-      moveFocus(root, -1);
-      return;
-    }
-    if (event.key === "Escape") {
-      event.preventDefault();
-      event.stopPropagation();
-      if (step === "impact") renderModes();
-      else closePopover();
+  ctx.effect(start, "dsh-rewind chat visibility");
+}
+function installOn(ui, sessions) {
+  currentCleanup?.();
+  currentCleanup = void 0;
+  if (ui?.views === void 0) return;
+  const views = ui.views;
+  const ensure = () => {
+    try {
+      const definition = views.entries().find((candidate) => candidate.target === "chat");
+      if (definition === void 0 || typeof definition.create !== "function") return;
+      const current = patches.get(definition);
+      const create = definition.create;
+      if (current !== void 0 && create === current.wrapper) return;
+      const wrapper = function wrappedChatBuilder() {
+        return new RewindVisibilityBuilder(create.call(definition));
+      };
+      const mutable = definition;
+      mutable.create = wrapper;
+      patches.set(definition, { original: create, wrapper });
+      rewindLog.info("visibility", "installed Chat snapshot visibility wrapper");
+      rebuildOpenSessions(ui, sessions);
+    } catch (error) {
+      rewindLog.error("visibility", "Chat visibility install probe failed", error);
     }
   };
-  renderModes();
-  const shell = mountShell(root, anchor, onKeyDown);
-  popoverEl = root;
-  disposeOutside = shell.dispose;
-  void (async () => {
-    const outcome = await previewImpact(session, chatOf, seq, (cb) => opts.watchChat(session.sessionId, cb));
-    impactOutcome = outcome;
-    if (outcome !== null && outcome.kind === "success") {
-      bothState = { state: hasFileImpact(outcome.text) ? "hasChanges" : "noChanges" };
-    } else {
-      bothState = { state: "error", message: outcome?.text ?? "preview command timed out" };
+  let unsubscribe;
+  try {
+    unsubscribe = views.subscribe?.(ensure);
+  } catch (error) {
+    rewindLog.warn("visibility", "Chat view subscription failed", error);
+  }
+  ensure();
+  currentCleanup = () => {
+    unsubscribe?.();
+    restorePatches();
+    rebuildOpenSessions(ui, sessions);
+  };
+}
+function restorePatches() {
+  for (const [definition, record] of patches) {
+    const mutable = definition;
+    if (mutable.create === record.wrapper) mutable.create = record.original;
+  }
+  patches = /* @__PURE__ */ new Map();
+}
+function rebuildOpenSessions(ui, sessions) {
+  const state = sessions?.list?.getSnapshot();
+  if (state === void 0) return;
+  const ids = /* @__PURE__ */ new Set([...state.ids ?? [], ...Object.keys(state.byId ?? {})]);
+  for (const id of ids) {
+    const row = state.byId?.[id];
+    const retained = row?.retainedBy;
+    if (retained === void 0 || !Object.values(retained).some((count) => (count ?? 0) > 0)) continue;
+    try {
+      ui.binding?.(id)?.rebuild?.();
+    } catch (error) {
+      rewindLog.warn("visibility", `chat rebuild failed for ${id}`, error);
     }
-    renderModes();
-    shell.position();
-  })().catch(() => {
-    bothState = { state: "error", message: "unexpected error" };
-    renderModes();
-    shell.position();
-  });
+  }
+}
+var RewindVisibilityBuilder = class {
+  /** @param inner - the real Chat builder. */
+  constructor(inner) {
+    __publicField(this, "inner", inner);
+    __publicField(this, "originals", /* @__PURE__ */ new Map());
+    __publicField(this, "commands", /* @__PURE__ */ new Map());
+    __publicField(this, "byTurn", /* @__PURE__ */ new Map());
+    __publicField(this, "turnProcess", /* @__PURE__ */ new Map());
+    __publicField(this, "derived", /* @__PURE__ */ new Map());
+    __publicField(this, "cuts", []);
+    __publicField(this, "cutSignature", "[]");
+    __publicField(this, "lastSignature", "[]");
+  }
+  get empty() {
+    return this.inner.empty;
+  }
+  replace(input) {
+    this.setAll(input.nodes);
+    this.lastSignature = this.cutSignature;
+    return this.inner.replace({ nodes: this.deriveAll(), timeline: input.timeline, ...changed(input) });
+  }
+  apply(input) {
+    const affected = /* @__PURE__ */ new Set();
+    let commandsChanged = false;
+    for (const node of input.upserts) {
+      const previous = this.originals.get(node.key);
+      const previousTurn = previous === void 0 ? void 0 : turnOf(previous);
+      const nextTurn = turnOf(node);
+      if (previousTurn !== void 0) affected.add(previousTurn);
+      if (nextTurn !== void 0) affected.add(nextTurn);
+      if (previous?.kind === "command" || node.kind === "command") commandsChanged = true;
+      this.setOriginal(node);
+    }
+    if (commandsChanged) this.refreshCuts();
+    if (this.cutSignature !== this.lastSignature) {
+      this.lastSignature = this.cutSignature;
+      return this.inner.replace({ nodes: this.deriveAll(), timeline: input.timeline, ...changed(input) });
+    }
+    const cuts = this.cuts;
+    const upserts = /* @__PURE__ */ new Map();
+    for (const node of input.upserts) upserts.set(node.key, this.deriveOne(node, cuts));
+    for (const turn of affected) {
+      const processKey = this.turnProcess.get(turn);
+      const base = processKey === void 0 ? void 0 : this.originals.get(processKey);
+      if (base === void 0) continue;
+      const next = this.deriveTurnProcess(base, cuts, turn, this.deriveOne(base, cuts));
+      if (this.derived.get(processKey) !== next) upserts.set(processKey, next);
+    }
+    const list = [...upserts.values()];
+    for (const node of list) this.derived.set(node.key, node);
+    return this.inner.apply({ upserts: list, timeline: input.timeline, ...changed(input) });
+  }
+  groupInput() {
+    return this.inner.groupInput?.();
+  }
+  publish() {
+    this.inner.publish?.();
+  }
+  setAll(nodes) {
+    this.originals.clear();
+    this.commands.clear();
+    this.byTurn.clear();
+    this.turnProcess.clear();
+    this.derived.clear();
+    for (const node of nodes) this.setOriginal(node);
+    this.refreshCuts();
+  }
+  setOriginal(node) {
+    const previous = this.originals.get(node.key);
+    if (previous !== void 0) this.unindex(previous);
+    this.originals.set(node.key, node);
+    if (node.kind === "command") this.commands.set(node.key, node);
+    const turn = turnOf(node);
+    if (turn === void 0) return;
+    const members = this.byTurn.get(turn) ?? /* @__PURE__ */ new Map();
+    members.set(node.key, node);
+    this.byTurn.set(turn, members);
+    if (node.kind === "turn-process") this.turnProcess.set(turn, node.key);
+  }
+  unindex(node) {
+    if (node.kind === "command") this.commands.delete(node.key);
+    const turn = turnOf(node);
+    if (turn === void 0) return;
+    const members = this.byTurn.get(turn);
+    if (members === void 0) return;
+    members.delete(node.key);
+    if (members.size === 0) this.byTurn.delete(turn);
+    if (node.kind === "turn-process" && this.turnProcess.get(turn) === node.key) {
+      this.turnProcess.delete(turn);
+      for (const member of members.values()) {
+        if (member.kind === "turn-process") {
+          this.turnProcess.set(turn, member.key);
+          break;
+        }
+      }
+    }
+  }
+  refreshCuts() {
+    this.cuts = rewindCutsOf(this.commands.values());
+    this.cutSignature = JSON.stringify(
+      this.cuts.map((cut) => `${cut.target}:${cut.marker}`).sort()
+    );
+  }
+  deriveAll() {
+    const cuts = this.cuts;
+    const derived = /* @__PURE__ */ new Map();
+    for (const node of this.originals.values()) derived.set(node.key, this.deriveOne(node, cuts));
+    for (const [turn, key] of this.turnProcess) {
+      const base = this.originals.get(key);
+      if (base === void 0) continue;
+      const current = derived.get(key) ?? this.deriveOne(base, cuts);
+      derived.set(key, this.deriveTurnProcess(base, cuts, turn, current));
+    }
+    const result = [...derived.values()];
+    this.derived = derived;
+    return result;
+  }
+  deriveOne(node, cuts) {
+    const base = this.originals.get(node.key) ?? node;
+    if (base.kind === "command") {
+      const command = base.data;
+      if (command.name !== void 0 && command.name !== null && ENGINE_COMMANDS.has(command.name)) {
+        const args = command.args ?? "";
+        const probe = args.includes("preview") || args.includes("__candidates");
+        const executed = command.outcome?.kind === "success" && command.outcome.sourceEventSeq !== void 0;
+        if (probe || executed) return hidden(base);
+      }
+      return base;
+    }
+    const contained = cuts.some((cut) => cut.target <= base.anchorSeq && base.anchorSeq <= cut.marker);
+    return contained ? hidden(base) : base;
+  }
+  deriveTurnProcess(base, cuts, turn = turnOf(base), current = this.deriveOne(base, cuts)) {
+    if (turn === void 0 || current.visibility === "hidden") return current;
+    const members = this.byTurn.get(turn);
+    if (members === void 0) return current;
+    let count = 0;
+    let allHidden = true;
+    for (const member of members.values()) {
+      if (member.key === base.key) continue;
+      count += 1;
+      if (this.deriveOne(member, cuts).visibility !== "hidden") {
+        allHidden = false;
+        break;
+      }
+    }
+    if (count === 0) return current;
+    return allHidden ? hidden(base) : current;
+  }
+};
+function hidden(node) {
+  return node.visibility === "hidden" ? node : { ...node, visibility: "hidden" };
+}
+function turnOf(node) {
+  const turn = node.location?.turn?.turn;
+  return typeof turn === "number" ? turn : void 0;
+}
+function changed(input) {
+  return input.changedTurns === void 0 ? {} : { changedTurns: input.changedTurns };
 }
 
-// src/client/portals.tsx
+// src/client/mount.tsx
 var import_react = require("react");
+var import_jsx_runtime = require("react/jsx-runtime");
+var CHAT_NODE_SLOT = "conversation.chat.node";
+var ROW_KEYS = /* @__PURE__ */ new Set(["user", "steering"]);
+var SHIPPED_ROW_PRIORITY = 0;
+var NO_SLOT_CHAIN = () => null;
+var TICK_KEY = "dsh-rewind:mount";
+function rendererOf(component) {
+  if (typeof component === "function") return component;
+  if (component === null || typeof component !== "object") return void 0;
+  const type = component.type;
+  return typeof type === "function" ? type : void 0;
+}
+function targetOf(props) {
+  const sessionId = props["sessionId"];
+  const data = props["node"]?.data;
+  if (typeof sessionId !== "string" || typeof data?.seq !== "number" || typeof data.time !== "number") return void 0;
+  return { sessionId, seq: data.seq, time: data.time };
+}
+function rowWithAction(official, render) {
+  return function RowWithAction(props) {
+    const row = official(typeof props["renderSlotChain"] === "function" ? props : { ...props, renderSlotChain: NO_SLOT_CHAIN });
+    const target = targetOf(props);
+    if (target === void 0 || !(0, import_react.isValidElement)(row)) return row;
+    const actions = row.props.actions;
+    if (typeof actions !== "function") return row;
+    const buildActions = actions;
+    const withAction = (text) => {
+      const actionsRow = buildActions(text);
+      if (!(0, import_react.isValidElement)(actionsRow)) return actionsRow;
+      try {
+        const element = render({ ...target, text });
+        if (element === null || element === void 0) return actionsRow;
+        const existing = actionsRow.props.extraActions;
+        return (0, import_react.cloneElement)(actionsRow, {
+          extraActions: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_react.Fragment, { children: [
+            existing,
+            element
+          ] })
+        });
+      } catch {
+        return actionsRow;
+      }
+    };
+    return (0, import_react.cloneElement)(row, { actions: withAction });
+  };
+}
+function installRowAction({ slots, render }) {
+  if (typeof slots.entries !== "function") return () => {
+  };
+  const readEntries = (key) => slots.entries(key);
+  const taken = /* @__PURE__ */ new Map();
+  const takeOver = (entry) => {
+    if (taken.has(entry)) return false;
+    const official = rendererOf(entry.component);
+    if (official === void 0) return false;
+    const replacement = rowWithAction(official, render);
+    taken.set(entry, { original: entry.component, replacement });
+    entry.component = replacement;
+    return true;
+  };
+  const tick = () => {
+    if (typeof slots.register !== "function") return;
+    try {
+      slots.register({ name: CHAT_NODE_SLOT, key: TICK_KEY }, () => null)();
+    } catch {
+    }
+  };
+  const sync = () => {
+    let changed2 = false;
+    for (const entry of readEntries(CHAT_NODE_SLOT)) {
+      const key = entry.options.key;
+      if (key === void 0 || !ROW_KEYS.has(key)) continue;
+      if ((entry.options.priority ?? SHIPPED_ROW_PRIORITY) !== SHIPPED_ROW_PRIORITY) continue;
+      changed2 = takeOver(entry) || changed2;
+    }
+    if (changed2) tick();
+  };
+  sync();
+  const unsubscribe = slots.subscribe?.(CHAT_NODE_SLOT, sync);
+  return () => {
+    unsubscribe?.();
+    for (const [entry, record] of taken) {
+      if (entry.component === record.replacement) entry.component = record.original;
+    }
+    taken.clear();
+  };
+}
+
+// src/client/action.tsx
+var import_dsh_client_ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives");
+var import_jsx_runtime2 = require("react/jsx-runtime");
+var ICON = /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("svg", { width: "15", height: "15", viewBox: "0 0 16 16", fill: "none", "aria-hidden": "true", children: [
+  /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("path", { d: "M6.5 2.5 2.5 6.5l4 4", stroke: "currentColor", strokeWidth: "1.25", strokeLinecap: "round", strokeLinejoin: "round" }),
+  /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("path", { d: "M2.5 6.5h7a4 4 0 0 1 4 4v1.5", stroke: "currentColor", strokeWidth: "1.25", strokeLinecap: "round" })
+] });
+function RewindActionButton({ t, titleKey, ariaKey, pending = false, onOpen }) {
+  return /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(import_dsh_client_ui_primitives.Tooltip, { label: t(titleKey), side: "bottom", children: /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
+    "button",
+    {
+      type: "button",
+      className: CLASS.action,
+      "aria-label": t(ariaKey),
+      "aria-haspopup": "dialog",
+      "data-pending-retract": pending || void 0,
+      onClick: (event) => {
+        event.stopPropagation();
+        onOpen(event.currentTarget);
+      },
+      children: ICON
+    }
+  ) });
+}
+function rewindActionRenderer(t, eligible, open) {
+  return (row) => eligible(row.sessionId) ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
+    RewindActionButton,
+    {
+      t,
+      titleKey: "button.title",
+      ariaKey: "button.aria",
+      onOpen: (anchor) => open(row, anchor)
+    }
+  ) : null;
+}
+
+// src/client/pending-mount.tsx
+var import_react2 = require("react");
 var import_react_dom = require("react-dom");
 
 // src/client/pending.ts
-function matchPendingRows(rows, steering) {
-  const matched = [];
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    const item = steering[i];
-    if (item !== void 0 && row.text === (item.text ?? "")) {
-      matched.push(item.id);
-    } else {
-      matched.push(null);
-    }
+var INBOX_PROJECTION = "inbox";
+function inboxOf(session) {
+  try {
+    return session.projections.faceOf(INBOX_PROJECTION).getSnapshot();
+  } catch {
+    return void 0;
   }
-  return matched;
+}
+function textOf(content) {
+  const texts = content.filter((block) => block.type === "text");
+  if (texts.length === 0) return null;
+  return texts.map((block) => block.text ?? "").join("");
+}
+function attachmentsCountOf(content) {
+  return content.filter((block) => block.type !== "text").length;
+}
+function steeringItemsOf(nextStep) {
+  return (nextStep ?? []).filter((item) => item.source?.kind === "user").map((item) => {
+    const text = textOf(item.content);
+    return {
+      id: item.id,
+      text,
+      attachments: attachmentsCountOf(item.content),
+      images: imageRefsOf(item.content)
+    };
+  });
+}
+function matchPendingRows(rows, steering) {
+  return rows.map((row, index) => {
+    const item = steering[index];
+    return item !== void 0 && matches2(item, row) ? item.id : null;
+  });
+}
+function matches2(item, row) {
+  return item.attachments > 0 ? row.attachments === item.attachments : row.text === (item.text ?? "");
 }
 function retractSpan(steering, targetId) {
   const index = steering.findIndex((item) => item.id === targetId);
@@ -1003,8 +1274,8 @@ function retractSpan(steering, targetId) {
   return steering.slice(index).map((item) => item.id);
 }
 
-// src/client/portals.tsx
-var import_jsx_runtime = require("react/jsx-runtime");
+// src/client/rewind-flow.ts
+var COMPOSER_EDITABLE_SELECTOR = "[data-composer-input]";
 function fillComposerEditable(text) {
   const editable = document.querySelector(COMPOSER_EDITABLE_SELECTOR);
   if (editable === null) return false;
@@ -1034,22 +1305,21 @@ function writeComposer(text, facade) {
   if (facade !== void 0) {
     try {
       facade.setDraft(text);
+      try {
+        facade.focus?.();
+      } catch {
+      }
       return true;
     } catch {
     }
   }
   return fillComposer(text);
 }
-function userNodeOf(chat, key) {
-  const node = chat?.nodes.get(key);
-  if (node === void 0 || node.kind !== "user" && node.kind !== "steering") return void 0;
-  return node.data;
-}
-async function runRewindAndFill(session, seq, mode, currentSessionId, chatOf, watchChat, setComposerText) {
+async function runRewindAndFill(session, seq, mode, isMainViewSession, chatOf, watchChat, setComposerText, restoreImages) {
   const known = knownCommandSeqs(session, chatOf, (node) => isExecutedRewindCommand(node, seq));
   let result;
   try {
-    result = await session.command(`/rewind @${seq} ${mode}`);
+    result = await session.command(`/${ENGINE_COMMAND} @${seq} ${mode}`);
   } catch (error) {
     rewindLog.warn("refill", `rewind command threw, skipping refill @${seq}`, error);
     return;
@@ -1077,15 +1347,25 @@ async function runRewindAndFill(session, seq, mode, currentSessionId, chatOf, wa
     showHint(outcome.text ?? "rewind failed");
     return;
   }
-  if (currentSessionId() !== session.sessionId) {
+  if (!isMainViewSession(session.sessionId)) {
     return;
   }
   let text;
+  let images;
   try {
-    text = messageTextAt(chatOf(session), seq);
+    const chat = chatOf(session);
+    text = messageTextAt(chat, seq);
+    images = messageAttachmentsAt(chat, seq);
   } catch (error) {
-    rewindLog.warn("refill", `reading target text for @${seq} threw`, error);
+    rewindLog.warn("refill", `reading target content for @${seq} threw`, error);
     return;
+  }
+  if (restoreImages !== void 0 && images !== void 0 && images.length > 0) {
+    try {
+      await restoreImages(session.sessionId, images);
+    } catch (error) {
+      rewindLog.warn("refill", `image restore for @${seq} threw`, error);
+    }
   }
   if (text === void 0 || text === "") {
     return;
@@ -1118,213 +1398,19 @@ function showHint(text) {
   }
   window.setTimeout(() => hint.remove(), 3200);
 }
-var COMPOSER_EDITABLE_SELECTOR = "[data-composer-input]";
-var USER_SEAT_SELECTOR = '[data-chat-flow-kind="user"][data-chat-anchor-key], [data-chat-flow-kind="steering"][data-chat-anchor-key]';
-var CHAT_SEAT_SELECTOR = "[data-chat-anchor-key]";
-var PENDING_SEAT_SELECTOR = "[data-pending-steering]";
-function actionsContainerOf(row) {
-  const buttons = Array.from(row?.querySelectorAll("button") ?? []);
-  const lastButton = buttons.filter((button) => !button.classList.contains(CLASS.button)).at(-1);
-  const structural = lastButton?.parentElement;
-  if (structural instanceof HTMLElement && structural.querySelector("button") !== null) return structural;
-  return void 0;
-}
-function collectTargets(chat, hiddenSeqs) {
-  const rows = /* @__PURE__ */ new Map();
-  for (const element of document.querySelectorAll(USER_SEAT_SELECTOR)) {
-    const key = element.dataset.chatAnchorKey;
-    if (key !== void 0) rows.set(key, element);
-  }
-  const targets = [];
-  for (const key of chat.order) {
-    const node = chat.nodes.get(key);
-    if (node === void 0 || node.kind !== "user" && node.kind !== "steering") continue;
-    const user = node.data;
-    if (hiddenSeqs.has(node.anchorSeq ?? user.seq)) continue;
-    const row = rows.get(key);
-    const actions = actionsContainerOf(row);
-    if (actions === void 0) continue;
-    targets.push({ kind: "durable", key, container: actions, seq: user.seq, time: user.time, preview: messagePreviewOf(user) });
-  }
-  return targets;
-}
-function isRewindInertSession(snapshot) {
-  return snapshot.subagent !== null && snapshot.subagent !== void 0;
-}
-function collectDurableTargets(snapshot, chat, hiddenSeqs) {
-  if (chat === void 0 || isRewindInertSession(snapshot)) return [];
-  return collectTargets(chat, hiddenSeqs);
-}
-function bubbleTextOf(row) {
-  const clone = row.cloneNode(true);
-  clone.lastElementChild?.remove();
-  return clone.textContent ?? "";
-}
-function collectPendingTargets(snapshot) {
-  if (snapshot.subagent !== null) return [];
-  const steering = snapshot.queue.filter((item) => item.placement === "steering");
-  if (steering.length === 0) return [];
-  const rows = Array.from(document.querySelectorAll(PENDING_SEAT_SELECTOR));
-  const matched = matchPendingRows(
-    rows.map((row) => ({ text: bubbleTextOf(row) })),
-    steering.map((item) => ({ id: item.id, text: item.text }))
-  );
-  const targets = [];
-  for (let i = 0; i < matched.length; i++) {
-    const itemId = matched[i];
-    if (itemId === null) continue;
-    const row = rows[i];
-    if (row === void 0) continue;
-    const actions = actionsContainerOf(row);
-    if (actions === void 0) continue;
-    const item = steering[i];
-    targets.push({
-      kind: "pending",
-      key: `pending:${itemId}`,
-      container: actions,
-      itemId,
-      text: item.text,
-      preview: item.preview
-    });
-  }
-  return targets;
-}
-function sameTargets(left, right) {
-  return left.length === right.length && left.every((target, index) => {
-    const other = right[index];
-    if (other === void 0 || target.key !== other.key || target.container !== other.container) return false;
-    if (target.kind === "durable") return other.kind === "durable" && target.seq === other.seq;
-    return other.kind === "pending" && target.itemId === other.itemId;
-  });
-}
-function RewindPortals({ sessionId, sessionOf, chatOf, currentSessionId, watchChat, t, subscribeLocale, setComposerText }) {
-  const [targets, setTargets] = (0, import_react.useState)([]);
-  const hidden = (0, import_react.useRef)(/* @__PURE__ */ new WeakSet());
-  const [, forceRender] = (0, import_react.useReducer)((count) => count + 1, 0);
-  (0, import_react.useEffect)(() => subscribeLocale(() => {
-    forceRender();
-  }), [subscribeLocale]);
-  (0, import_react.useLayoutEffect)(() => {
-    let active = true;
-    let queued = false;
-    const refresh = () => {
-      if (!active) return;
-      const session = sessionOf(sessionId);
-      if (session === void 0) {
-        setTargets([]);
-        return;
-      }
-      const snapshot = session.getSnapshot();
-      const chat = chatOf(session);
-      const hiddenSeqs = chat === void 0 ? /* @__PURE__ */ new Set() : hiddenSeqsOf(chat);
-      for (const seat of chat === void 0 ? [] : document.querySelectorAll(CHAT_SEAT_SELECTOR)) {
-        const key = seat.dataset.chatAnchorKey;
-        const anchor = key !== void 0 ? chat?.nodes.get(key)?.anchorSeq : void 0;
-        if (anchor !== void 0 && hiddenSeqs.has(anchor)) {
-          seat.style.display = "none";
-          seat.dataset.dshRewindHidden = "true";
-          hidden.current.add(seat);
-        } else if (hidden.current.has(seat)) {
-          seat.style.display = "";
-          delete seat.dataset.dshRewindHidden;
-          hidden.current.delete(seat);
-        }
-      }
-      const durable = collectDurableTargets(snapshot, chat, hiddenSeqs);
-      const next = [...durable, ...collectPendingTargets(snapshot)];
-      setTargets((current) => sameTargets(current, next) ? current : next);
-    };
-    const queueRefresh = () => {
-      if (queued || !active) return;
-      queued = true;
-      queueMicrotask(() => {
-        queued = false;
-        refresh();
-      });
-    };
-    refresh();
-    const observer = new MutationObserver(queueRefresh);
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["style"] });
-    return () => {
-      active = false;
-      observer.disconnect();
-    };
-  }, [sessionId, sessionOf]);
-  return targets.map((target) => (0, import_react_dom.createPortal)(
-    target.kind === "pending" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-      RetractButton,
-      {
-        target,
-        sessionId,
-        sessionOf,
-        chatOf,
-        watchChat,
-        setComposerText,
-        t
-      },
-      target.key
-    ) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-      RewindButton,
-      {
-        target,
-        sessionId,
-        sessionOf,
-        chatOf,
-        watchChat,
-        currentSessionId,
-        setComposerText,
-        t
-      },
-      target.key
-    ),
-    target.container,
-    target.key
-  ));
-}
-function RewindButton({ target, sessionId, sessionOf, chatOf, watchChat, currentSessionId, setComposerText, t }) {
-  const onClick = (event) => {
-    event.stopPropagation();
-    const session = sessionOf(sessionId);
-    if (session === void 0) {
-      rewindLog.warn("portals", "rewind button clicked with no session binding");
-      return;
-    }
-    const node = userNodeOf(chatOf(session), target.key);
-    if (node === void 0) return;
-    openPopover({
-      session,
-      chatOf,
-      watchChat,
-      seq: node.seq,
-      time: node.time,
-      preview: messagePreviewOf(node),
-      anchor: event.currentTarget,
-      t,
-      onRewind: (mode) => {
-        void runRewindAndFill(session, node.seq, mode, currentSessionId, chatOf, watchChat, setComposerText);
-      }
-    });
-  };
-  return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-    "button",
-    {
-      type: "button",
-      className: CLASS.button,
-      "aria-label": t("button.aria"),
-      title: t("button.title"),
-      onClick,
-      dangerouslySetInnerHTML: { __html: REWIND_ICON_SVG }
-    }
-  );
-}
 function composerText() {
   const surface = composerSurface();
   if (surface === null) return "";
   return surface.textContent ?? "";
 }
-async function retractPending(session, itemId, text, setComposerText) {
-  const queue = session.getSnapshot().queue;
-  const steering = queue.filter((item) => item.placement === "steering");
+function isRewindInertSession(snapshot) {
+  return snapshot.subagent !== null && snapshot.subagent !== void 0;
+}
+
+// src/client/retract.ts
+async function retractPending(session, itemId, text, setComposerText, restoreImages) {
+  const steering = steeringItemsOf(inboxOf(session)?.["next-step"]);
+  const images = steering.find((item) => item.id === itemId)?.images ?? [];
   let removedTarget = false;
   for (const id of retractSpan(steering, itemId)) {
     let accepted = false;
@@ -1338,112 +1424,291 @@ async function retractPending(session, itemId, text, setComposerText) {
     if (!accepted) break;
     if (id === itemId) removedTarget = true;
   }
-  if (removedTarget && text !== null && text !== "" && composerText().trim() === "") {
+  if (!removedTarget) return;
+  if (images.length > 0 && restoreImages !== void 0) {
+    try {
+      await restoreImages(session.sessionId, images);
+    } catch (error) {
+      rewindLog.warn("retract", `image restore for ${itemId} threw`, error);
+    }
+  }
+  if (text !== null && text !== "" && composerText().trim() === "") {
     setComposerText(session.sessionId, text);
   }
 }
-function RetractButton({ target, sessionId, sessionOf, chatOf, watchChat, setComposerText, t }) {
-  const onClick = (event) => {
-    event.stopPropagation();
-    const session = sessionOf(sessionId);
-    if (session === void 0) return;
+
+// src/client/pending-mount.tsx
+var import_jsx_runtime3 = require("react/jsx-runtime");
+var PENDING_SEAT_SELECTOR = "[data-pending-steering]";
+var MESSAGE_ATTACHMENT_SELECTOR = "[data-message-attachments]";
+var SESSION_CONTENT_SELECTOR = "[data-conversation-session]";
+var NO_TARGETS = [];
+function bubbleTextOf(row) {
+  const clone = row.cloneNode(true);
+  clone.lastElementChild?.remove();
+  const attachments = row.querySelectorAll(MESSAGE_ATTACHMENT_SELECTOR).length;
+  for (const block of clone.querySelectorAll(MESSAGE_ATTACHMENT_SELECTOR)) block.remove();
+  return { text: clone.textContent ?? "", attachments };
+}
+function actionsContainerOf(row) {
+  const buttons = [...row.querySelectorAll("button")].filter((button) => button.dataset["pendingRetract"] === void 0);
+  const structural = buttons.at(-1)?.parentElement;
+  return structural instanceof HTMLElement && structural.querySelector("button") !== null ? structural : void 0;
+}
+function collectTargets(roots, steering) {
+  const targets = [];
+  for (const root of roots) {
+    const rows = [...root.querySelectorAll(PENDING_SEAT_SELECTOR)];
+    const matched = matchPendingRows(rows.map(bubbleTextOf), steering);
+    for (const [index, row] of rows.entries()) {
+      const itemId = matched[index];
+      const item = steering[index];
+      const container = actionsContainerOf(row);
+      if (itemId === null || itemId === void 0 || item === void 0 || container === void 0) continue;
+      targets.push({ container, itemId, text: item.text });
+    }
+  }
+  return targets;
+}
+function sameTargets(left, right) {
+  return left.length === right.length && left.every((target, index) => {
+    const other = right[index];
+    return other !== void 0 && target.container === other.container && target.itemId === other.itemId;
+  });
+}
+function contentRootsOf(sessionId) {
+  return [...document.querySelectorAll(SESSION_CONTENT_SELECTOR)].filter((element) => element.dataset["conversationSession"] === sessionId);
+}
+function involvesPending(record) {
+  const target = record.target;
+  if (target instanceof Element && target.closest(PENDING_SEAT_SELECTOR) !== null) return true;
+  for (const node of [...record.addedNodes, ...record.removedNodes]) {
+    if (node instanceof Element && (node.matches(PENDING_SEAT_SELECTOR) || node.querySelector(PENDING_SEAT_SELECTOR) !== null)) {
+      return true;
+    }
+  }
+  return false;
+}
+function resolveSession(deps, sessionId) {
+  try {
+    return deps.sessionOf(sessionId);
+  } catch {
+    return void 0;
+  }
+}
+function inboxFaceOf(session) {
+  try {
+    return session.projections.faceOf("inbox");
+  } catch {
+    return void 0;
+  }
+}
+function RetractButton({ target, sessionId, deps }) {
+  const onOpen = (anchor) => {
+    const session = resolveSession(deps, sessionId);
+    if (session === void 0) {
+      rewindLog.warn("retract", "pending retract clicked with no session binding");
+      return;
+    }
     openPopover({
       session,
-      chatOf,
-      watchChat,
-      preview: target.preview,
-      anchor: event.currentTarget,
-      t,
+      preview: target.text ?? "",
+      anchor,
+      placement: "below",
+      t: deps.t,
       retract: { itemId: target.itemId, text: target.text },
       onRetract: () => {
-        void retractPending(session, target.itemId, target.text, setComposerText);
+        void retractPending(session, target.itemId, target.text, deps.setComposerText, deps.restoreImages);
       }
     });
   };
-  return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-    "button",
+  return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+    RewindActionButton,
     {
-      type: "button",
-      className: CLASS.button,
-      "aria-label": t("button.retract.aria"),
-      title: t("button.retract.title"),
-      onClick,
-      dangerouslySetInnerHTML: { __html: REWIND_ICON_SVG }
+      t: deps.t,
+      titleKey: "button.title",
+      ariaKey: "button.retract.aria",
+      pending: true,
+      onOpen
     }
   );
 }
-function createRewindBridge(deps) {
-  return function RewindBridge({ sessionId }) {
-    return (0, import_react.createElement)(RewindPortals, { sessionId, ...deps });
+function PendingRetractLayer({ sessionId, deps }) {
+  const [targets, setTargets] = (0, import_react2.useState)(NO_TARGETS);
+  const [, forceRender] = (0, import_react2.useReducer)((count) => count + 1, 0);
+  (0, import_react2.useLayoutEffect)(() => deps.subscribeLocale(() => {
+    forceRender();
+  }), [deps]);
+  (0, import_react2.useLayoutEffect)(() => {
+    let stopped = false;
+    let queued = false;
+    let observer = null;
+    let observed = [];
+    const stopObserver = () => {
+      observer?.disconnect();
+      observer = null;
+      observed = [];
+    };
+    const observe = (roots) => {
+      if (observer !== null && observed.length === roots.length && observed.every((root, index) => root === roots[index])) return;
+      stopObserver();
+      observed = roots;
+      observer = new MutationObserver((records) => {
+        if (stopped) return;
+        if (observed.some((root) => !root.isConnected)) {
+          refresh();
+          return;
+        }
+        if (records.some(involvesPending)) schedule();
+      });
+      for (const root of observed) observer.observe(root, { childList: true, subtree: true });
+    };
+    const refresh = () => {
+      if (stopped) return;
+      const session2 = resolveSession(deps, sessionId);
+      const steering = session2 === void 0 ? [] : steeringItemsOf(inboxOf(session2)?.["next-step"]);
+      if (session2 === void 0 || steering.length === 0 || isRewindInertSession(session2.getSnapshot())) {
+        setTargets(NO_TARGETS);
+        stopObserver();
+        return;
+      }
+      const roots = contentRootsOf(sessionId);
+      if (roots.length === 0) {
+        setTargets(NO_TARGETS);
+        stopObserver();
+        return;
+      }
+      observe(roots);
+      const next = collectTargets(roots, steering);
+      setTargets((current) => sameTargets(current, next) ? current : next);
+    };
+    const schedule = () => {
+      if (queued || stopped) return;
+      queued = true;
+      queueMicrotask(() => {
+        queued = false;
+        refresh();
+      });
+    };
+    refresh();
+    const session = resolveSession(deps, sessionId);
+    const unsubscribe = session === void 0 ? void 0 : inboxFaceOf(session)?.subscribe?.(schedule);
+    return () => {
+      stopped = true;
+      unsubscribe?.();
+      stopObserver();
+    };
+  }, [sessionId, deps]);
+  return targets.map((target) => (0, import_react_dom.createPortal)(
+    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(RetractButton, { target, sessionId, deps }, target.itemId),
+    target.container,
+    target.itemId
+  ));
+}
+function createPendingBridge(deps) {
+  return function PendingBridge({ sessionId }) {
+    return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(PendingRetractLayer, { sessionId, deps });
   };
 }
 
+// src/client/host-api.ts
+var TIMEOUT_MS = 8e3;
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function isResult(value) {
+  if (!isRecord(value)) return false;
+  if (value["ok"] === true) return true;
+  if (value["ok"] !== false || !isRecord(value["error"])) return false;
+  const error = value["error"];
+  return typeof error["code"] === "string" && typeof error["message"] === "string" && isRecord(error["details"]);
+}
+function isImpact(value) {
+  return isRecord(value) && typeof value["path"] === "string" && (value["action"] === "restore" || value["action"] === "delete");
+}
+function isCandidate(value) {
+  return isRecord(value) && Number.isSafeInteger(value["seq"]) && typeof value["time"] === "number" && Number.isFinite(value["time"]) && typeof value["preview"] === "string";
+}
+function isAbort(error) {
+  const name2 = error?.name;
+  return name2 === "AbortError" || name2 === "TimeoutError";
+}
+function init(payload, signal) {
+  return {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+    signal
+  };
+}
+async function settleQuery(response, route) {
+  if (!response.ok) throw new Error(`transport failure for ${route}: HTTP ${response.status}`);
+  const result = await response.json();
+  if (!isResult(result)) throw new Error(`invalid response for ${route}`);
+  return result;
+}
+async function previewOverApi(sessionId, seq) {
+  try {
+    const response = await fetch("./api/dsh-rewind/preview", init({ sessionId, seq }, AbortSignal.timeout(TIMEOUT_MS)));
+    const result = await settleQuery(response, "preview");
+    if (!result.ok) {
+      rewindLog.warn("preview", `preview request failed for @${seq}`, result.error);
+      return { kind: "error", text: result.error.message };
+    }
+    const value = result.value;
+    if (!isRecord(value) || typeof value["backupOff"] !== "boolean" || !Array.isArray(value["files"]) || !value["files"].every(isImpact)) {
+      rewindLog.warn("preview", `preview request returned an invalid result for @${seq}`);
+      return { kind: "error", text: "invalid preview response" };
+    }
+    return { kind: "success", files: value["files"], backupOff: value["backupOff"] };
+  } catch (error) {
+    if (isAbort(error)) {
+      rewindLog.warn("preview", `preview request timed out for @${seq}`);
+      return null;
+    }
+    rewindLog.warn("preview", `preview request threw for @${seq}`, error);
+    return { kind: "error", text: error instanceof Error ? error.message : String(error) };
+  }
+}
+async function candidatesOverApi(sessionId) {
+  try {
+    const response = await fetch("./api/dsh-rewind/candidates", init({ sessionId }, AbortSignal.timeout(TIMEOUT_MS)));
+    const result = await settleQuery(response, "candidates");
+    if (!result.ok) {
+      rewindLog.warn("preview", "candidate request failed", result.error);
+      return void 0;
+    }
+    const value = result.value;
+    if (!isRecord(value) || !Array.isArray(value["candidates"]) || !value["candidates"].every(isCandidate)) {
+      rewindLog.warn("preview", "candidate request returned an invalid result");
+      return void 0;
+    }
+    return value["candidates"];
+  } catch (error) {
+    rewindLog.warn("preview", "candidate request threw", error);
+    return void 0;
+  }
+}
+
 // src/client/build-info.ts
-var PLUGIN_VERSION = true ? "0.12.2" : "dev";
-var BUILD_HASH = true ? "c9f4bb5f" : "dev";
+var PLUGIN_VERSION = true ? "0.22.1" : "dev";
+var PLUGIN_PACKAGE = "dsh-rewind-plugin";
+var BUILD_HASH = true ? "6759af87" : "dev";
 
 // src/client/locales.ts
-var zh = {
-  "button.aria": "\u56DE\u9000\u5230\u6B64\u6D88\u606F",
-  "button.title": "\u56DE\u9000",
-  "button.retract.aria": "\u56DE\u9000\u5230\u6B64\u63D2\u8BDD\u6D88\u606F",
-  "button.retract.title": "\u56DE\u9000",
-  "popover.title": "\u56DE\u9000\u5230\u8FD9\u6761\u6D88\u606F",
-  "popover.noText": "\uFF08\u65E0\u6587\u672C\uFF09",
-  "popover.retract.title": "\u56DE\u9000\u5230\u8FD9\u6761\u63D2\u8BDD\u6D88\u606F",
-  "popover.retract.target": "\u63D2\u8BDD\u4E2D \xB7 {preview}",
-  "popover.retract.hint": "\u64A4\u56DE\u8FD9\u6761\u53CA\u4E4B\u540E\u7684\u63D2\u8BDD\u6D88\u606F\uFF0C\u4E0D\u6253\u65AD\u5F53\u524D\u751F\u6210",
-  "popover.retract.confirm": "\u786E\u8BA4\u56DE\u9000",
-  "popover.chat": "\u4EC5\u56DE\u9000\u5BF9\u8BDD",
-  "popover.chat.hint": "\u53EA\u56DE\u9000\u6A21\u578B\u4E0A\u4E0B\u6587\uFF0C\u4E0D\u52A8\u5DE5\u4F5C\u533A\u6587\u4EF6",
-  "popover.both": "\u56DE\u9000\u5BF9\u8BDD\u548C\u4EE3\u7801",
-  "popover.both.hint": "\u5BF9\u8BDD\u56DE\u9000\u5E76\u8FD8\u539F\u5DE5\u4F5C\u533A\u6587\u4EF6",
-  "popover.checking": "\u6B63\u5728\u68C0\u67E5\u6587\u4EF6\u53D8\u66F4\u2026",
-  "popover.noChanges": "\u6B64\u6D88\u606F\u4E4B\u540E\u6CA1\u6709\u53EF\u8FD8\u539F\u7684\u6587\u4EF6\u53D8\u66F4\uFF0C\u4EC5\u53EF\u56DE\u9000\u5BF9\u8BDD",
-  "popover.cancel": "\u53D6\u6D88",
-  "popover.impact.loading": "\u6B63\u5728\u83B7\u53D6\u5F71\u54CD\u6E05\u5355\u2026",
-  "popover.impact.failed": "\u65E0\u6CD5\u83B7\u53D6\u5F71\u54CD\u6E05\u5355\uFF1A{message}",
-  "popover.impact.none": "\u76EE\u6807\u4E4B\u540E\u6CA1\u6709\u8DDF\u8E2A\u5230\u7684\u5199\u7C7B\u53D8\u66F4\uFF0C\u65E0\u9700\u8FD8\u539F\u6587\u4EF6\u3002",
-  "popover.impact.restore": "\u8FD8\u539F {path}",
-  "popover.impact.delete": "\u5220\u9664 {path}",
-  "popover.confirm": "\u786E\u8BA4\u56DE\u9000",
-  "popover.back": "\u8FD4\u56DE",
-  "cleanup.title": "\u5FEB\u7167\u6E05\u7406",
-  "cleanup.desc": "dsh-rewind \xB7 \u7BA1\u7406\u4F1A\u8BDD\u5FEB\u7167\u5907\u4EFD\u7684\u81EA\u52A8\u6E05\u7406\u7B56\u7565",
-  "cleanup.expand": "\u5C55\u5F00",
-  "cleanup.collapse": "\u6536\u8D77",
-  "cleanup.unsaved": "\u672A\u4FDD\u5B58\u4FEE\u6539",
-  "cleanup.auto": "\u81EA\u52A8\u6E05\u7406",
-  "cleanup.auto.on": "\u5F00\u542F\u540E\u6309\u4E0D\u6D3B\u8DC3\u5929\u6570\u81EA\u52A8\u6E05\u7406\u8FC7\u671F\u4F1A\u8BDD\u5FEB\u7167",
-  "cleanup.auto.off": "\u5173\u95ED\u540E\u4FDD\u7559\u5168\u90E8\u5FEB\u7167\uFF0C\u4E0D\u81EA\u52A8\u6E05\u7406",
-  "cleanup.maxAge": "\u4E0D\u6D3B\u8DC3\u65F6\u95F4\uFF08\u5929\uFF09",
-  "cleanup.maxAge.hint": "\u8D85\u8FC7\u8BE5\u5929\u6570\u672A\u6D3B\u52A8\u7684\u4F1A\u8BDD\u5FEB\u7167\u4F1A\u88AB\u6E05\u7406",
-  "cleanup.invalid": "\u4EC5\u63A5\u53D7\u6B63\u6574\u6570",
-  "cleanup.discard": "\u653E\u5F03\u4FEE\u6539",
-  "cleanup.save": "\u4FDD\u5B58",
-  "cleanup.saving": "\u4FDD\u5B58\u4E2D\u2026",
-  "cleanup.saved": "\u5DF2\u4FDD\u5B58\u5E76\u751F\u6548",
-  "cleanup.saveFailed": "\u4FDD\u5B58\u5931\u8D25\uFF1A{message}",
-  "cleanup.readonly": "\u8BBE\u7F6E\u6E90\u53EA\u8BFB"
-};
 var en = {
-  "button.aria": "Rewind to this message",
   "button.title": "Rewind",
+  "button.aria": "Rewind to this message",
   "button.retract.aria": "Rewind to this pending message",
-  "button.retract.title": "Rewind",
   "popover.title": "Rewind to this message",
   "popover.noText": "(no text)",
-  "popover.retract.title": "Rewind to this pending message",
-  "popover.retract.target": "Pending \xB7 {preview}",
-  "popover.retract.hint": "Retracts this pending message and the ones after it, without interrupting the run",
-  "popover.retract.confirm": "Confirm rewind",
   "popover.chat": "Rewind conversation only",
-  "popover.chat.hint": "Cut the model context only; workspace files stay untouched",
-  "popover.both": "Rewind conversation and code",
-  "popover.both.hint": "Cut the context and restore workspace files",
+  "popover.chat.hint": "Context only; workspace untouched",
+  "popover.both": "Rewind conversation and files",
+  "popover.both.hint": "Context and restore workspace files",
   "popover.checking": "Checking for file changes\u2026",
-  "popover.noChanges": "No tracked file changes after this message; conversation-only rewind",
-  "popover.cancel": "Cancel",
+  "popover.noChanges": "No restorable file changes",
+  "popover.backupDisabled": "Snapshots off; the restore may be incomplete",
   "popover.impact.loading": "Fetching impact list\u2026",
   "popover.impact.failed": "Could not fetch the impact list: {message}",
   "popover.impact.none": "No tracked file changes after the target; nothing to restore.",
@@ -1451,205 +1716,455 @@ var en = {
   "popover.impact.delete": "Delete {path}",
   "popover.confirm": "Confirm rewind",
   "popover.back": "Back",
-  "cleanup.title": "Snapshot cleanup",
-  "cleanup.desc": "dsh-rewind \xB7 Manage the auto-cleanup policy of session snapshot backups",
-  "cleanup.expand": "Expand",
-  "cleanup.collapse": "Collapse",
-  "cleanup.unsaved": "Unsaved changes",
+  "popover.retract.title": "Rewind to this pending message",
+  "popover.retract.target": "Pending \xB7 {preview}",
+  "popover.retract.hint": "Retracts this pending message and the ones after it, without interrupting the run",
+  "popover.cancel": "Cancel",
+  "backup.title": "Snapshot backups",
+  "backup.on": "When on, file snapshots are created automatically for file restore.",
+  "backup.off": "When off, no file snapshots are created; file changes made while off cannot be restored.",
   "cleanup.auto": "Auto cleanup",
-  "cleanup.auto.on": "When enabled, session snapshots idle past the cutoff are cleaned automatically",
-  "cleanup.auto.off": "When disabled, all snapshot backups are kept; nothing is cleaned automatically.",
+  "cleanup.auto.on": "When enabled, session snapshots idle past the cutoff are cleaned automatically.",
+  "cleanup.auto.off": "When off, snapshots are not cleaned automatically.",
   "cleanup.maxAge": "Idle time (days)",
-  "cleanup.maxAge.hint": "Snapshot backups of sessions idle longer than this many days are cleaned",
-  "cleanup.invalid": "A positive integer only",
-  "cleanup.discard": "Discard changes",
+  "cleanup.maxAge.hint": "Snapshot backups of sessions idle longer than this many days are cleaned.",
+  "cleanup.invalid": "Enter a positive integer, or leave blank to use the default",
+  "cleanup.overridden": "Overridden",
+  "cleanup.reset": "Reset to default",
   "cleanup.save": "Save",
   "cleanup.saving": "Saving\u2026",
-  "cleanup.saved": "Saved and applied",
-  "cleanup.saveFailed": "Save failed: {message}",
-  "cleanup.readonly": "Read-only settings source"
+  "cleanup.saveFailed": "The deployment did not accept these values; they were left for you to correct",
+  "cleanup.readonly": "This deployment stores settings read-only",
+  "cleanup.unavailable": "This plugin is not loaded, so it cannot be configured right now"
 };
+var zh = {
+  "button.title": "\u56DE\u9000",
+  "button.aria": "\u56DE\u9000\u5230\u6B64\u6D88\u606F",
+  "button.retract.aria": "\u56DE\u9000\u5230\u6B64\u63D2\u8BDD\u6D88\u606F",
+  "popover.title": "\u56DE\u9000\u5230\u8FD9\u6761\u6D88\u606F",
+  "popover.noText": "\uFF08\u65E0\u6587\u672C\uFF09",
+  "popover.chat": "\u4EC5\u56DE\u9000\u5BF9\u8BDD",
+  "popover.chat.hint": "\u4EC5\u56DE\u9000\u4E0A\u4E0B\u6587\uFF0C\u4E0D\u52A8\u5DE5\u4F5C\u533A\u6587\u4EF6",
+  "popover.both": "\u56DE\u9000\u5BF9\u8BDD\u548C\u6587\u4EF6",
+  "popover.both.hint": "\u56DE\u9000\u4E0A\u4E0B\u6587\u5E76\u8FD8\u539F\u5DE5\u4F5C\u533A\u6587\u4EF6",
+  "popover.checking": "\u6B63\u5728\u68C0\u67E5\u6587\u4EF6\u53D8\u66F4\u2026",
+  "popover.noChanges": "\u65E0\u53EF\u8FD8\u539F\u7684\u6587\u4EF6\u53D8\u66F4",
+  "popover.backupDisabled": "\u5FEB\u7167\u5907\u4EFD\u5DF2\u5173\u95ED\uFF0C\u8FD8\u539F\u53EF\u80FD\u4E0D\u5145\u5206",
+  "popover.impact.loading": "\u6B63\u5728\u83B7\u53D6\u5F71\u54CD\u6E05\u5355\u2026",
+  "popover.impact.failed": "\u65E0\u6CD5\u83B7\u53D6\u5F71\u54CD\u6E05\u5355\uFF1A{message}",
+  "popover.impact.none": "\u76EE\u6807\u4E4B\u540E\u6CA1\u6709\u8DDF\u8E2A\u5230\u7684\u5199\u7C7B\u53D8\u66F4\uFF0C\u65E0\u9700\u8FD8\u539F\u6587\u4EF6\u3002",
+  "popover.impact.restore": "\u8FD8\u539F {path}",
+  "popover.impact.delete": "\u5220\u9664 {path}",
+  "popover.confirm": "\u786E\u8BA4\u56DE\u9000",
+  "popover.back": "\u8FD4\u56DE",
+  "popover.retract.title": "\u56DE\u9000\u5230\u8FD9\u6761\u63D2\u8BDD\u6D88\u606F",
+  "popover.retract.target": "\u63D2\u8BDD\u4E2D \xB7 {preview}",
+  "popover.retract.hint": "\u64A4\u56DE\u8FD9\u6761\u53CA\u4E4B\u540E\u7684\u63D2\u8BDD\u6D88\u606F\uFF0C\u4E0D\u6253\u65AD\u5F53\u524D\u751F\u6210",
+  "popover.cancel": "\u53D6\u6D88",
+  "backup.title": "\u5FEB\u7167\u5907\u4EFD",
+  "backup.on": "\u5F00\u542F\u540E\u81EA\u52A8\u521B\u5EFA\u6587\u4EF6\u5FEB\u7167\uFF0C\u7528\u4E8E\u6587\u4EF6\u8FD8\u539F\u3002",
+  "backup.off": "\u5173\u95ED\u540E\u4E0D\u518D\u521B\u5EFA\u6587\u4EF6\u5FEB\u7167\uFF1B\u5173\u95ED\u671F\u95F4\u7684\u6587\u4EF6\u6539\u52A8\u65E0\u6CD5\u8FD8\u539F\u3002",
+  "cleanup.auto": "\u81EA\u52A8\u6E05\u7406",
+  "cleanup.auto.on": "\u5F00\u542F\u540E\u6309\u4E0D\u6D3B\u8DC3\u5929\u6570\u81EA\u52A8\u6E05\u7406\u8FC7\u671F\u4F1A\u8BDD\u5FEB\u7167\u3002",
+  "cleanup.auto.off": "\u5173\u95ED\u540E\u4E0D\u4F1A\u81EA\u52A8\u6E05\u7406\u5FEB\u7167\u3002",
+  "cleanup.maxAge": "\u4E0D\u6D3B\u8DC3\u65F6\u95F4\uFF08\u5929\uFF09",
+  "cleanup.maxAge.hint": "\u8D85\u8FC7\u8BE5\u5929\u6570\u672A\u6D3B\u52A8\u7684\u4F1A\u8BDD\u5FEB\u7167\u4F1A\u88AB\u6E05\u7406\u3002",
+  "cleanup.invalid": "\u8BF7\u586B\u6B63\u6574\u6570\uFF1B\u7559\u7A7A\u8868\u793A\u4F7F\u7528\u9ED8\u8BA4\u503C",
+  "cleanup.overridden": "\u5DF2\u8986\u76D6",
+  "cleanup.reset": "\u6062\u590D\u9ED8\u8BA4",
+  "cleanup.save": "\u4FDD\u5B58",
+  "cleanup.saving": "\u4FDD\u5B58\u4E2D\u2026",
+  "cleanup.saveFailed": "\u672C\u90E8\u7F72\u6CA1\u6709\u63A5\u53D7\u8FD9\u4E9B\u503C\uFF0C\u5DF2\u4FDD\u7559\u4F9B\u4F60\u4FEE\u6539",
+  "cleanup.readonly": "\u672C\u90E8\u7F72\u7684\u8BBE\u7F6E\u4E3A\u53EA\u8BFB",
+  "cleanup.unavailable": "\u8BE5\u63D2\u4EF6\u5F53\u524D\u672A\u52A0\u8F7D\uFF0C\u6682\u65F6\u65E0\u6CD5\u914D\u7F6E"
+};
+var ja = {
+  "button.title": "\u5DFB\u304D\u623B\u3057",
+  "button.aria": "\u3053\u306E\u30E1\u30C3\u30BB\u30FC\u30B8\u307E\u3067\u5DFB\u304D\u623B\u3059",
+  "button.retract.aria": "\u3053\u306E\u4FDD\u7559\u4E2D\u306E\u30E1\u30C3\u30BB\u30FC\u30B8\u307E\u3067\u5DFB\u304D\u623B\u3059",
+  "popover.title": "\u3053\u306E\u30E1\u30C3\u30BB\u30FC\u30B8\u307E\u3067\u5DFB\u304D\u623B\u3059",
+  "popover.noText": "\uFF08\u30C6\u30AD\u30B9\u30C8\u306A\u3057\uFF09",
+  "popover.chat": "\u4F1A\u8A71\u306E\u307F\u5DFB\u304D\u623B\u3059",
+  "popover.chat.hint": "\u30B3\u30F3\u30C6\u30AD\u30B9\u30C8\u306E\u307F\u5BFE\u8C61\u3067\u3001\u30EF\u30FC\u30AF\u30B9\u30DA\u30FC\u30B9\u306F\u5909\u66F4\u3057\u307E\u305B\u3093",
+  "popover.both": "\u4F1A\u8A71\u3068\u30D5\u30A1\u30A4\u30EB\u3092\u5DFB\u304D\u623B\u3059",
+  "popover.both.hint": "\u30B3\u30F3\u30C6\u30AD\u30B9\u30C8\u3092\u5DFB\u304D\u623B\u3057\u3001\u30EF\u30FC\u30AF\u30B9\u30DA\u30FC\u30B9\u306E\u30D5\u30A1\u30A4\u30EB\u3092\u5FA9\u5143\u3057\u307E\u3059",
+  "popover.checking": "\u30D5\u30A1\u30A4\u30EB\u306E\u5909\u66F4\u3092\u78BA\u8A8D\u4E2D\u2026",
+  "popover.noChanges": "\u5FA9\u5143\u3067\u304D\u308B\u30D5\u30A1\u30A4\u30EB\u306E\u5909\u66F4\u306F\u3042\u308A\u307E\u305B\u3093",
+  "popover.backupDisabled": "\u30B9\u30CA\u30C3\u30D7\u30B7\u30E7\u30C3\u30C8\u304C\u7121\u52B9\u306A\u305F\u3081\u3001\u5FA9\u5143\u304C\u4E0D\u5B8C\u5168\u306B\u306A\u308B\u53EF\u80FD\u6027\u304C\u3042\u308A\u307E\u3059",
+  "popover.impact.loading": "\u5F71\u97FF\u30EA\u30B9\u30C8\u3092\u53D6\u5F97\u4E2D\u2026",
+  "popover.impact.failed": "\u5F71\u97FF\u30EA\u30B9\u30C8\u3092\u53D6\u5F97\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\uFF1A{message}",
+  "popover.impact.none": "\u5BFE\u8C61\u3088\u308A\u5F8C\u306B\u8FFD\u8DE1\u3055\u308C\u305F\u30D5\u30A1\u30A4\u30EB\u5909\u66F4\u306F\u3042\u308A\u307E\u305B\u3093\u3002\u5FA9\u5143\u3059\u308B\u3082\u306E\u306F\u3042\u308A\u307E\u305B\u3093\u3002",
+  "popover.impact.restore": "{path} \u3092\u5FA9\u5143",
+  "popover.impact.delete": "{path} \u3092\u524A\u9664",
+  "popover.confirm": "\u5DFB\u304D\u623B\u3057\u3092\u5B9F\u884C",
+  "popover.back": "\u623B\u308B",
+  "popover.retract.title": "\u3053\u306E\u4FDD\u7559\u4E2D\u306E\u30E1\u30C3\u30BB\u30FC\u30B8\u307E\u3067\u5DFB\u304D\u623B\u3059",
+  "popover.retract.target": "\u4FDD\u7559\u4E2D \xB7 {preview}",
+  "popover.retract.hint": "\u3053\u306E\u4FDD\u7559\u4E2D\u306E\u30E1\u30C3\u30BB\u30FC\u30B8\u3068\u305D\u308C\u4EE5\u964D\u3092\u64A4\u56DE\u3057\u307E\u3059\u3002\u73FE\u5728\u306E\u751F\u6210\u306F\u4E2D\u65AD\u3057\u307E\u305B\u3093",
+  "popover.cancel": "\u30AD\u30E3\u30F3\u30BB\u30EB",
+  "backup.title": "\u30B9\u30CA\u30C3\u30D7\u30B7\u30E7\u30C3\u30C8\u306E\u30D0\u30C3\u30AF\u30A2\u30C3\u30D7",
+  "backup.on": "\u6709\u52B9\u306B\u3059\u308B\u3068\u3001\u30D5\u30A1\u30A4\u30EB\u5FA9\u5143\u7528\u306E\u30B9\u30CA\u30C3\u30D7\u30B7\u30E7\u30C3\u30C8\u304C\u81EA\u52D5\u3067\u4F5C\u6210\u3055\u308C\u307E\u3059\u3002",
+  "backup.off": "\u7121\u52B9\u306B\u3059\u308B\u3068\u3001\u30D5\u30A1\u30A4\u30EB\u306E\u30B9\u30CA\u30C3\u30D7\u30B7\u30E7\u30C3\u30C8\u306F\u4F5C\u6210\u3055\u308C\u307E\u305B\u3093\u3002\u7121\u52B9\u306A\u9593\u306E\u30D5\u30A1\u30A4\u30EB\u5909\u66F4\u306F\u5FA9\u5143\u3067\u304D\u307E\u305B\u3093\u3002",
+  "cleanup.auto": "\u81EA\u52D5\u30AF\u30EA\u30FC\u30F3\u30A2\u30C3\u30D7",
+  "cleanup.auto.on": "\u6709\u52B9\u306B\u3059\u308B\u3068\u3001\u3057\u304D\u3044\u5024\u3092\u8D85\u3048\u3066\u30A2\u30A4\u30C9\u30EB\u72B6\u614B\u306E\u30BB\u30C3\u30B7\u30E7\u30F3\u306E\u30B9\u30CA\u30C3\u30D7\u30B7\u30E7\u30C3\u30C8\u304C\u81EA\u52D5\u3067\u524A\u9664\u3055\u308C\u307E\u3059\u3002",
+  "cleanup.auto.off": "\u7121\u52B9\u306B\u3059\u308B\u3068\u3001\u30B9\u30CA\u30C3\u30D7\u30B7\u30E7\u30C3\u30C8\u306F\u81EA\u52D5\u3067\u524A\u9664\u3055\u308C\u307E\u305B\u3093\u3002",
+  "cleanup.maxAge": "\u30A2\u30A4\u30C9\u30EB\u6642\u9593\uFF08\u65E5\uFF09",
+  "cleanup.maxAge.hint": "\u3053\u306E\u65E5\u6570\u3092\u8D85\u3048\u3066\u30A2\u30A4\u30C9\u30EB\u72B6\u614B\u306E\u30BB\u30C3\u30B7\u30E7\u30F3\u306E\u30B9\u30CA\u30C3\u30D7\u30B7\u30E7\u30C3\u30C8\u30D0\u30C3\u30AF\u30A2\u30C3\u30D7\u304C\u524A\u9664\u3055\u308C\u307E\u3059\u3002",
+  "cleanup.invalid": "\u6B63\u306E\u6574\u6570\u3092\u5165\u529B\u3057\u3066\u304F\u3060\u3055\u3044\u3002\u7A7A\u6B04\u306E\u5834\u5408\u306F\u65E2\u5B9A\u5024\u3092\u4F7F\u3044\u307E\u3059",
+  "cleanup.overridden": "\u4E0A\u66F8\u304D\u6E08\u307F",
+  "cleanup.reset": "\u65E2\u5B9A\u5024\u306B\u623B\u3059",
+  "cleanup.save": "\u4FDD\u5B58",
+  "cleanup.saving": "\u4FDD\u5B58\u4E2D\u2026",
+  "cleanup.saveFailed": "\u3053\u306E\u30C7\u30D7\u30ED\u30A4\u30E1\u30F3\u30C8\u3067\u306F\u5024\u304C\u53D7\u3051\u4ED8\u3051\u3089\u308C\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u4FEE\u6B63\u3067\u304D\u308B\u3088\u3046\u5165\u529B\u306F\u4FDD\u6301\u3055\u308C\u3066\u3044\u307E\u3059",
+  "cleanup.readonly": "\u3053\u306E\u30C7\u30D7\u30ED\u30A4\u30E1\u30F3\u30C8\u3067\u306F\u8A2D\u5B9A\u304C\u8AAD\u307F\u53D6\u308A\u5C02\u7528\u3067\u3059",
+  "cleanup.unavailable": "\u3053\u306E\u30D7\u30E9\u30B0\u30A4\u30F3\u306F\u73FE\u5728\u8AAD\u307F\u8FBC\u307E\u308C\u3066\u3044\u306A\u3044\u305F\u3081\u3001\u8A2D\u5B9A\u3067\u304D\u307E\u305B\u3093"
+};
+var es = {
+  "button.title": "Rebobinar",
+  "button.aria": "Rebobinar hasta este mensaje",
+  "button.retract.aria": "Rebobinar hasta este mensaje pendiente",
+  "popover.title": "Rebobinar hasta este mensaje",
+  "popover.noText": "(sin texto)",
+  "popover.chat": "Rebobinar solo la conversaci\xF3n",
+  "popover.chat.hint": "Solo el contexto; el espacio de trabajo no se modifica",
+  "popover.both": "Rebobinar conversaci\xF3n y archivos",
+  "popover.both.hint": "Contexto y restauraci\xF3n de los archivos del espacio de trabajo",
+  "popover.checking": "Comprobando cambios en los archivos\u2026",
+  "popover.noChanges": "No hay cambios de archivo restaurables",
+  "popover.backupDisabled": "Instant\xE1neas desactivadas; la restauraci\xF3n puede ser incompleta",
+  "popover.impact.loading": "Obteniendo la lista de impacto\u2026",
+  "popover.impact.failed": "No se pudo obtener la lista de impacto: {message}",
+  "popover.impact.none": "No hay cambios de archivo rastreados despu\xE9s del destino; no hay nada que restaurar.",
+  "popover.impact.restore": "Restaurar {path}",
+  "popover.impact.delete": "Eliminar {path}",
+  "popover.confirm": "Confirmar rebobinado",
+  "popover.back": "Atr\xE1s",
+  "popover.retract.title": "Rebobinar hasta este mensaje pendiente",
+  "popover.retract.target": "Pendiente \xB7 {preview}",
+  "popover.retract.hint": "Retira este mensaje pendiente y los siguientes, sin interrumpir la ejecuci\xF3n",
+  "popover.cancel": "Cancelar",
+  "backup.title": "Copias de seguridad de instant\xE1neas",
+  "backup.on": "Si est\xE1 activado, se crean instant\xE1neas de archivos autom\xE1ticamente para la restauraci\xF3n.",
+  "backup.off": "Si est\xE1 desactivado, no se crean instant\xE1neas de archivos; los cambios hechos mientras est\xE1 desactivado no se pueden restaurar.",
+  "cleanup.auto": "Limpieza autom\xE1tica",
+  "cleanup.auto.on": "Si est\xE1 activada, las instant\xE1neas de sesiones inactivas m\xE1s all\xE1 del umbral se limpian autom\xE1ticamente.",
+  "cleanup.auto.off": "Si est\xE1 desactivada, las instant\xE1neas no se limpian autom\xE1ticamente.",
+  "cleanup.maxAge": "Tiempo de inactividad (d\xEDas)",
+  "cleanup.maxAge.hint": "Se limpian las copias de seguridad de instant\xE1neas de las sesiones inactivas durante m\xE1s de este n\xFAmero de d\xEDas.",
+  "cleanup.invalid": "Introduzca un entero positivo o d\xE9jelo vac\xEDo para usar el valor predeterminado",
+  "cleanup.overridden": "Sobrescrito",
+  "cleanup.reset": "Restablecer al valor predeterminado",
+  "cleanup.save": "Guardar",
+  "cleanup.saving": "Guardando\u2026",
+  "cleanup.saveFailed": "La implementaci\xF3n no acept\xF3 estos valores; se conservaron para que pueda corregirlos",
+  "cleanup.readonly": "Esta implementaci\xF3n guarda la configuraci\xF3n en modo de solo lectura",
+  "cleanup.unavailable": "Este plugin no est\xE1 cargado, por lo que no se puede configurar ahora"
+};
+var fr = {
+  "button.title": "Rembobiner",
+  "button.aria": "Rembobiner jusqu\u2019\xE0 ce message",
+  "button.retract.aria": "Rembobiner jusqu\u2019\xE0 ce message en attente",
+  "popover.title": "Rembobiner jusqu\u2019\xE0 ce message",
+  "popover.noText": "(sans texte)",
+  "popover.chat": "Rembobiner la conversation uniquement",
+  "popover.chat.hint": "Contexte uniquement ; l\u2019espace de travail reste intact",
+  "popover.both": "Rembobiner la conversation et les fichiers",
+  "popover.both.hint": "Contexte et restauration des fichiers de l\u2019espace de travail",
+  "popover.checking": "V\xE9rification des modifications de fichiers\u2026",
+  "popover.noChanges": "Aucune modification de fichier restaurable",
+  "popover.backupDisabled": "Instantan\xE9s d\xE9sactiv\xE9s ; la restauration peut \xEAtre incompl\xE8te",
+  "popover.impact.loading": "R\xE9cup\xE9ration de la liste d\u2019impact\u2026",
+  "popover.impact.failed": "Impossible de r\xE9cup\xE9rer la liste d\u2019impact : {message}",
+  "popover.impact.none": "Aucune modification de fichier suivie apr\xE8s la cible ; rien \xE0 restaurer.",
+  "popover.impact.restore": "Restaurer {path}",
+  "popover.impact.delete": "Supprimer {path}",
+  "popover.confirm": "Confirmer le rembobinage",
+  "popover.back": "Retour",
+  "popover.retract.title": "Rembobiner jusqu\u2019\xE0 ce message en attente",
+  "popover.retract.target": "En attente \xB7 {preview}",
+  "popover.retract.hint": "Retire ce message en attente et les suivants, sans interrompre l\u2019ex\xE9cution",
+  "popover.cancel": "Annuler",
+  "backup.title": "Sauvegardes d\u2019instantan\xE9s",
+  "backup.on": "Lorsque cette option est activ\xE9e, des instantan\xE9s de fichiers sont cr\xE9\xE9s automatiquement pour la restauration.",
+  "backup.off": "Lorsque cette option est d\xE9sactiv\xE9e, aucun instantan\xE9 de fichier n\u2019est cr\xE9\xE9 ; les modifications effectu\xE9es pendant cette p\xE9riode ne peuvent pas \xEAtre restaur\xE9es.",
+  "cleanup.auto": "Nettoyage automatique",
+  "cleanup.auto.on": "Si activ\xE9, les instantan\xE9s des sessions inactives au-del\xE0 du seuil sont nettoy\xE9s automatiquement.",
+  "cleanup.auto.off": "Si d\xE9sactiv\xE9, les instantan\xE9s ne sont pas nettoy\xE9s automatiquement.",
+  "cleanup.maxAge": "Dur\xE9e d\u2019inactivit\xE9 (jours)",
+  "cleanup.maxAge.hint": "Les sauvegardes d\u2019instantan\xE9s des sessions inactives depuis plus de ce nombre de jours sont nettoy\xE9es.",
+  "cleanup.invalid": "Saisissez un entier positif, ou laissez vide pour utiliser la valeur par d\xE9faut",
+  "cleanup.overridden": "Remplac\xE9",
+  "cleanup.reset": "R\xE9initialiser par d\xE9faut",
+  "cleanup.save": "Enregistrer",
+  "cleanup.saving": "Enregistrement\u2026",
+  "cleanup.saveFailed": "Le d\xE9ploiement n\u2019a pas accept\xE9 ces valeurs ; elles ont \xE9t\xE9 conserv\xE9es pour que vous puissiez les corriger",
+  "cleanup.readonly": "Ce d\xE9ploiement enregistre les param\xE8tres en lecture seule",
+  "cleanup.unavailable": "Ce plugin n\u2019est pas charg\xE9, il ne peut donc pas \xEAtre configur\xE9 pour le moment"
+};
+var de = {
+  "button.title": "Zur\xFCckspulen",
+  "button.aria": "Bis zu dieser Nachricht zur\xFCckspulen",
+  "button.retract.aria": "Bis zu dieser ausstehenden Nachricht zur\xFCckspulen",
+  "popover.title": "Bis zu dieser Nachricht zur\xFCckspulen",
+  "popover.noText": "(kein Text)",
+  "popover.chat": "Nur Unterhaltung zur\xFCckspulen",
+  "popover.chat.hint": "Nur Kontext; Arbeitsbereich bleibt unver\xE4ndert",
+  "popover.both": "Unterhaltung und Dateien zur\xFCckspulen",
+  "popover.both.hint": "Kontext und Wiederherstellung der Arbeitsbereichsdateien",
+  "popover.checking": "Datei\xE4nderungen werden gepr\xFCft\u2026",
+  "popover.noChanges": "Keine wiederherstellbaren Datei\xE4nderungen",
+  "popover.backupDisabled": "Snapshots deaktiviert; die Wiederherstellung kann unvollst\xE4ndig sein",
+  "popover.impact.loading": "Auswirkungsliste wird abgerufen\u2026",
+  "popover.impact.failed": "Auswirkungsliste konnte nicht abgerufen werden: {message}",
+  "popover.impact.none": "Keine erfassten Datei\xE4nderungen nach dem Ziel; nichts wiederherzustellen.",
+  "popover.impact.restore": "{path} wiederherstellen",
+  "popover.impact.delete": "{path} l\xF6schen",
+  "popover.confirm": "Zur\xFCckspulen best\xE4tigen",
+  "popover.back": "Zur\xFCck",
+  "popover.retract.title": "Bis zu dieser ausstehenden Nachricht zur\xFCckspulen",
+  "popover.retract.target": "Ausstehend \xB7 {preview}",
+  "popover.retract.hint": "Zieht diese ausstehende Nachricht und alle folgenden zur\xFCck, ohne den Lauf zu unterbrechen",
+  "popover.cancel": "Abbrechen",
+  "backup.title": "Snapshot-Sicherungen",
+  "backup.on": "Wenn aktiviert, werden automatisch Datei-Snapshots f\xFCr die Wiederherstellung erstellt.",
+  "backup.off": "Wenn deaktiviert, werden keine Datei-Snapshots erstellt; \xC4nderungen aus dieser Zeit k\xF6nnen nicht wiederhergestellt werden.",
+  "cleanup.auto": "Automatische Bereinigung",
+  "cleanup.auto.on": "Wenn aktiviert, werden Snapshots von Sitzungen, deren Inaktivit\xE4t den Grenzwert \xFCberschreitet, automatisch bereinigt.",
+  "cleanup.auto.off": "Wenn deaktiviert, werden Snapshots nicht automatisch bereinigt.",
+  "cleanup.maxAge": "Inaktivit\xE4tsdauer (Tage)",
+  "cleanup.maxAge.hint": "Snapshot-Sicherungen von Sitzungen, die l\xE4nger als diese Anzahl Tage inaktiv sind, werden bereinigt.",
+  "cleanup.invalid": "Geben Sie eine positive Ganzzahl ein oder lassen Sie das Feld leer, um den Standard zu verwenden",
+  "cleanup.overridden": "\xDCberschrieben",
+  "cleanup.reset": "Auf Standard zur\xFCcksetzen",
+  "cleanup.save": "Speichern",
+  "cleanup.saving": "Speichern\u2026",
+  "cleanup.saveFailed": "Die Bereitstellung hat diese Werte nicht \xFCbernommen; sie wurden zur Korrektur beibehalten",
+  "cleanup.readonly": "Diese Bereitstellung speichert Einstellungen schreibgesch\xFCtzt",
+  "cleanup.unavailable": "Dieses Plugin ist nicht geladen und kann daher gerade nicht konfiguriert werden"
+};
+var ru = {
+  "button.title": "\u041E\u0442\u043A\u0430\u0442\u0438\u0442\u044C",
+  "button.aria": "\u041E\u0442\u043A\u0430\u0442\u0438\u0442\u044C \u043A \u044D\u0442\u043E\u043C\u0443 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044E",
+  "button.retract.aria": "\u041E\u0442\u043A\u0430\u0442\u0438\u0442\u044C \u043A \u044D\u0442\u043E\u043C\u0443 \u043E\u0436\u0438\u0434\u0430\u044E\u0449\u0435\u043C\u0443 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044E",
+  "popover.title": "\u041E\u0442\u043A\u0430\u0442\u0438\u0442\u044C \u043A \u044D\u0442\u043E\u043C\u0443 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044E",
+  "popover.noText": "(\u043D\u0435\u0442 \u0442\u0435\u043A\u0441\u0442\u0430)",
+  "popover.chat": "\u041E\u0442\u043A\u0430\u0442\u0438\u0442\u044C \u0442\u043E\u043B\u044C\u043A\u043E \u0431\u0435\u0441\u0435\u0434\u0443",
+  "popover.chat.hint": "\u0422\u043E\u043B\u044C\u043A\u043E \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442; \u0440\u0430\u0431\u043E\u0447\u0430\u044F \u043E\u0431\u043B\u0430\u0441\u0442\u044C \u043D\u0435 \u0438\u0437\u043C\u0435\u043D\u044F\u0435\u0442\u0441\u044F",
+  "popover.both": "\u041E\u0442\u043A\u0430\u0442\u0438\u0442\u044C \u0431\u0435\u0441\u0435\u0434\u0443 \u0438 \u0444\u0430\u0439\u043B\u044B",
+  "popover.both.hint": "\u041A\u043E\u043D\u0442\u0435\u043A\u0441\u0442 \u0438 \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u0444\u0430\u0439\u043B\u043E\u0432 \u0440\u0430\u0431\u043E\u0447\u0435\u0439 \u043E\u0431\u043B\u0430\u0441\u0442\u0438",
+  "popover.checking": "\u041F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439 \u0444\u0430\u0439\u043B\u043E\u0432\u2026",
+  "popover.noChanges": "\u041D\u0435\u0442 \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u043C\u044B\u0445 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439 \u0444\u0430\u0439\u043B\u043E\u0432",
+  "popover.backupDisabled": "\u0421\u043D\u0438\u043C\u043A\u0438 \u043E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u044B; \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 \u043C\u043E\u0436\u0435\u0442 \u0431\u044B\u0442\u044C \u043D\u0435\u043F\u043E\u043B\u043D\u044B\u043C",
+  "popover.impact.loading": "\u041F\u043E\u043B\u0443\u0447\u0435\u043D\u0438\u0435 \u0441\u043F\u0438\u0441\u043A\u0430 \u0432\u043B\u0438\u044F\u043D\u0438\u044F\u2026",
+  "popover.impact.failed": "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u043E\u043B\u0443\u0447\u0438\u0442\u044C \u0441\u043F\u0438\u0441\u043E\u043A \u0432\u043B\u0438\u044F\u043D\u0438\u044F: {message}",
+  "popover.impact.none": "\u041F\u043E\u0441\u043B\u0435 \u0446\u0435\u043B\u0438 \u043D\u0435\u0442 \u043E\u0442\u0441\u043B\u0435\u0436\u0438\u0432\u0430\u0435\u043C\u044B\u0445 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0439 \u0444\u0430\u0439\u043B\u043E\u0432; \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u0430\u0432\u043B\u0438\u0432\u0430\u0442\u044C \u043D\u0435\u0447\u0435\u0433\u043E.",
+  "popover.impact.restore": "\u0412\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u044C {path}",
+  "popover.impact.delete": "\u0423\u0434\u0430\u043B\u0438\u0442\u044C {path}",
+  "popover.confirm": "\u041F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u0442\u044C \u043E\u0442\u043A\u0430\u0442",
+  "popover.back": "\u041D\u0430\u0437\u0430\u0434",
+  "popover.retract.title": "\u041E\u0442\u043A\u0430\u0442\u0438\u0442\u044C \u043A \u044D\u0442\u043E\u043C\u0443 \u043E\u0436\u0438\u0434\u0430\u044E\u0449\u0435\u043C\u0443 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044E",
+  "popover.retract.target": "\u041E\u0436\u0438\u0434\u0430\u0435\u0442 \xB7 {preview}",
+  "popover.retract.hint": "\u041E\u0442\u0437\u044B\u0432\u0430\u0435\u0442 \u044D\u0442\u043E \u043E\u0436\u0438\u0434\u0430\u044E\u0449\u0435\u0435 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435 \u0438 \u043F\u043E\u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0438\u0435, \u043D\u0435 \u043F\u0440\u0435\u0440\u044B\u0432\u0430\u044F \u0432\u044B\u043F\u043E\u043B\u043D\u0435\u043D\u0438\u0435",
+  "popover.cancel": "\u041E\u0442\u043C\u0435\u043D\u0430",
+  "backup.title": "\u0420\u0435\u0437\u0435\u0440\u0432\u043D\u044B\u0435 \u043A\u043E\u043F\u0438\u0438 \u0441\u043D\u0438\u043C\u043A\u043E\u0432",
+  "backup.on": "\u0415\u0441\u043B\u0438 \u0432\u043A\u043B\u044E\u0447\u0435\u043D\u043E, \u0441\u043D\u0438\u043C\u043A\u0438 \u0444\u0430\u0439\u043B\u043E\u0432 \u0441\u043E\u0437\u0434\u0430\u044E\u0442\u0441\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438 \u0434\u043B\u044F \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F.",
+  "backup.off": "\u0415\u0441\u043B\u0438 \u043E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u043E, \u0441\u043D\u0438\u043C\u043A\u0438 \u0444\u0430\u0439\u043B\u043E\u0432 \u043D\u0435 \u0441\u043E\u0437\u0434\u0430\u044E\u0442\u0441\u044F; \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F, \u0441\u0434\u0435\u043B\u0430\u043D\u043D\u044B\u0435 \u0432 \u044D\u0442\u043E \u0432\u0440\u0435\u043C\u044F, \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u044C \u043D\u0435\u043B\u044C\u0437\u044F.",
+  "cleanup.auto": "\u0410\u0432\u0442\u043E\u043E\u0447\u0438\u0441\u0442\u043A\u0430",
+  "cleanup.auto.on": "\u0415\u0441\u043B\u0438 \u0432\u043A\u043B\u044E\u0447\u0435\u043D\u0430, \u0441\u043D\u0438\u043C\u043A\u0438 \u0441\u0435\u0430\u043D\u0441\u043E\u0432, \u043F\u0440\u043E\u0441\u0442\u0430\u0438\u0432\u0430\u044E\u0449\u0438\u0445 \u0434\u043E\u043B\u044C\u0448\u0435 \u043F\u043E\u0440\u043E\u0433\u0430, \u043E\u0447\u0438\u0449\u0430\u044E\u0442\u0441\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438.",
+  "cleanup.auto.off": "\u0415\u0441\u043B\u0438 \u043E\u0442\u043A\u043B\u044E\u0447\u0435\u043D\u0430, \u0441\u043D\u0438\u043C\u043A\u0438 \u043D\u0435 \u043E\u0447\u0438\u0449\u0430\u044E\u0442\u0441\u044F \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438.",
+  "cleanup.maxAge": "\u0412\u0440\u0435\u043C\u044F \u043F\u0440\u043E\u0441\u0442\u043E\u044F (\u0434\u043D\u0435\u0439)",
+  "cleanup.maxAge.hint": "\u0420\u0435\u0437\u0435\u0440\u0432\u043D\u044B\u0435 \u043A\u043E\u043F\u0438\u0438 \u0441\u043D\u0438\u043C\u043A\u043E\u0432 \u0441\u0435\u0430\u043D\u0441\u043E\u0432, \u043F\u0440\u043E\u0441\u0442\u0430\u0438\u0432\u0430\u044E\u0449\u0438\u0445 \u0434\u043E\u043B\u044C\u0448\u0435 \u044D\u0442\u043E\u0433\u043E \u0447\u0438\u0441\u043B\u0430 \u0434\u043D\u0435\u0439, \u043E\u0447\u0438\u0449\u0430\u044E\u0442\u0441\u044F.",
+  "cleanup.invalid": "\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u043F\u043E\u043B\u043E\u0436\u0438\u0442\u0435\u043B\u044C\u043D\u043E\u0435 \u0446\u0435\u043B\u043E\u0435 \u0447\u0438\u0441\u043B\u043E \u0438\u043B\u0438 \u043E\u0441\u0442\u0430\u0432\u044C\u0442\u0435 \u043F\u043E\u043B\u0435 \u043F\u0443\u0441\u0442\u044B\u043C \u0434\u043B\u044F \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u044F \u043F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E",
+  "cleanup.overridden": "\u041F\u0435\u0440\u0435\u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0435\u043D\u043E",
+  "cleanup.reset": "\u0421\u0431\u0440\u043E\u0441\u0438\u0442\u044C \u043A \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u044E \u043F\u043E \u0443\u043C\u043E\u043B\u0447\u0430\u043D\u0438\u044E",
+  "cleanup.save": "\u0421\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C",
+  "cleanup.saving": "\u0421\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0438\u0435\u2026",
+  "cleanup.saveFailed": "\u0420\u0430\u0437\u0432\u0451\u0440\u0442\u044B\u0432\u0430\u043D\u0438\u0435 \u043D\u0435 \u043F\u0440\u0438\u043D\u044F\u043B\u043E \u044D\u0442\u0438 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u044F; \u043E\u043D\u0438 \u043E\u0441\u0442\u0430\u0432\u043B\u0435\u043D\u044B \u0434\u043B\u044F \u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u044F",
+  "cleanup.readonly": "\u0412 \u044D\u0442\u043E\u043C \u0440\u0430\u0437\u0432\u0451\u0440\u0442\u044B\u0432\u0430\u043D\u0438\u0438 \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B \u0442\u043E\u043B\u044C\u043A\u043E \u0434\u043B\u044F \u0447\u0442\u0435\u043D\u0438\u044F",
+  "cleanup.unavailable": "\u042D\u0442\u043E\u0442 \u043F\u043B\u0430\u0433\u0438\u043D \u043D\u0435 \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043D, \u043F\u043E\u044D\u0442\u043E\u043C\u0443 \u0441\u0435\u0439\u0447\u0430\u0441 \u0435\u0433\u043E \u043D\u0435\u043B\u044C\u0437\u044F \u043D\u0430\u0441\u0442\u0440\u043E\u0438\u0442\u044C"
+};
+var pt = {
+  "button.title": "Rebobinar",
+  "button.aria": "Rebobinar at\xE9 esta mensagem",
+  "button.retract.aria": "Rebobinar at\xE9 esta mensagem pendente",
+  "popover.title": "Rebobinar at\xE9 esta mensagem",
+  "popover.noText": "(sem texto)",
+  "popover.chat": "Rebobinar apenas a conversa",
+  "popover.chat.hint": "Apenas o contexto; o espa\xE7o de trabalho n\xE3o \xE9 alterado",
+  "popover.both": "Rebobinar conversa e arquivos",
+  "popover.both.hint": "Contexto e restaura\xE7\xE3o dos arquivos do espa\xE7o de trabalho",
+  "popover.checking": "Verificando altera\xE7\xF5es nos arquivos\u2026",
+  "popover.noChanges": "Nenhuma altera\xE7\xE3o de arquivo restaur\xE1vel",
+  "popover.backupDisabled": "Snapshots desativados; a restaura\xE7\xE3o pode ficar incompleta",
+  "popover.impact.loading": "Obtendo a lista de impacto\u2026",
+  "popover.impact.failed": "N\xE3o foi poss\xEDvel obter a lista de impacto: {message}",
+  "popover.impact.none": "Nenhuma altera\xE7\xE3o de arquivo rastreada ap\xF3s o destino; nada a restaurar.",
+  "popover.impact.restore": "Restaurar {path}",
+  "popover.impact.delete": "Excluir {path}",
+  "popover.confirm": "Confirmar rebobinamento",
+  "popover.back": "Voltar",
+  "popover.retract.title": "Rebobinar at\xE9 esta mensagem pendente",
+  "popover.retract.target": "Pendente \xB7 {preview}",
+  "popover.retract.hint": "Retira esta mensagem pendente e as seguintes, sem interromper a execu\xE7\xE3o",
+  "popover.cancel": "Cancelar",
+  "backup.title": "Backups de snapshots",
+  "backup.on": "Quando ativado, snapshots de arquivos s\xE3o criados automaticamente para a restaura\xE7\xE3o.",
+  "backup.off": "Quando desativado, nenhum snapshot de arquivo \xE9 criado; altera\xE7\xF5es feitas enquanto desativado n\xE3o podem ser restauradas.",
+  "cleanup.auto": "Limpeza autom\xE1tica",
+  "cleanup.auto.on": "Quando ativada, snapshots de sess\xF5es ociosas al\xE9m do limite s\xE3o limpos automaticamente.",
+  "cleanup.auto.off": "Quando desativada, os snapshots n\xE3o s\xE3o limpos automaticamente.",
+  "cleanup.maxAge": "Tempo ocioso (dias)",
+  "cleanup.maxAge.hint": "Backups de snapshots de sess\xF5es ociosas h\xE1 mais deste n\xFAmero de dias s\xE3o limpos.",
+  "cleanup.invalid": "Insira um inteiro positivo ou deixe em branco para usar o padr\xE3o",
+  "cleanup.overridden": "Substitu\xEDdo",
+  "cleanup.reset": "Redefinir para o padr\xE3o",
+  "cleanup.save": "Salvar",
+  "cleanup.saving": "Salvando\u2026",
+  "cleanup.saveFailed": "A implanta\xE7\xE3o n\xE3o aceitou estes valores; eles foram mantidos para voc\xEA corrigir",
+  "cleanup.readonly": "Esta implanta\xE7\xE3o armazena as configura\xE7\xF5es como somente leitura",
+  "cleanup.unavailable": "Este plugin n\xE3o est\xE1 carregado, ent\xE3o n\xE3o pode ser configurado agora"
+};
+var CLIENT_DICTS = { en, zh, ja, es, fr, de, ru, pt };
 
 // src/client/settings-card.tsx
-var import_react2 = require("react");
-var import_jsx_runtime2 = require("react/jsx-runtime");
-var CLEANUP_SETTINGS_NAMESPACE = "dsh-rewind-snapshot-cleanup";
+var import_dsh_client_ui_primitives2 = require("@deepseek-ai/dsh-client-ui-primitives");
+var import_jsx_runtime4 = require("react/jsx-runtime");
+var SETTINGS_ENTRY_ID = "dsh-rewind-plugin";
 var DEFAULT_MAX_AGE_DAYS = 30;
-function draftFrom(policy) {
-  return { enabled: policy?.enabled ?? false, maxAgeDays: String(policy?.maxAgeDays ?? "") };
-}
-function maxAgeOf(text) {
-  const trimmed = text.trim();
-  if (!/^\d+$/.test(trimmed)) return null;
-  const days = Number(trimmed);
-  return Number.isSafeInteger(days) && days > 0 ? days : null;
-}
-function configOf(draft) {
-  const days = maxAgeOf(draft.maxAgeDays);
-  if (days === null) return null;
-  return { enabled: draft.enabled, maxAgeDays: days };
-}
-function dirtyOf(base, draft) {
-  return base.enabled !== draft.enabled || base.maxAgeDays !== draft.maxAgeDays;
-}
-function SettingsCleanupCard({ api, t }) {
-  const [open, setOpen] = (0, import_react2.useState)(false);
-  const [baseline, setBaseline] = (0, import_react2.useState)(() => draftFrom(api.read()));
-  const [draft, setDraft] = (0, import_react2.useState)(() => draftFrom(api.read()));
-  const [busy, setBusy] = (0, import_react2.useState)(false);
-  const [error, setError] = (0, import_react2.useState)(null);
-  const writable = api.writable();
-  (0, import_react2.useEffect)(() => api.subscribe(() => {
-    const next = draftFrom(api.read());
-    setBaseline((base) => {
-      setDraft((cur) => dirtyOf(base, cur) ? cur : next);
-      return next;
-    });
-  }), [api]);
-  const dirty = dirtyOf(baseline, draft);
-  const days = maxAgeOf(draft.maxAgeDays);
-  const invalid = days === null;
-  const disabled = busy || !writable;
-  const edit = (patch) => {
-    setDraft((cur) => ({ ...cur, ...patch }));
-    setError(null);
+function autoCleanupEnabledField() {
+  return {
+    field: "autoCleanupEnabled",
+    format: (value) => String(value === true),
+    parse: (text) => ({ kind: "set", value: text === "true" })
   };
-  const save = async () => {
-    if (busy || !writable || !dirty) return;
-    const next = configOf(draft);
-    if (next === null) {
-      setError(t("cleanup.invalid"));
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      await api.save(next);
-      setBaseline(draft);
-      setError(null);
-    } catch (e) {
-      setError(t("cleanup.saveFailed", { message: e instanceof Error ? e.message : String(e) }));
-    } finally {
-      setBusy(false);
-    }
+}
+function fileCheckpointingEnabledField() {
+  return {
+    field: "fileCheckpointingEnabled",
+    format: (value) => String(value !== false),
+    parse: (text) => text === "true" ? { kind: "clear" } : { kind: "set", value: false }
   };
-  const discard = () => {
-    if (busy) return;
-    setDraft(baseline);
-    setError(null);
+}
+function formLabels(t) {
+  return {
+    unavailable: t("cleanup.unavailable"),
+    readOnly: t("cleanup.readonly"),
+    saveFailed: t("cleanup.saveFailed"),
+    save: t("cleanup.save"),
+    saving: t("cleanup.saving")
   };
-  return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("li", { className: `dsh-rewind-cleanup-card${open ? " dsh-rewind-cleanup-card-open" : ""}`, children: [
-    /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
-      "button",
-      {
-        type: "button",
-        className: "dsh-rewind-cleanup-header",
-        "aria-expanded": open,
-        "aria-label": `${t(open ? "cleanup.collapse" : "cleanup.expand")}: ${t("cleanup.title")}`,
-        onClick: () => setOpen(!open),
-        children: [
-          /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("span", { className: "dsh-rewind-cleanup-head-text", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "dsh-rewind-cleanup-name", children: t("cleanup.title") }),
-            /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "dsh-rewind-cleanup-desc", children: t("cleanup.desc") })
+}
+function settingsForm(scope) {
+  const form = new import_dsh_client_ui_primitives2.SettingsFormModel(scope, [
+    fileCheckpointingEnabledField(),
+    autoCleanupEnabledField(),
+    (0, import_dsh_client_ui_primitives2.settingsNumberField)("autoCleanupMaxAgeDays")
+  ]);
+  return {
+    form,
+    store: form.bind(() => ({
+      ...form.shell(),
+      checkpointingEnabled: form.field("fileCheckpointingEnabled"),
+      enabled: form.field("autoCleanupEnabled"),
+      maxAgeDays: form.field("autoCleanupMaxAgeDays")
+    }))
+  };
+}
+function SettingsCard(props) {
+  const { t, useSettingsCard } = props;
+  const state = useSettingsCard((snapshot) => snapshot);
+  if (props.view === "summary") return null;
+  const disabled = !state.writable || state.saving;
+  const checkpointing = state.checkpointingEnabled.text === "true";
+  const cleanupEnabled = state.enabled.text === "true";
+  return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(
+    import_dsh_client_ui_primitives2.SettingsForm,
+    {
+      labels: formLabels(t),
+      state,
+      onSave: props.save,
+      onDiscard: props.discard,
+      children: [
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "dsh-rewind-settings-section", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "dsh-rewind-settings-toggle-row", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "dsh-rewind-settings-toggle-label", children: t("backup.title") }),
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+              import_dsh_client_ui_primitives2.Switch,
+              {
+                checked: checkpointing,
+                label: t("backup.title"),
+                disabled,
+                onChange: (next) => {
+                  props.edit("fileCheckpointingEnabled", String(next));
+                }
+              }
+            )
           ] }),
-          dirty ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "dsh-rewind-cleanup-pending", children: t("cleanup.unsaved") }) : null,
-          /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
-            "svg",
-            {
-              className: `dsh-rewind-cleanup-chevron${open ? " dsh-rewind-cleanup-chevron-open" : ""}`,
-              width: "14",
-              height: "14",
-              viewBox: "0 0 16 16",
-              "aria-hidden": "true",
-              children: /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("path", { d: "M4 6l4 4 4-4", fill: "none", stroke: "currentColor", strokeWidth: "1.5", strokeLinecap: "round", strokeLinejoin: "round" })
-            }
-          )
-        ]
-      }
-    ),
-    open ? /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "dsh-rewind-cleanup-body", children: [
-      !writable ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { className: "dsh-rewind-cleanup-readonly", role: "status", children: t("cleanup.readonly") }) : null,
-      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "dsh-rewind-cleanup-permission", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "dsh-rewind-cleanup-toggle-row", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "dsh-rewind-cleanup-toggle-label", id: "dsh-rewind-cleanup-enabled-label", children: t("cleanup.auto") }),
-          /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
-            "button",
-            {
-              type: "button",
-              role: "switch",
-              className: "dsh-rewind-cleanup-switch",
-              "aria-checked": draft.enabled,
-              "aria-labelledby": "dsh-rewind-cleanup-enabled-label",
-              disabled,
-              onClick: () => edit({ enabled: !draft.enabled }),
-              children: /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "dsh-rewind-cleanup-thumb" })
-            }
-          )
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("p", { className: "dsh-rewind-settings-hint", children: t(checkpointing ? "backup.on" : "backup.off") })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { className: "dsh-rewind-cleanup-hint", children: t(draft.enabled ? "cleanup.auto.on" : "cleanup.auto.off") })
-      ] }),
-      draft.enabled ? /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "dsh-rewind-cleanup-field", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "dsh-rewind-cleanup-head", children: /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("label", { className: "dsh-rewind-cleanup-label", htmlFor: "dsh-rewind-cleanup-maxage", children: t("cleanup.maxAge") }) }),
-        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
-          "input",
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "dsh-rewind-settings-divider" }),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "dsh-rewind-settings-section", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "dsh-rewind-settings-toggle-row", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "dsh-rewind-settings-toggle-label", children: t("cleanup.auto") }),
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+              import_dsh_client_ui_primitives2.Switch,
+              {
+                checked: cleanupEnabled,
+                label: t("cleanup.auto"),
+                disabled,
+                onChange: (next) => {
+                  props.edit("autoCleanupEnabled", String(next));
+                }
+              }
+            )
+          ] }),
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("p", { className: "dsh-rewind-settings-hint", children: t(cleanupEnabled ? "cleanup.auto.on" : "cleanup.auto.off") })
+        ] }),
+        cleanupEnabled ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+          import_dsh_client_ui_primitives2.SettingsValueField,
           {
-            className: `dsh-rewind-cleanup-input${invalid ? " dsh-rewind-cleanup-input-invalid" : ""}`,
-            type: "text",
-            inputMode: "numeric",
             id: "dsh-rewind-cleanup-maxage",
-            value: draft.maxAgeDays,
-            disabled,
-            "aria-invalid": invalid || void 0,
+            label: t("cleanup.maxAge"),
+            hint: t("cleanup.maxAge.hint"),
+            overriddenLabel: t("cleanup.overridden"),
+            resetLabel: t("cleanup.reset"),
+            invalidLabel: t("cleanup.invalid"),
             placeholder: String(DEFAULT_MAX_AGE_DAYS),
-            onChange: (e) => edit({ maxAgeDays: e.target.value })
+            numeric: true,
+            disabled,
+            ...state.maxAgeDays,
+            onEdit: (text) => {
+              props.edit("autoCleanupMaxAgeDays", text);
+            },
+            onReset: () => {
+              props.resetField("autoCleanupMaxAgeDays");
+            }
           }
-        ),
-        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { className: invalid ? "dsh-rewind-cleanup-error" : "dsh-rewind-cleanup-hint", children: invalid ? t("cleanup.invalid") : t("cleanup.maxAge.hint") })
-      ] }) : null,
-      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "dsh-rewind-cleanup-footer", children: [
-        error ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { className: "dsh-rewind-cleanup-failed", role: "status", children: error }) : null,
-        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
-          "button",
-          {
-            type: "button",
-            className: "dsh-rewind-cleanup-discard",
-            disabled: !dirty || busy || !writable,
-            onClick: discard,
-            children: t("cleanup.discard")
-          }
-        ),
-        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
-          "button",
-          {
-            type: "button",
-            className: "dsh-rewind-cleanup-save",
-            disabled: !dirty || busy || !writable || invalid,
-            onClick: save,
-            children: busy ? t("cleanup.saving") : t("cleanup.save")
-          }
-        )
-      ] })
-    ] }) : null
-  ] });
+        ) : null
+      ]
+    }
+  );
 }
 
 // src/client/index.ts
 var name = "dsh-rewind";
-var inject = ["slots", "sessions", "locale", "commandUi"];
+var inject = ["slots", "sessions", "locale", "commandUi", "configForms"];
 var NS2 = "rewind";
 var HEADER_ACTIONS_SLOT = "conversation.session.header.actions";
 var COMPOSER_EDITABLE_SELECTOR2 = "[data-composer-input]";
 function apply(ctx) {
   rewindLog.info("boot", `loaded v${PLUGIN_VERSION} (build ${BUILD_HASH})`);
   ctx.effect(function* () {
-    yield ctx.locale.register(NS2, { zh, en });
+    yield ctx.locale.register(NS2, CLIENT_DICTS);
     const t = ctx.locale.bind(NS2);
+    registerPreviewCall(previewOverApi);
     const style = document.createElement("style");
-    style.dataset.plugin = "dsh-rewind";
+    style.dataset.plugin = PLUGIN_PACKAGE;
     style.textContent = STYLE;
     document.head.appendChild(style);
+    installChatViewVisibility(ctx);
     const sessionOf = (sessionId) => ctx.sessions.binding(sessionId)?.session;
-    const currentSessionId = () => ctx.sessions.list.getSnapshot().current;
+    const isMainViewSession = (sessionId) => (ctx.sessions.list.getSnapshot().byId[sessionId]?.retainedBy.mainView ?? 0) > 0;
     const subscribeLocale = (cb) => ctx.locale.subscribe(cb);
     const uiConversation = () => ctx.get("uiConversation");
     const CHAT_VIEW = "chat";
@@ -1662,24 +2177,89 @@ function apply(ctx) {
         return void 0;
       }
     };
+    const composerFacade = (sessionId) => {
+      const conversation = ctx.get("conversation");
+      const input = conversation?.input;
+      const scope = ctx.sessions.scope?.(sessionId);
+      if (input === void 0 || scope === void 0) return void 0;
+      return {
+        setDraft: (draft) => {
+          input.for(scope).setDraft(draft);
+        },
+        focus: () => {
+          input.for(scope).focus();
+        }
+      };
+    };
+    const IMAGE_MEDIA_EXTENSION = {
+      "image/png": "png",
+      "image/jpeg": "jpg",
+      "image/webp": "webp",
+      "image/gif": "gif"
+    };
+    const restoreImages = async (sessionId, images) => {
+      if (images.length === 0) return;
+      const session = sessionOf(sessionId);
+      const conversation = ctx.get("conversation");
+      const scope = ctx.sessions.scope?.(sessionId);
+      if (session === void 0 || conversation?.input === void 0 || conversation.createDrafts === void 0 || scope === void 0) {
+        rewindLog.warn("refill", "image restore unavailable (conversation services not ready)");
+        return;
+      }
+      const files = [];
+      for (const [index, ref] of images.entries()) {
+        const extension = IMAGE_MEDIA_EXTENSION[ref.mediaType];
+        if (extension === void 0) {
+          rewindLog.warn("refill", `skipping image with unsupported type ${ref.mediaType}`);
+          continue;
+        }
+        if (typeof ref.bytes !== "number" || typeof ref.width !== "number" || typeof ref.height !== "number") {
+          rewindLog.warn("refill", `skipping image ${ref.attachmentId}: incomplete durable reference`);
+          continue;
+        }
+        try {
+          const result = await session.readAttachment({
+            attachmentId: ref.attachmentId,
+            mediaType: ref.mediaType,
+            bytes: ref.bytes,
+            width: ref.width,
+            height: ref.height,
+            ...ref.name === void 0 ? {} : { name: ref.name }
+          });
+          if (!result.ok) throw result.error;
+          const bytes = result.value.data;
+          files.push(new File([bytes], ref.name ?? `image-${index + 1}.${extension}`, { type: ref.mediaType }));
+        } catch (error) {
+          rewindLog.warn("refill", `image read threw for ${ref.attachmentId}`, error);
+        }
+      }
+      if (files.length === 0) return;
+      try {
+        const drafts = conversation.createDrafts(sessionId, files, session.getSnapshot().subagent === null);
+        const admitted = conversation.input.for(scope).addAttachments(drafts.map((draft) => draft.id));
+        if (!admitted) {
+          rewindLog.warn("refill", `composer refused ${drafts.length} restored image(s) (busy)`);
+          conversation.releaseDraftAttachments?.(drafts);
+        }
+      } catch (error) {
+        rewindLog.warn("refill", "image restore threw", error);
+      }
+    };
     const setComposerText = (sessionId, text) => {
       try {
-        const conversation = ctx.get("conversation");
-        const input = conversation?.input;
-        const scope = ctx.sessions.scope?.(sessionId);
-        const facade = input !== void 0 && scope !== void 0;
-        const ok = writeComposer(
-          text,
-          facade ? { setDraft: (draft) => {
-            input.for(scope).setDraft(draft);
-          } } : void 0
-        );
-        return ok;
+        return writeComposer(text, composerFacade(sessionId));
       } catch (error) {
         rewindLog.warn("refill", "composer write threw", error);
         return false;
       }
     };
+    registerComposerFocuser((sessionId) => {
+      try {
+        composerFacade(sessionId)?.focus();
+      } catch (error) {
+        rewindLog.warn("refill", "composer focus threw", error);
+      }
+    });
     const watchChat = (sessionId, cb) => resolveChatWatch(
       (id) => {
         try {
@@ -1692,50 +2272,25 @@ function apply(ctx) {
       cb
     );
     const slots = ctx.slots;
-    yield slots.inject(HEADER_ACTIONS_SLOT, () => slots.register(
-      {
-        name: HEADER_ACTIONS_SLOT,
-        // A distinct list-entry id keeps the bridge from shadowing any other
-        // header action; the entry renders portals only, never header UI.
-        id: "dsh-rewind-portals",
-        order: 1e3
-      },
-      createRewindBridge({ sessionOf, chatOf, currentSessionId, watchChat, setComposerText, t, subscribeLocale })
-    ));
-    const clientCtx = ctx;
-    clientCtx.inject(["settingsScope"], (scoped) => {
-      try {
-        const scope = scoped.settingsScope.bind({ namespace: CLEANUP_SETTINGS_NAMESPACE });
-        const cardApi = {
-          read: () => {
-            const value = scope.getSnapshot().value;
-            return value === void 0 ? void 0 : { enabled: value.enabled, maxAgeDays: value.maxAgeDays };
-          },
-          writable: () => {
-            return scope.getSnapshot().writable === true;
-          },
-          save: async (next) => {
-            await scope.set("enabled", next.enabled);
-            await scope.set("maxAgeDays", next.maxAgeDays);
-          },
-          subscribe: (cb) => scope.subscribe(cb)
-        };
-        scoped.slots.inject("settings.plugin.item", () => scoped.slots.register(
-          {
-            name: "settings.plugin.item",
-            key: CLEANUP_SETTINGS_NAMESPACE,
-            // Match the official cards / dsh-market: locale + inject provide
-            // the card its props through the slot renderer (the keyed card owns
-            // its internals, but the page feeds it locale + the bound api).
-            locale: NS2,
-            inject: () => ({ t, api: cardApi })
-          },
-          SettingsCleanupCard
-        ));
-      } catch (error) {
-        rewindLog.error("settings", "settings card register failed", error);
-      }
-    });
+    try {
+      const { store, form } = settingsForm(
+        ctx.configForms.get(SETTINGS_ENTRY_ID)
+      );
+      ctx.effect(() => () => {
+        form.dispose();
+      }, "dsh-rewind settings form");
+      yield slots.inject("plugins.bundle.config", () => slots.register(
+        {
+          name: "plugins.bundle.config",
+          key: PLUGIN_PACKAGE,
+          locale: NS2,
+          inject: () => ({ hooks: { settingsCard: store }, ...form.actions() })
+        },
+        SettingsCard
+      ));
+    } catch (error) {
+      rewindLog.error("settings", "settings card register failed", error);
+    }
     const commandUi = ctx.get("commandUi");
     const hasCandidates = (sessionId) => {
       const face = sessionId === void 0 ? void 0 : sessionOf(sessionId);
@@ -1743,14 +2298,7 @@ function apply(ctx) {
       const chat = chatOf(face);
       return chat !== void 0 && rewindCandidatesOfChat(chat).length > 0;
     };
-    const fetchHostCandidates = async (face, chatOf2) => {
-      const known = knownCommandSeqs(face, chatOf2, (node) => isCandidateCommand(node));
-      const result = await face.command("/rewind __candidates");
-      if (!result.ok || result.value?.matched !== true) return void 0;
-      const outcome = await waitForCommand(face, chatOf2, (node) => isCandidateCommand(node) && !known.has(node.seq), 8e3, (cb) => watchChat(face.sessionId, cb));
-      if (outcome === null || outcome.kind !== "success" || outcome.text === void 0) return void 0;
-      return rewindCandidatesFromHostText(outcome.text);
-    };
+    const fetchHostCandidates = async (face) => candidatesOverApi(face.sessionId);
     const hostCandidatesCache = /* @__PURE__ */ new Map();
     const composerAnchor = () => {
       const surface = composerSurface2();
@@ -1768,7 +2316,7 @@ function apply(ctx) {
         options: async (session) => {
           const face = sessionOf(session.sessionId);
           if (face === void 0) return [];
-          const candidates = await fetchHostCandidates(face, chatOf);
+          const candidates = await fetchHostCandidates(face);
           if (candidates !== void 0) hostCandidatesCache.set(session.sessionId, candidates);
           return candidates === void 0 ? [] : rewindOptionsFromCandidates(candidates, t);
         },
@@ -1781,15 +2329,13 @@ function apply(ctx) {
           if (candidate === void 0) return;
           openPopover({
             session: face,
-            chatOf,
-            watchChat,
             seq: candidate.seq,
             time: candidate.time,
             preview: candidate.preview,
             anchor: composerAnchor(),
             t,
             onRewind: (mode) => {
-              void runRewindAndFill(face, candidate.seq, mode, currentSessionId, chatOf, watchChat, setComposerText);
+              void runRewindAndFill(face, candidate.seq, mode, isMainViewSession, chatOf, watchChat, setComposerText, restoreImages);
             }
           });
         }
@@ -1798,9 +2344,48 @@ function apply(ctx) {
     for (const name2 of ["rewind", "undo"]) {
       yield commandUi.decorate({ name: name2, ...rewindPopupSpec });
     }
+    const canRewindIn = (sessionId) => {
+      const face = sessionOf(sessionId);
+      return face !== void 0 && !isRewindInertSession(face.getSnapshot());
+    };
+    const openRewindFor = (row, anchor) => {
+      const face = sessionOf(row.sessionId);
+      if (face === void 0) {
+        rewindLog.warn("action", "rewind action clicked with no session binding");
+        return;
+      }
+      openPopover({
+        session: face,
+        seq: row.seq,
+        time: row.time,
+        preview: row.text,
+        anchor,
+        placement: "below",
+        t,
+        onRewind: (mode) => {
+          void runRewindAndFill(face, row.seq, mode, isMainViewSession, chatOf, watchChat, setComposerText, restoreImages);
+        }
+      });
+    };
+    try {
+      yield installRowAction({
+        slots: ctx.slots,
+        render: rewindActionRenderer(t, canRewindIn, openRewindFor)
+      });
+    } catch (error) {
+      rewindLog.error("action", "rewind action mount failed", error);
+    }
+    try {
+      yield slots.inject(HEADER_ACTIONS_SLOT, () => slots.register(
+        { name: HEADER_ACTIONS_SLOT, id: "dsh-rewind-pending", order: 1e3 },
+        createPendingBridge({ sessionOf, setComposerText, restoreImages, t, subscribeLocale })
+      ));
+    } catch (error) {
+      rewindLog.error("retract", "pending retract mount failed", error);
+    }
     const composerSurface2 = () => document.querySelector(COMPOSER_EDITABLE_SELECTOR2);
     yield () => {
-      style.remove();
+      closePopover();
     };
   }, "dsh-rewind client lifecycle");
 }

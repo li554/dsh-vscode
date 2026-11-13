@@ -5,287 +5,376 @@
   </picture>
 </p>
 
-<h1 align="center">dsh-auto-continue</h1>
-
 <p align="center">
-  <em>DSH Web UI plugin — when a request is interrupted by a network error or any other non-human cause, it automatically sends “Continue” for you.</em>
+  A <a href="https://github.com/deepseek-ai/deepseek-harness">DeepSeek Harness</a> plugin that resumes interrupted sessions for you, with an optional autonomous loop.
 </p>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/dsh-client-auto-continue"><img src="https://img.shields.io/npm/v/dsh-client-auto-continue?logo=npm&label=npm" alt="npm version"></a>
   <a href="https://www.npmjs.com/package/dsh-client-auto-continue"><img src="https://img.shields.io/npm/dm/dsh-client-auto-continue?label=downloads" alt="npm downloads"></a>
   <a href="https://github.com/HsiangNianian/dsh-auto-continue/stargazers"><img src="https://img.shields.io/github/stars/HsiangNianian/dsh-auto-continue?logo=github&label=Stars" alt="GitHub stars"></a>
-  <a href="https://github.com/HsiangNianian/dsh-auto-continue/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-65a30d?style=flat" alt="MIT license"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-65a30d" alt="MIT license"></a>
   <a href="https://awesome-dsh-plugin.com"><img src="https://awesome-dsh-plugin.com/badge.svg" alt="awesome · DSH plugin"></a>
   <a href="https://www.dsh.so/artifact/dsh-auto-continue/"><img src="https://www.dsh.so/badge/install/dsh-auto-continue.svg" alt="dsh.so install"></a>
-  <br>
-  <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=fff" alt="TypeScript">
-  <img src="https://img.shields.io/badge/esbuild-FFCF00?style=flat&logo=esbuild&logoColor=000" alt="esbuild">
-  <img src="https://img.shields.io/badge/GUI--configurable-0ea5e9?style=flat" alt="GUI configurable">
 </p>
 
 <p align="center">
-  <b>English</b> · <a href="README.zh.md">中文</a>
+  <b>English</b> · <a href="README.zh.md">中文</a> · <a href="README.ru.md">Русский</a> · <a href="CHANGELOG.md">Changelog</a>
 </p>
 
----
+## Contents
 
-## What It Does
+- [What it does](#what-it-does)
+- [Install](#install)
+- [Usage](#usage)
+- [Configuration](#configuration)
+- [How it works](#how-it-works)
+- [Troubleshooting](#troubleshooting)
+- [Privacy and permissions](#privacy-and-permissions)
+- [Development](#development)
+- [Links](#links)
+- [License](#license)
 
-For [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh web`): whenever a request in the web GUI gets interrupted by a **non-human cause**, the plugin simulates the user typing **“Continue”** and sends it, so the agent keeps working without manual intervention. The message enters the session log exactly like a manual prompt — the model sees it, and the interrupted work resumes. Since 0.8.0 the engine runs **inside the host process** (single instance), so it keeps watching even with every browser tab closed, and multiple open tabs can never double-send.
+## What it does
 
-![demo](docs/demo.svg)
+When a turn fails with a recoverable error, hits the output limit, ends without visible output, or is cut off by a host restart, the plugin waits a few seconds and sends a continue message for you. It runs inside the DSH host, so it keeps working after you close the browser tab, and all tabs share one engine.
 
-**Smart recovery** (all configurable):
+<p align="center">
+  <picture>
+    <source media="(prefers-reduced-motion: reduce)" srcset="docs/demo-static.svg">
+    <img src="docs/demo.svg" alt="Recovery demo: a network error interrupts the assistant, the plugin waits 3 seconds, sends Continue, and the assistant resumes." width="720">
+  </picture>
+</p>
 
-- **Error classification** — transient failures (network / timeout / 5xx / 429…) are auto-resumed; permanent ones are **skipped** and notified, because retrying them never helps. A failure counts as permanent when its HTTP status is 401/403 or its code/message matches auth, credential/API-key, balance/quota, unknown-model, or context-length/overflow keywords. Provider-specific exceptions can be opted into with literal custom retryable patterns; turn classification off to resume everything
-- **Adaptive backoff** — consecutive failures wait longer each time (cooldown × factor: 20s → 40s → 80s…), capped at the max backoff, instead of hammering a broken upstream
-- **English / Chinese localization** — the settings card, built-in resume / guard / loop text, and browser notifications follow DSH's active UI language (initially selected from the browser language). Only `en` and `zh` are supported; other languages fall back to Chinese. Switching languages updates built-in defaults without overwriting custom text
-- **Templated continue text** — `continueText` supports `{code}` `{message}` `{status}` `{tool}` `{turn}` `{errorCount}` `{sessionTitle}` `{elapsed}` placeholders, so the resume message can carry the failure context ("Continue ({tool} failed: {code})"); a **separate template** fires on `max-tokens` (e.g. "Continue the output without repeating anything already generated")
-- **Idempotency guard** — before resuming, the plugin inspects the last tool call: if its result is unconfirmed (the turn died mid-tool, e.g. a `git push` that may have gone through), the resume message tells the model to check state first and not to rerun; if the tool is confirmed done, it says so and asks not to repeat it; a failed tool gets no guard (retrying it is the point). Both guard texts are configurable (`{tool}` / `{result}` placeholders)
-- **Pause** — a global **Pause auto-continue** toggle in the settings card stops everything (live + scan) instantly; per-session pauses (e.g. via a notification button) suspend only one session until they expire. The **Resume now** notification button is the one explicit exception: pressing it is the user asking for exactly one send, pause or not
-- **Notification buttons** — notifications carry **Resume now** (send immediately, ignoring cooldown, the consecutive cap and any pause) and **Pause this session 1h** actions
-- **Loop guard** — watches **running** turns too. Four signals trip the guard, which cancels the turn and restarts it with a configurable loop text ("stop repeating, try another way"): the model repeating the **exact same message** several times (any length — e.g. "Let me test variants of the regex…" ×7), repeated near-duplicate paragraphs **inside one streamed assistant message**, many short messages inside a short time window with no tool call in between (the "Let me read…" spin), or the same tool called repeatedly with the **same arguments and the same results** (a changed argument or result counts as progress). The cancel carries an internal marker so it is never confused with a user stop — the restart only happens for guard-initiated cancels. Thresholds, the time window and the loop text are configurable
-- **Stats panel** — the settings card shows today's auto-continue count, recoveries, failures, permanent skips, give-ups and loop breaks, broken down by error code, with a one-click reset
-- **Browser notifications** — optional alerts when auto-continue fires, gives up, or hits a permanent error; the browser asks for permission on first use, and nothing is shown again after a denial
+- **Error recovery.** Network errors, timeouts, 5xx and 429 are retried with a grace period, a cooldown that grows after each failure, and a cap on consecutive attempts. Permanent errors (auth, balance, unknown model, context too long) are skipped.
+- **Offline hold.** Network failures wait for the connection to come back instead of burning retries.
+- **Startup recovery.** After a host restart, sessions interrupted in the last 15 minutes are resumed, including ones you have not reopened.
+- **Per-session modes.** A switch next to the message box sets each conversation to Follow default, Off, Recovery only or Autonomous loop.
+- **Autonomous loop (opt-in).** Keep a session going after normal completions, with an optional round limit.
+- **Safety.** An idempotency guard tells the model whether the last tool call finished, and a loop guard stops turns that repeat themselves.
+- **Visibility.** A settings page with today's statistics, recent recovery attempts and paused sessions, plus optional browser notifications with **Resume now** and **Pause this session 1h** buttons.
 
-It watches the live event streams and reacts to:
+## Install
 
-| Event | Meaning |
-| --- | --- |
-| `turn/end` → `error` | Turn failed (model / network / timeout, …) |
-| `turn/end` → `interrupted` | Crash-orphaned turn left behind by a host restart (recovered by the startup scan) |
-| `turn/end` → `max-tokens` | Output token ceiling reached |
-| `host/agent-error` | Agent failure with no turn position (only network/timeout-class messages auto-resume) |
-
-**Never auto-continues:** user-aborted turns (`aborted`) or policy rejections (`blocked`); live `interrupted` turn-ends too — that marker is only written by crash repair when the host reloads, so orphaned turns are recovered by the startup scan, not the live path; sessions the host already resumed itself; running sessions or sessions with queued messages; subagent sessions; anything inside the cooldown / consecutive-cap windows (configurable in the settings card, below).
-
----
-
-## How It Works
-
-The host-side engine subscribes to the session event firehose inside the dsh host process — exactly one engine, regardless of how many tabs are open (the duplicate-send class of bugs cannot exist by construction). On an interruption it waits a **grace period** (default 3 s) — if the host starts a new turn by itself (`turn/start`), the auto-continue is cancelled — then sends the configured text through the agent registry (`agent.followup`, the same queue the Send button uses).
-
-On host boot it also scans the live sessions: a session whose last turn ended with a non-human reason **within the scan window** (default 15 minutes), with no later `turn/start` or user message, gets resumed automatically too (e.g. the host crashed while the browser was closed — the agent-loop resumes the session and the engine picks it up).
-
-The browser half is a thin shell: the settings card, plus a status bridge that shows notifications (with Resume now / Pause this session 1h buttons, routed back to the host engine) and feeds the card's stats / paused-sessions panels.
-
-### Recovery workflow
-
-The diagram summarizes the automatic recovery path, the loop-guard restart path, and the exit to human intervention. Click it to open the full-size version.
-
-[![dsh-auto-continue recovery workflow](docs/auto-continue-workflow.en.svg)](docs/auto-continue-workflow.en.svg)
-
-## Quick Start
-
-DSH plugins install into a **profile** (`dsh web` → `web` profile). Install, restart `dsh web`, done.
-
-> **Use the latest DSH (recommended: 0.1.2-alpha.4 or newer).** Run `dsh --version` before installing. Plugin v0.11.1 supports the settings API used by DSH 0.1.2-alpha.2+ (including alpha.3 and alpha.4) while retaining compatibility with DSH 0.1.0-rc.7 through 0.1.1; rc.6 and earlier remain unsupported (`list slot ... requires options.id`). Preview releases may appear on the [official DSH releases page](https://github.com/deepseek-ai/deepseek-harness/releases) before the public npm tag catches up.
+DSH plugins install into a profile; `dsh web` uses the `web` profile. In the desktop app, install from its **Plugins** page instead of the CLI.
 
 ### From npm (recommended)
 
-Published as [`dsh-client-auto-continue`](https://www.npmjs.com/package/dsh-client-auto-continue):
-
 ```bash
-dsh plugin --profile web add dsh-client-auto-continue
+dsh plugin --profile web add dsh-client-auto-continue@latest
 dsh web
 ```
 
-### Directly from GitHub (no clone needed)
+Restart DSH and reload the browser after installing. Then open **Plugins → dsh-client-auto-continue** from the main sidebar to check that it is **Running**.
 
-Installs straight from the repository's default branch — built artifacts are committed, so no local clone or build step:
+To update, let running work finish, stop DSH, run the same command again, then restart DSH and reload the browser. Your settings stay in the profile. The desktop app has its own profile: update it from the app's **Plugins** page.
+
+### Compatibility
+
+| DSH runtime | Plugin version | Settings location |
+| --- | --- | --- |
+| 0.2.2-rc.1, 0.2.1-rc.2, 0.2.1-alpha.1 | 0.19.0 verified | **Plugins → dsh-client-auto-continue** |
+| 0.2.0-rc.1 | 0.12.1 or newer | **Plugins → dsh-client-auto-continue** |
+| 0.1.7-rc.2 | 0.11.9 or newer | **Plugins → dsh-client-auto-continue** |
+| Older hosts with the legacy settings API | legacy UI | **Settings → Plugins → Plugin configuration** |
+
+DSH 0.1.0-rc.6 and earlier are not supported. Plugin 0.11.9 and 0.12.0 are rejected by DSH 0.2.0-rc.1's version check ([#50](https://github.com/HsiangNianian/dsh-auto-continue/issues/50)). The desktop app's version is not the DSH runtime version; check the runtime (`dsh --version` for the CLI).
+
+<details>
+<summary>Install from GitHub (tracks <code>main</code>)</summary>
+
+Built files are committed, so no clone or build is needed:
 
 ```bash
 dsh plugin --profile web add github:HsiangNianian/dsh-auto-continue
 dsh web
 ```
 
-> This tracks the `main` branch rather than released tags — great for trying the latest changes, while the npm method above is the stable choice. Switching between install sources is just re-running `dsh plugin --profile web add <other-spec>`; the profile dependency is replaced in place.
+This follows the `main` branch rather than releases. To switch install sources, run `dsh plugin --profile web add <other-spec>`; the profile dependency is replaced in place.
 
-### From this repository
+</details>
 
-Requires Node.js ≥ 18.
+<details>
+<summary>Install from a local checkout</summary>
+
+Use Node.js 22.
 
 ```bash
 git clone https://github.com/HsiangNianian/dsh-auto-continue.git
 cd dsh-auto-continue
-npm install
+npm ci
 npm run build
-
-# the package carries its own cordis.patch.yml (dsh.bundle.patch),
-# so the plugin row registers itself
-dsh plugin --profile web add link:$(pwd)
-
+dsh plugin --profile web add "link:$(pwd)"
 dsh web
 ```
 
-### Manual (no pnpm / dsh plugin needed)
+The package ships its own `cordis.patch.yml` (`dsh.bundle.patch`), so the plugin registers itself. After editing the code, run `npm run build`, restart DSH and reload the browser.
+
+</details>
+
+<details>
+<summary>Migrating an older manual installation</summary>
+
+Older setups used a symlink plus a hand-written `insert` row in the loader config. That can start the engine without showing the plugin on the **Plugins** page.
+
+1. Let running work finish and stop `dsh web`. Back up `package.json`, `cordis.patch.yml` and `pnpm-lock.yaml` in `~/.dsh/profiles/web/`, and `~/.dsh/settings.yaml` if it exists (use `$DSH_HOME` instead of `~/.dsh` if you set it).
+2. In `cordis.patch.yml`, remove only the hand-written `auto-continue` row inside an `insert` list (and the list if it becomes empty). Keep a top-level `- id: auto-continue` entry with `config:`; that is your settings.
+3. Install with the npm or GitHub command above. The profile's `package.json` should now list `dsh-client-auto-continue` under `dsh.profile.bundles`.
+4. If you had settings in the old `settings.yaml` `auto-continue` section, merge them into the profile's `cordis.patch.yml` entry:
+
+   ```yaml
+   - id: auto-continue
+     config:
+       cooldownMs: 45000 # your own saved value
+   ```
+
+5. Start `dsh web`, reload the browser, open **Plugins → dsh-client-auto-continue** and check your values.
+
+On hosts that offer both profile config and the legacy settings API ([#64](https://github.com/HsiangNianian/dsh-auto-continue/issues/64)), the plugin imports the `auto-continue` section of `$DSH_HOME/settings-legacy.yaml` once per profile. Values already in the profile win, and the old file is left untouched. Recovery waits until the import is done; if the import fails, the host logs an error and recovery stays held until you fix the file or permissions and restart.
+
+The `include:auto-continue` label under **Built-in plugins** is the normal loader prefix, not a sign of a duplicate install.
+
+</details>
+
+<details>
+<summary>Verify and uninstall</summary>
 
 ```bash
-ln -sfn "$(pwd)" ~/.dsh/profiles/node_modules/dsh-client-auto-continue
-# then append to ~/.dsh/profiles/web/cordis.patch.yml:
-#   - insert:
-#       - id: auto-continue
-#         name: 'dsh-client-auto-continue'
-dsh web
+# the composed config should contain exactly one auto-continue entry
+dsh --profile web --dump-config | grep -A 4 'id: auto-continue'
+
+# uninstall
+dsh plugin --profile web remove dsh-client-auto-continue
 ```
 
-> Switching from a manual install to `dsh plugin add`? Remove the manual `insert` entry first — the bundle patch registers the row and a duplicate would conflict.
+Also remove the `- id: auto-continue` entry from the profile's `cordis.patch.yml`, if there is one, then restart DSH.
 
-> **Settings exposure:** since DSH 0.1.0-rc.7 the web settings surface is **registry-driven** — every namespace a plugin registers is served, so the settings card works out of the box, no vendor patch needed (the plugin requires rc.7+, see Quick Start).
+</details>
 
-### Verify & uninstall
+## Usage
 
-```bash
-dsh --profile web --dump-config | grep auto-continue   # config layer mounted
-```
+Recovery is on by default. Nothing else needs to be set up.
 
-In the browser console (Ctrl/Cmd+Shift+I): `[auto-continue] 已启动(文本="继续", …)` — every detection and auto-send is logged.
+### Session modes
 
-```bash
-dsh plugin --profile web remove dsh-client-auto-continue   # npm / repo install
-# or remove the symlink + the insert entry                  # manual install
-dsh web
-```
+The **Auto-continue** switch next to the message box applies to the current conversation only. The menu beside it picks a mode:
 
----
+| Mode | What happens |
+| --- | --- |
+| Follow default | Uses **Default session mode** from the settings (Recovery only unless you change it) |
+| Off | No automatic messages and no loop-guard interruptions in this conversation |
+| Recovery only | Recovers errors, output limits, silent turns and restart interruptions; leaves normal completions alone |
+| Autonomous loop | Also continues after every normal completion, using the loop text |
+
+Turning the switch off selects Off; turning it on again selects Follow default. Choices are saved on the host right away (`sessionModes`), sync across tabs and survive restarts. Switching a conversation to Off cancels anything waiting to be sent but lets a running turn finish.
+
+<p align="center">
+  <img src="docs/screenshots/08-composer-toggle.png" alt="Auto-continue switch and mode menu next to the message box" width="560">
+</p>
+
+In a narrow window the label and menu collapse to an icon. DS-Bot and dsh-pocket get the same compact layout up to 640 CSS pixels. To hide the controls, turn off **Show auto-continue switch in the composer** in **General** and save; this does not change any session's mode.
+
+### Pausing and manual control
+
+- **Enable auto-continue globally** (in **General**) is the master switch. Turning it off stops all automatic messages without forgetting per-session choices. The loop guard keeps running; turn off **Loop guard** too if you want no interruptions at all.
+- **Pause this session 1h** (notification button) suspends one conversation for an hour.
+- **Resume now** (notification button) sends one continue message immediately. It ignores cooldown, the consecutive limit and any pause, but does not lift the pause.
+- Sending a message yourself, or a new turn starting, cancels any continue message that is still waiting.
+
+### Status and logs
+
+The **Status and logs** category shows today's counts (continue messages, recoveries, failures, skipped errors, give-ups, loop breaks, by error code, with a reset button), the last 20 recovery attempts grouped by session, and the sessions that are currently paused. These live in host memory and reset when the plugin restarts. With **Verbose logs** on, every decision is logged with an `[auto-continue]` prefix in the DSH log (the terminal running `dsh web` for the CLI).
 
 ## Configuration
 
-Everything is configurable from the GUI — no file or console edits needed. Open **Settings → Plugins → Plugin configuration**. **Auto Continue** appears as a collapsed card alongside the other plugins; click the card or its right-hand chevron to expand the full configuration in place. Besides the fields below, the expanded card shows a live **stats panel** (today's activity with a reset button) and the list of **paused sessions** (each with a per-session resume button).
+Open **Plugins → dsh-client-auto-continue** from the main sidebar and pick a category. (**Settings → Built-in plugins** only lists component status; it is not the editor.) Edits are staged and take effect when you click **Save**; switching categories keeps your drafts, invalid values block the save, and **Reset to default** removes an override.
 
-The settings card groups controls by handoff, safety, recovery, loop breaking, and live status. Its header also keeps the open-source repository and a **Star on GitHub** shortcut within reach.
+![Plugin settings, General category](docs/screenshots/01-settings-section.png)
 
-**Or skip the GUI and edit the config file directly** — the engine reads the plugin's section from `~/.dsh/settings.yaml` (one shared file for every plugin's sections), so this works in any install, patched or not. The file is watched and re-read automatically, so changes apply live; restart `dsh web` if a page that was already open doesn't pick them up. Fields you leave out fall back to the defaults in the table below.
-
-The browser mirrors DSH's active language into the internal `locale` field. Leave the five localized text fields empty or omit them to follow that language automatically; any non-empty value is treated as your own template and is never rewritten when the language changes:
+Settings are stored in the `auto-continue` entry of the active profile patch, `~/.dsh/profiles/web/cordis.patch.yml` for the default web profile (older hosts: `~/.dsh/settings.yaml`, under `auto-continue:`). You can edit the file directly; omitted keys use their defaults:
 
 ```yaml
-auto-continue:
-  locale: 'en' # normally managed by the browser
-  paused: false
-  continueText: ''
-  continueTextMaxTokens: ''
-  guardTools: true
-  guardPendingText: ''
-  guardDoneText: ''
-  graceMs: 3000
-  cooldownMs: 20000
-  maxConsecutive: 3
-  scanOnBoot: true
-  scanLimit: 8
-  freshMs: 900000
-  verbose: true
-  classify: true
-  retryableErrorPatterns: ''
-  backoffFactor: 2
-  backoffMaxMs: 300000
-  notify: false
-  loopGuard: true
-  loopShortChars: 40
-  loopWindowMs: 30000
-  loopShortCount: 12
-  loopRepeatText: 4
-  loopToolRepeat: 5
-  loopText: ''
+- id: auto-continue
+  config:
+    cooldownMs: 45000
+    resumeCompletedTurns: true
+    loopMaxIterations: 20
 ```
 
-**How the card works:**
+Times are in milliseconds. Text fields left empty use the built-in text in the current language.
 
-![The collapsed Auto Continue card in the plugin configuration list](docs/screenshots/02-settings-card.png)
+### General
 
-- Edits are **staged** — nothing reaches the disk until you hit **Save**; an unsaved badge marks the card while drafts are pending, and **Discard** drops them
-- A field you changed shows an **Overridden** badge with a per-field **Reset to default** button that restores the built-in value
-- Boolean fields are **tri-state**: *Inherit* (use the default) / *On* / *Off*
-- Invalid drafts (non-numbers, values below the minimum) block the save with a hint
-- In a read-only deployment the card shows the stored values but disables every control
-- Changes apply immediately after Save and persist in `~/.dsh/settings.yaml` (uninstalling the plugin leaves the section behind — harmless, delete it by hand if you like)
+| Setting | Key | Default | Notes |
+| --- | --- | --- | --- |
+| Enable auto-continue globally | `paused` | `false` | Stored inverted: `paused: true` stops all automatic messages and cancels queued ones |
+| Show auto-continue switch in the composer | `showComposerToggle` | `true` | Only hides or shows the controls |
+| Send continue messages with plugin source | `usePluginSource` | `false` | Off sends as the `user` source; on marks messages as `plugin:dsh-client-auto-continue` |
+| Resume silent turns | `resumeSilentTurns` | `true` | Resume turns that had model activity but no visible output; they still count toward **Max consecutive** |
+| Resume subagent sessions | `resumeSubagentSessions` | `false` | Resume a failed, cut-off or silent subagent while it's still loaded, using its main conversation's mode. DSH usually closes a failed background subagent right away, so this mostly helps subagents that stay loaded |
+| Default session mode | `resumeCompletedTurns` | `false` | `false` = Recovery only, `true` = Autonomous loop, for sessions on Follow default |
+| Autonomous loop round limit | `loopMaxIterations` | `0` | Loop rounds per session, `0` = no limit. Resets when you send a message or turn the loop back on |
+| Browser notifications | `notify` | `false` | Notifications for sends, skips, give-ups and saved settings. The browser asks for permission the first time |
 
-| Field | Default | Description |
+### Retry strategy
+
+| Setting | Key | Default | Notes |
+| --- | --- | --- | --- |
+| Grace period (ms) | `graceMs` | `3000` | Wait before sending; a new turn or your own message cancels it |
+| Cooldown (ms) | `cooldownMs` | `20000` | Minimum gap between recovery attempts in one session. A failure during cooldown waits for the rest of it |
+| Max consecutive | `maxConsecutive` | `3` | Attempts before giving up. Resets when you send a message or a turn ends with visible output. Loop continuations after normal completions do not count |
+| Classify errors | `classify` | `true` | Retry transient errors only; skip permanent ones. Off = retry every error |
+| Custom retryable errors | `retryableErrorPatterns` | `''` | One literal per line, case-insensitive, matched against code, HTTP status and message. Overrides the built-in classifier |
+| Backoff factor | `backoffFactor` | `2` | Cooldown multiplier per consecutive failure (20 s → 40 s → 80 s) |
+| Max backoff (ms) | `backoffMaxMs` | `300000` | Upper bound for the cooldown |
+| Pause while offline | `pauseWhenOffline` | `true` | Hold network-error retries while the host is offline, without using up attempts |
+| Offline re-check interval (ms) | `offlineCheckMs` | `15000` | How often a held retry checks the network. Minimum 1000 |
+| Re-arm goals disarmed by a restart | `resumeGoals` | `false` | After a continue message, re-arm an `active` goal the restart disarmed. This acts on your behalf, hence off |
+| Resume paused goals | `resumePausedGoals` | `false` | Also resume goals you paused by hand. Needs `resumeGoals` |
+
+### Startup recovery
+
+| Setting | Key | Default | Notes |
+| --- | --- | --- | --- |
+| Scan on host startup | `scanOnBoot` | `true` | Look for interrupted sessions, open or stored, after the host starts |
+| Wake child sessions after restart | `resumeInterruptedChildren` | `false` | Send each root session one message listing its interrupted subagent or team-member sessions |
+| Scan limit | `scanLimit` | `8` | Recoveries per scan pass, most recently active first |
+| Scan window (ms) | `freshMs` | `900000` | Only interruptions newer than this are recovered; scanning also stops after this long |
+
+### Continue text
+
+| Setting | Key | Used when |
 | --- | --- | --- |
-| Pause auto-continue | `off` | Global pause: no live or scan auto-send fires, queued pending sends are cancelled |
-| Continue text | `Continue` | Text automatically sent after an interruption |
-| Continue text (max tokens) | `Continue` | Text sent when the output token ceiling is reached (same placeholders) |
-| Idempotency guard | `on` | Inspect the last tool call before resuming and steer the model (see What It Does) |
-| Loop guard | `on` | Detect a running turn spinning in place and restart it (see What It Does) |
-| Short-sentence max (chars) | `40` | A model message shorter than this counts as a short sentence (spinning signal) |
-| Short-sentence window (ms) | `30000` | Consecutive short sentences must land inside this window; normal thinking spread over time is not misjudged |
-| Short-sentence threshold | `12` | Consecutive short sentences inside the window, with no tool call in between, trip the loop guard |
-| Identical message count | `4` | Consecutive identical messages (any length) trip the loop guard — the strongest spinning signal; the same threshold is also used for repeated near-duplicate streamed paragraphs inside one message |
-| Same-tool repeat count | `5` | Consecutive calls of the same tool with identical arguments and results trip the loop guard |
-| Loop text | `(You may be stuck in a loop. Stop repeating the last action and continue with a different approach.)` | Text sent after the loop guard restarts a turn; `{tool}` placeholder |
-| Guard text (unconfirmed result) | `(The previous tool "{tool}" may not have completed. Check its state before continuing and do not run it again.)` | Appended when the last tool may have partially executed; `{tool}` placeholder |
-| Guard text (tool succeeded) | `(The previous tool "{tool}" completed successfully. Result: {result}; do not run it again. Continue from there.)` | Appended when the last tool is confirmed done; `{tool}` / `{result}` placeholders |
-| Grace period (ms) | `3000` | Wait after an interruption; cancelled if the host recovers on its own |
-| Cooldown (ms) | `20000` | Min interval between auto-continues per session (failed attempts count too) |
-| Max consecutive | `3` | Max consecutive auto-continues; stops until a user intervenes or a turn completes |
-| Scan on load / reconnect | `on` | Scan recently interrupted sessions on load / reconnect |
-| Scan limit | `8` | Max sessions scanned (running / subagent sessions excluded) |
-| Scan window (ms) | `900000` | Scan only considers interruptions inside this window |
-| Verbose logs | `on` | `[auto-continue]` console logs |
-| Classify errors | `on` | Auto-resume transient failures only; auth / balance / model errors are skipped and notified |
-| Custom retryable errors | empty | One case-insensitive literal per line; matching the error code, HTTP status, or message explicitly overrides the built-in classifier |
-| Backoff factor | `2` | Cooldown multiplier per consecutive failure (2 = 20s → 40s → 80s…) |
-| Max backoff (ms) | `300000` | Cap on the adaptive backoff interval |
-| Browser notifications | `off` | Notify when auto-continue fires, gives up, or hits a permanent error |
+| Continue text | `continueText` | A turn failed with an error |
+| Continue text (max tokens) | `continueTextMaxTokens` | The output token limit was reached |
+| Continue text (silent turn) | `continueTextSilent` | A turn ended with reasoning only |
+| Continue text (after harness restart) | `continueTextInterrupted` | The startup scan resumes a turn a restart cut off |
+| Continue text (autonomous loop) | `continueTextLoop` | Each autonomous-loop round |
+| Guard text (unconfirmed result) | `guardPendingText` | Appended when the last tool call may not have finished |
+| Guard text (tool succeeded) | `guardDoneText` | Appended when the last tool call succeeded |
+| Loop text | `loopText` | The loop guard restarted a turn |
 
-For a provider-specific error that is safe to resume (confirm first that manually sending "continue" recovers), add a narrow, stable fragment rather than disabling classification globally:
+All default to `''`, which means the built-in text. Continue texts accept `{code}`, `{message}`, `{status}`, `{tool}`, `{turn}`, `{errorCount}` and `{elapsed}`; for example `Continue ({tool}: {code})` becomes `Continue (git push: UPSTREAM)`. Guard texts and the loop text accept `{tool}`, and `guardDoneText` also `{result}` (a short excerpt of the tool output).
+
+Built-in texts exist in English, Chinese and Russian. They follow the DSH language: `zh` and `zh-*` use Chinese, `ru` and `ru-*` use Russian, every other locale uses English. Your own non-empty text is never replaced when the language changes.
+
+<details>
+<summary>Built-in English texts</summary>
+
+| Key | Text |
+| --- | --- |
+| `continueText`, `continueTextMaxTokens`, `continueTextLoop` | `Continue` |
+| `continueTextSilent` | `Continue. Your previous turn ended with internal reasoning only, with no message and no tool call, so nothing reached the user. Always finish a turn with a tool call or a visible answer.` |
+| `continueTextInterrupted` | `Continue. The harness was restarted while your previous turn was still running; tool calls pending at the restart are recorded with unknown outcomes. Resume where you left off, verifying external state before retrying anything that may have side effects.` |
+| `guardPendingText` | `(The previous tool "{tool}" may not have completed. Check its state before continuing and do not run it again.)` |
+| `guardDoneText` | `(The previous tool "{tool}" completed successfully. Result: {result}; do not run it again. Continue from there.)` |
+| `loopText` | `(You may be stuck in a loop. Stop repeating the last action and continue with a different approach.)` |
+
+</details>
+
+### Safety
+
+| Setting | Key | Default | Notes |
+| --- | --- | --- | --- |
+| Idempotency guard | `guardTools` | `true` | Before resuming, tell the model whether the last tool call finished so it does not run it twice |
+| Loop guard | `loopGuard` | `true` | Cancel a running turn that repeats itself and restart it with the loop text |
+| Short-sentence max (chars) | `loopShortChars` | `40` | Messages shorter than this count as short sentences |
+| Short-sentence window (ms) | `loopWindowMs` | `30000` | Window for counting short sentences. Minimum 1000 |
+| Short-sentence threshold | `loopShortCount` | `12` | Short sentences in the window, with no tool call, that trip the guard |
+| Identical message count | `loopRepeatText` | `4` | Identical messages in a row (or repeated paragraphs within one streamed message) that trip the guard |
+| Same-tool repeat count | `loopToolRepeat` | `5` | Calls of the same tool with identical arguments and results that trip the guard |
+
+### Status and logs
+
+| Setting | Key | Default | Notes |
+| --- | --- | --- | --- |
+| Verbose logs | `verbose` | `true` | Log decisions with the `[auto-continue]` prefix |
+
+Two keys are written by the plugin itself: `locale` (mirrors the DSH language, default `en`) and `sessionModes` (per-session choices from the composer, default `{}`). You normally do not edit them.
+
+### Error classification
+
+With **Classify errors** on, network errors, timeouts, HTTP 5xx and 429 are retried. HTTP 401 and 403, and codes or messages about auth, credentials or API keys, balance or quota, unknown models, or context length are treated as permanent and skipped (with a notification if enabled). `MALFORMED_RESPONSE` is always retryable unless it carries an explicit 401 or 403.
+
+If a provider returns an error that you know is safe to retry (check first that typing "continue" by hand works), add a narrow, stable fragment instead of turning classification off:
 
 ```yaml
-auto-continue:
-  retryableErrorPatterns: |-
-    Upstream rejected the request as invalid
+- id: auto-continue
+  config:
+    retryableErrorPatterns: |-
+      Upstream rejected the request as invalid
 ```
 
-Patterns are literal substrings, not regular expressions. Blank lines are ignored; any matching line wins before the built-in permanent-error rules. Cooldown and consecutive-attempt limits still apply.
+Patterns are plain substrings, not regular expressions. Cooldown and **Max consecutive** still apply.
 
-`continueText` (and `continueTextMaxTokens`) accept the placeholders `{code}`, `{message}`, `{status}`, `{tool}` (last tool call before the failure), `{turn}`, `{errorCount}` (consecutive failures including this one), `{sessionTitle}` (from the session list) and `{elapsed}` (time since the failure, e.g. `1m5s`) — e.g. `Continue ({tool}: {code})` becomes `Continue (git push: UPSTREAM)`. The guard texts accept `{tool}` and `{result}` (a truncated excerpt of the last tool output).
+## How it works
 
----
+[![Auto-continue decision flow](docs/auto-continue-workflow.en.svg)](docs/auto-continue-workflow.en.html)
 
-## Privacy & permissions
+1. **Triggers.** The engine listens to session events in the host. A `turn/end` with `error`, `max-tokens`, a silent ending, or `completed` (loop mode only) starts the flow. After a host restart, the startup scan checks open and stored sessions every 3 seconds until the scan window ends. The loop guard watches running turns and cancels one that repeats itself.
+2. **Session check.** Nothing is sent while auto-continue is paused globally, the session is Off or paused for an hour, or the session is a subagent and **Resume subagent sessions** is off. A subagent follows its main conversation's mode unless it has its own, and never runs the autonomous loop or the loop guard.
+3. **End reason.** Manual Stop and policy blocks (`blocked`) are left alone, and so are permanent errors. Everything else recoverable goes to recovery. A normal completion only continues in Autonomous loop mode, which skips the cooldown and the consecutive limit but respects `loopMaxIterations`.
+4. **Retry budget.** Recovery stops at **Max consecutive**. Inside the cooldown, the send is deferred rather than dropped. The cooldown is multiplied by the backoff factor after each failure, up to the maximum.
+5. **Grace period.** The engine waits `graceMs`. A new turn or a message from you cancels the send.
+6. **Offline hold.** For network errors, the host checks for a non-loopback network interface and one resolvable public name. While offline it waits and re-checks every `offlineCheckMs`, then goes through grace and cooldown again. With `HTTP(S)_PROXY` or `ALL_PROXY` set, only interfaces are checked.
+7. **Send.** The engine picks the text for the reason, appends the idempotency-guard note, and sends it with `agent.followup` using the session's preset and model. If user turns are already queued, the continue message is moved ahead of them while their order is kept. With `resumeGoals` on, a goal the restart disarmed is re-armed.
 
-The plugin is browser-only and touches **no files, credentials, or network beyond the dsh host**:
+**Child sessions.** Outside of **Resume subagent sessions**, subagent and team-member sessions are never resumed directly, and that setting only covers live ones. After a restart, with **Wake child sessions after restart** on, the startup scan collects children a restart interrupted (at most 8 child logs per pass) and sends their root session one message listing them, once per batch. The root decides whether to continue or wrap up. A root still mid-turn is left to normal recovery, and a root you stopped yourself is never woken.
 
-- It opens the same two read-only event streams the web UI already uses (no extra server, no third-party endpoints)
-- The engine's **only automatic write** is `sessions.prompt` — the same call the Send button makes — with the text you configured (saving the settings card writes the `auto-continue` section of `~/.dsh/settings.yaml` through the normal settings API, exactly like any other setting)
-- No browser storage at all: the single host-side engine keeps its cooldowns, send caps, pauses and stats in process memory
-- Browser notifications are opt-in (`notify` setting) and permission is requested on first use only
+**Unreadable sessions.** If a session's history cannot be read during the startup scan, that session is skipped and an error is logged; other sessions still recover ([#58](https://github.com/HsiangNianian/dsh-auto-continue/issues/58)). Repair it and restart DSH within the scan window to try again.
 
----
+## Troubleshooting
+
+| Symptom | What to check |
+| --- | --- |
+| "Skipping profile bundle" or "incompatible with dsh 0.2.0-rc.1" | Update to plugin 0.12.1 or newer in the profile the app actually uses, then restart |
+| Plugin enabled, but no settings fields | Open the main **Plugins** page, not **Settings → Built-in plugins**, and select **General** |
+| `/api/auto-continue-bridge` returns 404 | The host component did not load. Check the DSH startup log and `--dump-config`, then reload the page |
+| An error was not resumed | Check the global switch and the session mode. Look for `[auto-continue]` log lines: they say whether the error was classified as permanent, the session hit **Max consecutive**, or the retry is held offline |
+| Sessions not resumed after a restart | **Scan on host startup** must be on, and the interruption must be newer than the scan window (15 minutes by default) |
+| Settings are ignored after migrating | Make sure there is one top-level `- id: auto-continue` entry in `cordis.patch.yml` and no leftover `insert` row; see the migration notes under [Install](#install) |
+| Compact composer layout missing on a phone | Restart DSH and reload the remote page after updating the plugin |
+
+## Privacy and permissions
+
+- The engine runs in the DSH host and reads session events and history through DSH services. No third-party service is contacted and no credentials are stored.
+- Continue messages go through `agent.followup`; the loop guard may call `agent.cancel` first. A resumed agent keeps the session's existing tools and permissions.
+- The offline check reads the local network interfaces and does a DNS lookup of `api.deepseek.com`, `www.baidu.com` and `one.one.one.one`. It opens no connection and sends no request.
+- Settings are saved through DSH's settings API to the active profile (or `~/.dsh/settings.yaml` on older hosts). Retry counters, cooldowns, one-hour pauses and statistics are kept in memory only.
+- Browser notifications are opt-in. Permission is requested only when you turn them on and save.
 
 ## Development
 
+Use Node.js 22.
+
 ```bash
-npm run typecheck   # tsc --noEmit
-npm run build       # lib/client.js + lib/index.js + lib/types
-npm run watch       # rebuild on change; host HMR hot-reloads without a page refresh
-npm run test        # node tests/simulate-host.mjs — 15 host-side behavioral scenarios
+npm ci
+npm run typecheck
+npm run build
+npm test
 ```
 
-While `npm run watch` runs, the profile's client-hmr row polls `lib/client.js` every 500 ms and hot-reloads the plugin in the browser — no server restart needed for code changes.
+`npm run test:runtime` runs the settings, startup-recovery and restart tests against published DSH packages. Install the pinned fixtures first:
 
-CI installs from the lockfile, typechecks, rebuilds and verifies committed artifacts, runs the host and dual-layout client simulations, then runs [dsh-plugin-check](https://github.com/omdsh-dev/dsh-plugin-check). The same health check gates releases.
+```bash
+for v in 0.1.7 0.2.0 0.2.0-rc.2 0.2.1 0.2.1-rc.2; do npm ci --prefix "tests/fixtures/dsh-$v"; done
+npm run test:runtime
+```
 
----
+The runtime tests drive real DSH services with a deterministic model adapter; they make no requests to a model provider. CI also checks that the committed `lib/` matches a fresh build and runs [dsh-plugin-check](https://github.com/omdsh-dev/dsh-plugin-check).
 
-## Activity
-
-[![HsiangNianian/dsh-auto-continue GitStock K-Line Chart](https://gitstock.org/HsiangNianian/dsh-auto-continue/stock.svg)](https://gitstock.org/HsiangNianian/dsh-auto-continue)
-
----
+The banners and social preview are generated by `npm run docs:assets`; the workflow map is an [Archify](https://github.com/tt-a1i/archify) export (`docs/auto-continue-workflow.*`, sources in `*.archify.json`) (render the PNG with `rsvg-convert -w 1280 -h 640 docs/social-preview.svg -o docs/social-preview.png`). See [docs/screenshots/README.md](docs/screenshots/README.md) for how the screenshots are captured.
 
 ## Links
 
-- **Repository**: [github.com/HsiangNianian/dsh-auto-continue](https://github.com/HsiangNianian/dsh-auto-continue)
-- **LINUX DO**: [linux.do](https://linux.do)
-- **DeepSeek Harness**: [github.com/deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)
-- **dsh-plugin-check**: [github.com/omdsh-dev/dsh-plugin-check](https://github.com/omdsh-dev/dsh-plugin-check) — health-check your own DSH plugin repos
+- Repository: [github.com/HsiangNianian/dsh-auto-continue](https://github.com/HsiangNianian/dsh-auto-continue)
+- npm: [dsh-client-auto-continue](https://www.npmjs.com/package/dsh-client-auto-continue)
+- DeepSeek Harness: [github.com/deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)
+- dsh-plugin-check: [github.com/omdsh-dev/dsh-plugin-check](https://github.com/omdsh-dev/dsh-plugin-check)
+- LINUX DO: [linux.do](https://linux.do)
 
----
+[![GitStock chart for HsiangNianian/dsh-auto-continue](https://gitstock.org/HsiangNianian/dsh-auto-continue/stock.svg)](https://gitstock.org/HsiangNianian/dsh-auto-continue)
 
 ## License
 
-[![MIT](https://img.shields.io/badge/license-MIT-65a30d)](LICENSE)
-
-MIT © Hsiang Nianian
+[MIT](LICENSE) © Hsiang Nianian

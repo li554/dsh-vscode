@@ -21,6 +21,10 @@ declare class MnemonNativeProvider implements MemoryProviderAdapter {
   search(body: MemoryBody, request: SearchRequest, signal?: AbortSignal): Promise<ProviderSearchResult>;
   remember(body: MemoryBody, request: RememberRequest, signal?: AbortSignal): Promise<JsonValue>;
   rememberMany(body: MemoryBody, requests: readonly RememberRequest[], signal?: AbortSignal): Promise<JsonValue[]>;
+  /** Import entries as written, record their receipts and return what Mnemon pruned after it. */
+  private importExact;
+  /** One stored memory by exact id, read from a snapshot without touching access counts or the log. */
+  get(body: MemoryBody, id: string, signal?: AbortSignal): Promise<Insight | undefined>;
   related(body: MemoryBody, id: string, depth: number, edge?: EdgeType, signal?: AbortSignal): Promise<Insight[]>;
   link(body: MemoryBody, sourceId: string, targetId: string, type: EdgeType, weight: number, reason?: string, signal?: AbortSignal): Promise<JsonValue>;
   forget(body: MemoryBody, id: string, signal?: AbortSignal): Promise<JsonValue>;

@@ -11,6 +11,8 @@ interface ClusterOptions {
     tags?: string[];
     timeoutMs?: number;
     maxWorkers?: number;
+    /** Caller cancellation, forwarded to every host's command. */
+    signal?: AbortSignal;
 }
 /** Run one command against many hosts concurrently. */
 export declare function cluster(engine: PoolEngine, options: ClusterOptions): Promise<ClusterResult[]>;

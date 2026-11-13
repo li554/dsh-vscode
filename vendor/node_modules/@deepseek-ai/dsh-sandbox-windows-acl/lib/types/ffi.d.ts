@@ -17,7 +17,9 @@ export interface Win32Bindings extends Win32ProcessBindings {
     setTokenInformation(token: NativePtr, cls: number, info: Buffer, length: number): number;
     createRestrictedToken(existing: NativePtr, flags: number, disableCount: number, disableSids: null, deletePrivilegeCount: number, privilegesToDelete: null, restrictCount: number, restrictingSids: Buffer, newToken: NativePtr): number;
     setEntriesInAclW(count: number, entries: Buffer, oldAcl: NativePtr | null, newAcl: NativePtr): number;
-    setNamedSecurityInfoW(path: string, objectType: number, information: number, owner: null, group: null, dacl: NativePtr | null, sacl: null): number;
+    initializeAcl(acl: NativePtr, length: number, revision: number): number;
+    addMandatoryAce(acl: NativePtr, revision: number, aceFlags: number, policy: number, sid: NativePtr): number;
+    setNamedSecurityInfoW(path: string, objectType: number, information: number, owner: null, group: null, dacl: NativePtr | null, sacl: NativePtr | null): number;
     getNamedSecurityInfoW(path: string, objectType: number, information: number, owner: NativePtr, group: NativePtr, dacl: NativePtr, sacl: NativePtr, descriptor: NativePtr): number;
     getTempPathW(length: number, buffer: Buffer): number;
     setEnvironmentVariableW(name: string, value: string): number;

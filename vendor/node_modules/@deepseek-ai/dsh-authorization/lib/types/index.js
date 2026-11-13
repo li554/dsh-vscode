@@ -82,7 +82,7 @@ export class AuthorizationService extends Service {
                 // A flow leaving mid-attempt takes its attempt with it: the runner
                 // belongs to a plugin that is going away, so letting it keep prompting
                 // would outlive the fiber that can answer for it.
-                this.running.get(flow.key)?.controller.abort();
+                this.cancel(flow.key);
             };
         }.bind(this), 'authorization.registerFlow()');
         return () => void dispose();
@@ -119,7 +119,9 @@ export class AuthorizationService extends Service {
      * @param key - the credential record whose attempt should stop.
      */
     cancel(key) {
-        this.running.get(key)?.controller.abort();
+        const running = this.running.get(key);
+        if (running !== undefined && !running.committing)
+            running.controller.abort();
     }
     /**
      * Run one attempt to authorize a key, and report how it ended.
@@ -159,9 +161,13 @@ export class AuthorizationService extends Service {
         if (request.signal?.aborted === true)
             return { status: 'cancelled' };
         const controller = new AbortController();
-        const withdraw = () => { controller.abort(request.signal?.reason); };
+        const withdraw = () => {
+            const running = this.running.get(key);
+            if (running !== undefined && !running.committing)
+                controller.abort(request.signal?.reason);
+        };
         request.signal?.addEventListener('abort', withdraw, { once: true });
-        this.running.set(key, { controller });
+        this.running.set(key, { controller, committing: false });
         let settlement = 'failed';
         try {
             const outcome = await this.attempt(flow, method, controller.signal, request.interaction);
@@ -183,14 +189,12 @@ export class AuthorizationService extends Service {
     /**
      * Fan `authorization/settled` out with contained listener failures: every
      * listener runs, and a sync throw or async rejection is logged without
-     * changing the finished attempt's own outcome — except `INVARIANT`-coded
-     * failures, which rethrow after every listener ran. The attempt is already
+     * changing the finished attempt's own outcome. The attempt is already
      * over and its key released when this fires, so a broken watcher (that
      * second browser tab) can never turn the caller's settled result into a
      * failure of its own.
      */
     settle(key, settlement) {
-        let invariantFailure;
         const args = ['authorization/settled', key, settlement];
         for (const listener of this.ctx.events.dispatch('emit', args)) {
             try {
@@ -202,15 +206,9 @@ export class AuthorizationService extends Service {
                 }
             }
             catch (error) {
-                if (error?.code === 'INVARIANT') {
-                    invariantFailure ??= error;
-                    continue;
-                }
                 this.warnSettledListenerFailure(key, error);
             }
         }
-        if (invariantFailure !== undefined)
-            throw invariantFailure;
     }
     /* jscpd:ignore-end */
     /** Contained-listener diagnostic shared by the sync and async failure paths. */
@@ -247,6 +245,15 @@ export class AuthorizationService extends Service {
             const running = flow.run({
                 method,
                 signal,
+                commit: async (record) => {
+                    signal.throwIfAborted();
+                    const attempt = this.running.get(flow.key);
+                    if (attempt === undefined || attempt.controller.signal !== signal) {
+                        throw new AuthorizationError('authorization attempt is no longer active', 'CANCELLED');
+                    }
+                    attempt.committing = true;
+                    await this.ctx.credentials.modifyRecord(flow.key, () => Promise.resolve(record));
+                },
                 notify: (notice) => {
                     try {
                         interaction.notify(notice);

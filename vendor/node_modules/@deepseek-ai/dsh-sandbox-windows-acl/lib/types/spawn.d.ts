@@ -31,6 +31,7 @@ export declare function spawnSandboxedInherited(api: Win32Bindings, token: Nativ
     command: string;
     args: readonly string[];
     cwd: string;
+    controlFileDescriptor?: 7;
 }): SpawnedInherited;
 /**
  * Wait for a restricted child and close its process handle.
