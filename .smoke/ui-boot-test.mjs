@@ -72,7 +72,13 @@ if (!BROWSER) { console.log("no Edge/Chrome found; set DSH_BROWSER=<exe>"); proc
 
 // ---------------------------------------------------------------- extension tree
 let EXT;
-if (FROM_REPO) {
+const extArg = opt("ext");
+if (extArg) {
+  // Verify an INSTALLED extension copy (e.g. %USERPROFILE%\.vscode\extensions\
+  // li554.dsh-vscode-X.Y.Z) instead of the vsix: same code path VS Code runs.
+  EXT = path.resolve(extArg.slice("--ext=".length));
+  console.log("source: installed extension tree " + EXT);
+} else if (FROM_REPO) {
   EXT = PROJ;
   console.log("source: repository tree");
 } else {

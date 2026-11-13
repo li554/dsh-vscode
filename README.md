@@ -68,7 +68,7 @@
 | `@mlgbnb/dsh-archive-manager` | npm `@mlgbnb/dsh-archive-manager` `1.0.10` | **归档任务管理器**：设置页「归档任务」列表/恢复/删除，自行读取 `session(.vN).jsonl[.zstd]` 会话日志；client 注册平台 `settings.section` 槽位 |
 | `dsh-zh-kit` | npm `dsh-zh-kit` `0.1.2` | **中文界面套件**：中文化文案与中文输入体验。一处本地修补：首步提醒消息的 source kind 改为 `plugin:${name}`（0.2.2 session format v4 拒绝 `kind:'plugin'`） |
 | `@dsh-vscode/presets` | 本仓库生成（`.smoke/gen-presets.py`） | **内置 agent 预设打包层**：把 `plugins/presets/{router-standard,router-spec,ppt-master}` 转成 0.2.2 的 bundle 声明（`@deepseek-ai/dsh-agent-preset` 行）。预设里挂载的本地 ES 模块（`router-bootstrap-*.mjs`、`gitbash-executor.mjs`）作为 `dsh-preset-*` 真实包随附——预设的子行名是从 profile 解析的，相对路径不会被锚定到 patch 文件 |
-| `_hostdeps/`（`@vscode/*`、`ssh2` 族、`zod`、`fflate`、`node-pty`、`schemastery`、`cosmokit`、`markdown-to-jsx` 等 13 个包 / 12 个目录） | npm 包 | 各内置插件宿主侧所需的非平台依赖，内置以便离线解析（`dsh-mcp` 退役后其专属的 `@modelcontextprotocol/*`、`js-yaml` 及闭包已一并删除） |
+| `_hostdeps/`（`@vscode/*`、`ssh2` 族、`zod`、`fflate`、`node-pty`、`schemastery`、`cosmokit`、`markdown-to-jsx`、`safer-buffer` 等 14 个包 / 13 个目录） | npm 包 | 各内置插件宿主侧所需的非平台依赖，内置以便离线解析（`dsh-mcp` 退役后其专属的 `@modelcontextprotocol/*`、`js-yaml` 及闭包已一并删除） |
 
 > `dsh-mnemon` 的 source/strategy/provider 成员包与 `@dsh-vscode/presets` 挂载的 `dsh-preset-*` 模块包都以**兄弟包**形式放在 `plugins/bundled` 下（不在 `BUNDLED_PLUGINS` 里，由各 bundle 的 cordis patch 按裸包名认领），`.smoke/selfcontained-plugins.mjs` 会按「被 patch 认领」逐个校验；`_hostdeps/` 则是扁平化进 `<profile>/node_modules` 的第三方依赖。
 
@@ -86,6 +86,7 @@
   - **客户端 API 迁移**：0.2.2 删除 `ctx.settings.register`、`settingsScope`/`webUiSettings`、`ctx.layout.closeDetails`、`webRuntime` 服务；改为 `Config` 声明 + 客户端 `ctx.configForms`、`ctx.layout.closeDetails?.()`、`webStartup`。涉及插件已逐个移植（ssh/better-sidebar 走上游新版，web-review/zh-kit 打最小补丁）。
   - **会话格式 v4**：`source.kind: 'plugin'` 被拒，插件注入的消息必须写 `plugin:<包名>`（web-review、zh-kit 已改）；v0→v4 迁移链由平台负责，旧的 v0 容错补丁继续保留（只容忍、不修改原始文件）。
   - **平台补丁**：8 → 7 条（共 8 个文件，`dsh-app-boot` 一处改动涉及两个文件）。`dsh-subprocess-local`（`windowsHide`）与 `dsh-win32-process`（`STARTF_USESHOWWINDOW`）**上游已修复**，补丁删除但保留 `.smoke/windows-hide-test.mjs` 作为「上游不许回退」的守护；`dsh-session-persistence-jsonl` 的 `inspect(id)` 随 `@dsh-undo` 退役**移除**；新增**剪贴板 shim 补丁**（此前只存在于 vendor 树、不在补丁库里，升级会静默丢失）；新增 **`dsh-app-boot` 的 Electron 运行时可启动性补丁**（见下一条）。逐条裁决见 `.smoke/platform-patches/NOTES-0.2.2.md`。
+  - **0.4.2 修复 SSH 插件静默丢失**：`@linxin666/dsh-ssh` 的宿主半经 `ssh2 → asn1` 需要 `safer-buffer`，而 `_hostdeps` 从来没随附它——0.1.5 时代它是靠 vendor 树里的副本碰巧解决的，0.2.2 的 vendor 闭包不再包含它，于是插件的 bundle 在装载时抛 `Cannot find module 'safer-buffer'` 并被静默跳过（SSH 面板消失，宿主本身照常启动）。已把它补进 `_hostdeps`（2.1.2, MIT），并新增 `.smoke/check-hostdeps.py`：遍历 `_hostdeps/**` 与每个内置插件声明的 `dependencies`，逐个核对能否从 `_hostdeps` / vendor 闭包 / 自身嵌套 `node_modules` / 其它随附 sibling 包解析，解析不到就失败——这类「只在打包后才炸」的漏依赖以后过不了门禁。
   - **0.4.1 修复「装进 VS Code 就打不开」**：0.2.2 的 `dsh-app-boot` 通过 `node-addon-require-builtin` 这个原生 addon 取 Node 内部模块，而该 addon 按**精确的 Electron 版本白名单**（0.2.2 只有 43.0.0 / 44.0.0 / 44.7.0 / 45.0.0-alpha.6）做嵌入环境指纹校验。扩展把宿主跑在 **VS Code 自带的二进制**上（`ELECTRON_RUN_AS_NODE=1`，VS Code 1.144.1 = Electron 43.8.3），不在白名单里，于是 addon 返回 `Unsupported/no-context`，宿主在准备阶段直接退出 1：
     ```
     dsh: host preparation failed: node-addon-require-builtin unsupported:

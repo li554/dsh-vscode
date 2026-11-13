@@ -228,7 +228,11 @@ function hostNotes() {
   for (const line of err.split("\n")) {
     const skip = /skipping profile bundle "([^"]+)": (.*)$/.exec(line);
     if (skip) notes.push(`  SKIP ${skip[1]}: ${skip[2].slice(0, 260)}`);
-    else if (/failed to import loader entry/.test(line)) notes.push("  LOADER " + line.trim().slice(0, 260));
+    // Match the generic shape too: `<entry> (<pkg>): failed to import: Error: …`
+    // is how the loader reports a plugin whose own `require()` fails, and the
+    // old "failed to import loader entry" wording let a MISSING HOST DEPENDENCY
+    // (ssh's asn1 -> safer-buffer) scroll past as an ordinary log line.
+    else if (/failed to import/.test(line)) notes.push("  LOADER " + line.trim().slice(0, 260));
     else if (/has been registered at|Cannot find (?:module|package)/.test(line)) notes.push("  CRASH " + line.trim().slice(0, 260));
   }
   return [...new Set(notes)];
