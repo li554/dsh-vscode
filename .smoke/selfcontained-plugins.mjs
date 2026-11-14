@@ -8,7 +8,7 @@
 // npm packages at all —
 //
 //   @dsh-vscode/p2h-bridge       hand-written in this repo (REMOVED — retired;
-//                                 replaced by dsh-ppt-master + dsh-live-compact)
+//                                 replaced by dsh-ppt-master + billion-context)
 //   dsh-client-auto-continue     npm  (pinned in plugins-rc2 provenance below)
 //   @canglongcl/dsh-web-review   npm
 //
@@ -38,7 +38,7 @@ const BUNDLED = path.join(PROJ, "plugins", "bundled");
  * (or verified against the vendored runtime when the package is not published). */
 const PROVENANCE = {
   "dsh-ppt-master": "npm dsh-ppt-master@1.0.8 (restored its own cordis.patch.yml on 0.2.2: the singular @deepseek-ai/dsh-agent-preset it inserts now exists)",
-  "dsh-live-compact": "npm dsh-live-compact@1.1.6 (spine compaction engine extending @deepseek-ai/dsh-compaction-basic; old 1.0.1 headroomTokens adaptation obsolete)",
+  "billion-context": "npm billion-context@0.1.214 (context-compression engine replacing dsh-live-compact in 0.4.3; ships nested node_modules: zod 4.6.7 exact pin + mysql2 closure; bundle patch inserts bili-native + bili-compaction-gate and injects biliBasicCompactionPolicy into the four presets)",
   "dsh-client-auto-continue": "npm dsh-client-auto-continue@0.19.0 (settings moved to 0.2.2's Config/configForms; local patch drops the dead settingsScope inject)",
   "@canglongcl/dsh-web-review": "npm @canglongcl/dsh-web-review@0.6.0 (local patches: per-sessionId annotation drafts with no live agent; command description thunk; optional ctx.layout.closeDetails call)",
   "@liustack/modlens": "npm @liustack/modlens@3.27.3 (carries its own node_modules/{commander,undici} for the CLI it spawns; config.families contract unchanged)",

@@ -1,0 +1,4 @@
+import { createRequire as __biliCreateRequire } from 'node:module';
+const require = __biliCreateRequire(import.meta.url);
+import{readFileSync}from"fs";import{randomBytes}from"crypto";var LANE_TOKEN_MARKER="bili-lane-token:";var LANE_TOKEN_HEX_LEN=12;var LANE_TOKEN_RE=new RegExp(`(?<![0-9a-f])${LANE_TOKEN_MARKER}([0-9a-f]{${LANE_TOKEN_HEX_LEN}})(?![0-9a-f])`);function mintClaudeLaneToken(){return randomBytes(6).toString("hex")}function subagentStartHookOutput(){return{hookSpecificOutput:{hookEventName:"SubagentStart",additionalContext:`${LANE_TOKEN_MARKER}${mintClaudeLaneToken()}`}}}function main(){try{readFileSync(0,"utf8")}catch{}process.stdout.write(`${JSON.stringify(subagentStartHookOutput())}
+`)}if(process.argv[1]!==void 0&&process.argv[1].includes("claude-subagent-hook")){try{main()}catch{}}export{subagentStartHookOutput};
